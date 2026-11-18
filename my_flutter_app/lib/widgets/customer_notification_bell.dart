@@ -169,7 +169,7 @@ class _SignedInBellState extends State<_SignedInBell> {
                 ListTile(
                   title: Text(
                     l10n.notifications,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   trailing: unreadOf(items) > 0
                       ? TextButton(
@@ -214,7 +214,7 @@ class _SignedInBellState extends State<_SignedInBell> {
                             style: TextStyle(
                               fontWeight: item.read
                                   ? FontWeight.w500
-                                  : FontWeight.w800,
+                                  : FontWeight.w700,
                             ),
                           ),
                           subtitle: item.body.isEmpty ? null : Text(item.body),

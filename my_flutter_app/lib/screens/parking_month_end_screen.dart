@@ -1726,7 +1726,7 @@ class _Stat extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 9.5,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
                 color: AppColors.muted,
               ),
@@ -1961,7 +1961,7 @@ class _CustomerTileState extends State<_CustomerTile> {
                           parkingMoney(statementOwes.abs()),
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             fontFeatures: const [FontFeature.tabularFigures()],
                             color: owes ? AppColors.warn : AppColors.sage,
                           ),
@@ -1973,7 +1973,7 @@ class _CustomerTileState extends State<_CustomerTile> {
                     owes ? parkingMoney(customer.dueCents) : l10n.invStatusPaid,
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       fontFeatures: const [FontFeature.tabularFigures()],
                       color: owes ? AppColors.warn : AppColors.sage,
                     ),
@@ -2544,7 +2544,7 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
                       key: const Key('month-end-owes-total'),
                       style: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         fontFeatures: [FontFeature.tabularFigures()],
                         color: AppColors.ink,
                       ),
@@ -2662,7 +2662,7 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
               l10n.pmeRepaymentsThisMonth.toUpperCase(),
               style: const TextStyle(
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
                 color: AppColors.muted,
               ),
@@ -3249,7 +3249,7 @@ class _SettleSheetState extends State<_SettleSheet> {
                 parkingMoney(plan.totalCents),
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],

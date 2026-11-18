@@ -620,7 +620,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           textAlign: TextAlign.center,
           style: Theme.of(
             context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 10),
         Text(
@@ -681,7 +681,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                         l10n.verifyPhoneToContinueTitle,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -729,7 +729,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                                   Text(
                                     l10n.phoneVerificationCodeSentTitle,
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   const SizedBox(height: 3),

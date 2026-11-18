@@ -89,7 +89,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
           AppBottomNavItem(
             icon: Icons.directions_car_outlined,
             selectedIcon: Icons.directions_car,
-            label: l10n.manageCars,
+            // One word, so six tabs fit on one line each.
+            label: l10n.navCars,
           ),
         ),
       if (hasCarSales && canManagePurchases)
@@ -389,7 +390,7 @@ class _PendingBusinessBanner extends StatelessWidget {
                       : l10n.businessPendingApprovalBanner,
                   style: const TextStyle(
                     color: AppColors.warn,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     height: 1.25,
                   ),
                 ),

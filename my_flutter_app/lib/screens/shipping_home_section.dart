@@ -214,7 +214,7 @@ class _ShippingHomeSectionState extends State<ShippingHomeSection> {
             style: const TextStyle(
               fontSize: 22,
               height: 1.2,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               letterSpacing: -0.4,
               color: AppColors.ink,
             ),
@@ -242,7 +242,7 @@ class _ShippingHomeSectionState extends State<ShippingHomeSection> {
             key: const Key('shipping-money-title'),
             style: const TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: AppColors.muted,
             ),
           ),

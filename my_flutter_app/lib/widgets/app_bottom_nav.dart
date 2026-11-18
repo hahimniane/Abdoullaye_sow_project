@@ -144,16 +144,8 @@ class AppBottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.75)),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, -8),
-          ),
-        ],
+        // A plain white bar on a hairline, like the website's header.
+        border: const Border(top: BorderSide(color: AppColors.hairline)),
       ),
       child: SafeArea(
         top: false,
@@ -186,12 +178,11 @@ class AppBottomNav extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: raised.active ? AppColors.cobaltDeep : AppColors.cobalt,
-                fontFamily: 'JetBrains Mono',
-                fontWeight: FontWeight.w800,
-                fontSize: 9.5,
-                height: 1.08,
-                letterSpacing: 0.2,
+                color: AppColors.cobalt,
+                fontWeight: raised.active ? FontWeight.w700 : FontWeight.w600,
+                fontSize: 10.5,
+                height: 1.1,
+                letterSpacing: 0,
               ),
             ),
           ],
@@ -216,10 +207,10 @@ class AppBottomNav extends StatelessWidget {
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
               height: _itemHeight,
+              // The selected tab is marked by the logo navy alone: no
+              // filled tile behind it.
               decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.mist.withValues(alpha: 0.82)
-                    : Colors.transparent,
+                color: Colors.transparent,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -228,8 +219,8 @@ class AppBottomNav extends StatelessWidget {
                 children: [
                   Icon(
                     isSelected ? item.selectedIcon : item.icon,
-                    color: isSelected ? AppColors.cobaltDeep : AppColors.muted,
-                    size: 22,
+                    color: isSelected ? AppColors.cobalt : AppColors.muted,
+                    size: 23,
                   ),
                   const SizedBox(height: 5),
                   Text(
@@ -238,13 +229,12 @@ class AppBottomNav extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: isSelected
-                          ? AppColors.cobaltDeep
-                          : AppColors.muted,
-                      fontFamily: 'JetBrains Mono',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 9.5,
-                      height: 1.08,
+                      color: isSelected ? AppColors.cobalt : AppColors.muted,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                      fontSize: 10.5,
+                      height: 1.1,
                       letterSpacing: 0,
                     ),
                   ),

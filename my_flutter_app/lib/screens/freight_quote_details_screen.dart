@@ -143,7 +143,7 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
                 Text(
                   l10n.freightQuoteRequestSent,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -171,7 +171,7 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
               Text(
                 request!.description,
                 style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -317,7 +317,7 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
                   Text(
                     title,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   if (message.isNotEmpty) ...[
@@ -371,14 +371,14 @@ class _FreightQuoteCard extends StatelessWidget {
                   child: Text(
                     quote.businessName,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
                 Text(
                   freightMoney(quote.amount),
                   style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: theme.colorScheme.primary,
                   ),
                 ),

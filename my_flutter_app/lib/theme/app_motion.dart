@@ -39,8 +39,10 @@ abstract final class AppMotion {
   static final SpringDescription move = spring(response: 0.4);
 
   /// Sheets and drawers, which arrive off a drag: a little bounce.
-  static final SpringDescription sheet =
-      spring(response: 0.3, dampingRatio: 0.8);
+  static final SpringDescription sheet = spring(
+    response: 0.3,
+    dampingRatio: 0.8,
+  );
 
   /// A press must be felt at once, so this is short enough to read as
   /// instant rather than as an animation.
@@ -68,14 +70,20 @@ abstract final class AppMotion {
   /// nearest its projected rest — not to the one nearest where the finger
   /// happened to leave the glass. Exponential decay, the way scrolling
   /// decelerates; the textbook `v²/2a` is not what this should feel like.
-  static double project(double velocityPerSecond, {double deceleration = 0.998}) {
+  static double project(
+    double velocityPerSecond, {
+    double deceleration = 0.998,
+  }) {
     return (velocityPerSecond / 1000) * deceleration / (1 - deceleration);
   }
 
   /// Progressive resistance past a boundary. A hard stop reads as frozen;
   /// resistance reads as responsive with nothing further to give.
-  static double rubberband(double overshoot, double dimension,
-      {double constant = 0.55}) {
+  static double rubberband(
+    double overshoot,
+    double dimension, {
+    double constant = 0.55,
+  }) {
     if (dimension <= 0) return overshoot;
     return (overshoot * dimension * constant) /
         (dimension + constant * overshoot.abs());

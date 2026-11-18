@@ -196,7 +196,7 @@ class _DashboardHeader extends StatelessWidget {
       height: 52,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: const Icon(
@@ -267,7 +267,7 @@ class _DashboardTitleBlock extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 20,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 3),
@@ -340,7 +340,7 @@ class _HeaderIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: IconButton(
         tooltip: tooltip,
         onPressed: onPressed,
@@ -453,7 +453,7 @@ class _MetricCard extends StatelessWidget {
     return _Panel(
       padding: EdgeInsets.zero,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         onTap: isLoading ? null : () => _openDashboardShortcut(context, data),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -464,7 +464,7 @@ class _MetricCard extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: AppColors.mist,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(data.icon, color: AppColors.cobaltDeep),
               ),
@@ -479,7 +479,7 @@ class _MetricCard extends StatelessWidget {
                       style: const TextStyle(
                         color: AppColors.ink,
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
@@ -773,7 +773,7 @@ Future<void> _showDashboardSheet(
                       title,
                       style: const TextStyle(
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -1377,7 +1377,7 @@ Future<void> _showReviewSheet(
                     business.name,
                     style: const TextStyle(
                       fontSize: 17,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -1413,7 +1413,7 @@ Future<void> _showReviewSheet(
                     child: Text(
                       l10n.services,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -1527,7 +1527,7 @@ class _Panel extends StatelessWidget {
       elevation: 1,
       shadowColor: AppColors.ink.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppColors.rule),
       ),
       child: Padding(
@@ -1546,7 +1546,7 @@ class _Panel extends StatelessWidget {
                       style: const TextStyle(
                         color: AppColors.ink,
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -1590,14 +1590,14 @@ class _ListRow extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
             color: AppColors.mist,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: AppColors.cobaltDeep, size: 20),
         ),
         title: Text(
           title,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         subtitle: Text(subtitle, overflow: TextOverflow.ellipsis),
         trailing: trailing,
@@ -1630,7 +1630,7 @@ class _StatusPill extends StatelessWidget {
         style: TextStyle(
           color: color,
           fontSize: 12,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -1672,7 +1672,7 @@ class _InfoBand extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.mist,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         message,

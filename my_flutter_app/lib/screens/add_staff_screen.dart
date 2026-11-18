@@ -78,7 +78,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
             l10n.inviteBusinessPersonnel,
             style: const TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           backgroundColor: Colors.transparent,
@@ -293,7 +293,7 @@ class _StaffInviteFormState extends State<StaffInviteForm> {
       children: [
         Text(
           l10n.invitationSent,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
         if (result.phoneMasked.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.xs),
@@ -326,7 +326,7 @@ class _StaffInviteFormState extends State<StaffInviteForm> {
         children: [
           Text(
             l10n.inviteBusinessPersonnel,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 5),
           Text(
@@ -376,7 +376,7 @@ class _StaffInviteFormState extends State<StaffInviteForm> {
           const SizedBox(height: 14),
           Text(
             l10n.stiMethodLabel,
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           Wrap(
@@ -475,7 +475,7 @@ class _StaffInviteFormState extends State<StaffInviteForm> {
           const SizedBox(height: 20),
           Text(
             l10n.businessPermissions,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(

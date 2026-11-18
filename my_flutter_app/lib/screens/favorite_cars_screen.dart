@@ -96,7 +96,7 @@ class _FavoriteCarsScreenState extends State<FavoriteCarsScreen> {
                     Text(
                       l10n.noFavoriteCarsYet,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -235,7 +235,7 @@ class _FavoriteCarTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
                     ),
@@ -268,7 +268,7 @@ class _FavoriteCarTile extends StatelessWidget {
                       currency.format(favorite.price),
                       style: const TextStyle(
                         color: AppColors.brandRed,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],

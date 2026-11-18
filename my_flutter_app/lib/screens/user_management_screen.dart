@@ -631,7 +631,7 @@ class _PeopleHeader extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
@@ -694,7 +694,7 @@ class _HeaderStat extends StatelessWidget {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 20,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           Text(
@@ -729,7 +729,7 @@ class _PersonCard extends StatelessWidget {
         ? AppColors.errorRed
         : person.category == 'invitation'
         ? const Color(0xFFB7791F)
-        : const Color(0xFF0B806F);
+        : const Color(0xFF008A05);
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
@@ -746,7 +746,7 @@ class _PersonCard extends StatelessWidget {
                 foregroundColor: statusColor,
                 child: Text(
                   _initials(person.displayName),
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(width: 12),
@@ -761,7 +761,7 @@ class _PersonCard extends StatelessWidget {
                             person.displayName,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               fontSize: 16,
                             ),
                           ),
@@ -945,7 +945,7 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
                     _initials(person.displayName),
                     style: const TextStyle(
                       color: AppColors.cobaltDeep,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       fontSize: 20,
                     ),
                   ),
@@ -959,7 +959,7 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
                         person.displayName,
                         style: const TextStyle(
                           fontSize: 22,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
@@ -1039,7 +1039,7 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
                 l10n.accountActions,
                 style: const TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1476,7 +1476,7 @@ class _BusinessInviteDialogState extends State<_BusinessInviteDialog> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   l10n.businessPermissions,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(height: 6),
@@ -1567,7 +1567,7 @@ class _DetailSection extends StatelessWidget {
             children: [
               Icon(icon, color: AppColors.cobalt),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
             ],
           ),
           const Divider(height: 24),
@@ -1604,7 +1604,7 @@ class _Fact extends StatelessWidget {
           Expanded(
             child: Text(
               value.isEmpty ? AppLocalizations.of(context)!.notProvided : value,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -1639,7 +1639,7 @@ class _ActionTile extends StatelessWidget {
         leading: Icon(icon, color: color),
         title: Text(
           title,
-          style: TextStyle(color: color, fontWeight: FontWeight.w800),
+          style: TextStyle(color: color, fontWeight: FontWeight.w700),
         ),
         trailing: const Icon(Icons.chevron_right),
       ),
@@ -1689,7 +1689,7 @@ class _Badge extends StatelessWidget {
         style: TextStyle(
           color: color,
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -1752,7 +1752,7 @@ class _StateCard extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           Text(

@@ -2,21 +2,26 @@ import 'package:flutter/material.dart';
 
 /// Brand and semantic colors for the marketplace.
 ///
-/// This palette uses deep teal foundations,
-/// warm amber highlights, and clean slate/white surfaces.
+/// One design with the public website and the web consoles: near-black text
+/// on white and light grey, hairline rules, and the logo navy as the only
+/// brand color. Amber, green and red are kept for meaning (needs attention,
+/// money in, a problem), never for decoration.
 abstract final class AppColors {
-  static const Color ink = Color(0xFF0F172A);
-  static const Color cream = Color(0xFFF8FAFC);
+  static const Color ink = Color(0xFF222222);
+  static const Color cream = Color(0xFFF7F7F7);
   static const Color paper = Color(0xFFFFFFFF);
-  static const Color parchment = Color(0xFFF1F5F9);
-  static const Color mist = Color(0xFFCCFBF1);
-  static const Color rule = Color(0xFFE2E8F0);
-  static const Color muted = Color(0xFF64748B);
-  static const Color cobalt = Color(0xFF0D9488);
-  static const Color cobaltDeep = Color(0xFF0B3B38);
-  static const Color cobaltMid = Color(0xFF14B8A6);
+  static const Color parchment = Color(0xFFF2F2F2);
+  static const Color mist = Color(0xFFE8EDF4);
+  static const Color rule = Color(0xFFDDDDDD);
+
+  /// The quiet line around cards and between rows.
+  static const Color hairline = Color(0xFFEBEBEB);
+  static const Color muted = Color(0xFF6A6A6A);
+  static const Color cobalt = Color(0xFF032346);
+  static const Color cobaltDeep = Color(0xFF021A35);
+  static const Color cobaltMid = Color(0xFF0B2F5B);
   static const Color saffron = Color(0xFFF59E0B);
-  static const Color sage = Color(0xFF059669);
+  static const Color sage = Color(0xFF008A05);
   static const Color warn = Color(0xFFD97706);
 
   // Compatibility aliases used by existing screens.
@@ -29,7 +34,7 @@ abstract final class AppColors {
   static const Color brandBlack = ink;
   static const Color brandCharcoal = oxdeep;
   static const Color brandCoral = saffron;
-  static const Color errorRed = Color(0xFFDC2626);
+  static const Color errorRed = Color(0xFFC13515);
 
   // Dark theme semantic
   static const Color darkBg = ink;
@@ -47,11 +52,11 @@ abstract final class AppColors {
   static const Color lightOnSurface = ink;
   static const Color lightMuted = muted;
 
-  /// Existing screens still expect a header fill; use the teal gradient.
+  /// Existing screens still expect a header fill: the logo navy, almost flat.
   static const LinearGradient headerGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [cobaltDeep, cobalt, cobaltMid],
+    colors: [cobalt, cobalt, cobaltMid],
   );
 
   /// Service category accent colors.

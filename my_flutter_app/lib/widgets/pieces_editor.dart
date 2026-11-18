@@ -748,7 +748,7 @@ class _PieceCard extends StatelessWidget {
                   key: Key('piece-number-$index'),
                   style: const TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.cobaltDeep,
                   ),
                 ),
@@ -1233,7 +1233,7 @@ class _AddPieceButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: enabled ? AppColors.cobaltDeep : AppColors.muted,
                   ),
                 ),
@@ -1281,7 +1281,7 @@ class PiecesTotalLine extends StatelessWidget {
               key: const Key('pieces-total-amount'),
               style: TextStyle(
                 fontSize: total == null ? 13 : 20,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: total == null ? AppColors.muted : AppColors.cobaltDeep,
               ),
             ),

@@ -103,7 +103,7 @@ class WhatsAppBadge extends StatelessWidget {
             l10n.waWhatsApp,
             style: const TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: _whatsAppGreen,
             ),
           ),
@@ -255,7 +255,7 @@ class WhatsAppConversationCard extends StatelessWidget {
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
                                   fontWeight: unread > 0
-                                      ? FontWeight.w800
+                                      ? FontWeight.w700
                                       : null,
                                 ),
                           ),
@@ -327,7 +327,7 @@ class WhatsAppConversationCard extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -388,7 +388,7 @@ class WhatsAppTickLine extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               height: 1.25,
-              fontWeight: failed ? FontWeight.w800 : FontWeight.w600,
+              fontWeight: failed ? FontWeight.w700 : FontWeight.w600,
               color: tint,
             ),
           ),
@@ -677,7 +677,7 @@ class WhatsAppMessageBubble extends StatelessWidget {
                         l10n.waNoteBadge,
                         style: const TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.warn,
                         ),
                       ),
@@ -770,7 +770,7 @@ class WhatsAppMessageBubble extends StatelessWidget {
                           label,
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: fromCustomer
                                 ? AppColors.cobalt
                                 : (auto

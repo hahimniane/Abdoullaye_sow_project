@@ -669,7 +669,7 @@ class _UnitChoice extends StatelessWidget {
                 id,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                   color: selected ? AppColors.cobaltDeep : AppColors.muted,
                 ),
               ),
@@ -770,7 +770,7 @@ class _PhotoButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: color,
                   ),
                 ),
@@ -1104,7 +1104,7 @@ class _AddItemButton extends StatelessWidget {
         icon: const Icon(Icons.add, size: 18),
         label: Text(
           l10n.proofAddItem,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
       ),
     );

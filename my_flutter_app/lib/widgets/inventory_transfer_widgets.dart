@@ -322,7 +322,7 @@ class InventoryTransferCard extends StatelessWidget {
                     style: const TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),
@@ -414,7 +414,7 @@ class InventoryStepper extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 17,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: AppColors.ink,
             ),
           ),

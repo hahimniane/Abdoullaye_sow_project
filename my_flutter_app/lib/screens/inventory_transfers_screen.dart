@@ -531,7 +531,7 @@ class _Tab extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                   color: selected ? AppColors.ink : AppColors.muted,
                 ),
               ),
@@ -550,7 +550,7 @@ class _Tab extends StatelessWidget {
                     badge!,
                     style: const TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),

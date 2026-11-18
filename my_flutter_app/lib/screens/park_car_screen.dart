@@ -2332,7 +2332,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                   l10n.customerParkingTitle,
                   style: Theme.of(
                     context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
               const LanguageToggle(),
@@ -2363,7 +2363,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
             '${l10n.parkingStepIndicator(_customerStep + 1, titles.length)} · ${titles[_customerStep]}',
             style: const TextStyle(
               color: AppColors.muted,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               fontSize: 13,
             ),
           ),
@@ -2536,7 +2536,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
           l10n.availableParkingBusinesses,
           style: Theme.of(
             context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 10),
         for (final option in _parkingOptions) ...[
@@ -2785,7 +2785,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                   currency.format(option.estimatedTotal),
                 ),
                 style: const TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.cobaltDeep,
                   fontSize: 15,
                 ),
@@ -3208,7 +3208,7 @@ class _CustomerParkingPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
@@ -3218,7 +3218,7 @@ class _CustomerParkingPanel extends StatelessWidget {
             title,
             style: Theme.of(
               context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
@@ -3252,12 +3252,12 @@ class _ParkingDateTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: AppColors.lightSurfaceVariant,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.rule),
         ),
         child: Row(
@@ -3280,7 +3280,7 @@ class _ParkingDateTile extends StatelessWidget {
                   Text(
                     value,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -3311,7 +3311,7 @@ class _ParkingOptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(14),
@@ -3319,7 +3319,7 @@ class _ParkingOptionCard extends StatelessWidget {
           color: selected
               ? AppColors.mist.withValues(alpha: 0.42)
               : AppColors.paper,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: selected ? AppColors.cobalt : AppColors.rule,
             width: selected ? 1.4 : 1,
@@ -3336,7 +3336,7 @@ class _ParkingOptionCard extends StatelessWidget {
                   height: 40,
                   decoration: BoxDecoration(
                     color: AppColors.cobalt.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
                     Icons.local_parking_outlined,
@@ -3351,7 +3351,7 @@ class _ParkingOptionCard extends StatelessWidget {
                       Text(
                         option.businessName,
                         style: const TextStyle(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.ink,
                         ),
                       ),
@@ -3413,7 +3413,7 @@ class _ParkingOptionCard extends StatelessWidget {
               ),
               style: const TextStyle(
                 color: AppColors.cobaltDeep,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -3435,7 +3435,7 @@ class _ParkingChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Row(
@@ -3445,7 +3445,7 @@ class _ParkingChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -3465,7 +3465,7 @@ class _InlineParkingNotice extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.saffron.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.saffron.withValues(alpha: 0.35)),
       ),
       child: Text(
@@ -3515,7 +3515,7 @@ class _ParkingReviewRow extends StatelessWidget {
               textAlign: TextAlign.right,
               style: const TextStyle(
                 color: AppColors.ink,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

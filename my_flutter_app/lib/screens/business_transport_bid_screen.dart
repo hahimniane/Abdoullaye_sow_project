@@ -221,7 +221,7 @@ class _BusinessTransportBidScreenState
                         : opportunity.vehicleLabel,
                     style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),
@@ -263,7 +263,7 @@ class _BusinessTransportBidScreenState
                     Text(
                       l10n.businessTransportRevisionNumber(quote!.revision),
                       style: const TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
                     ),
@@ -489,7 +489,7 @@ class _MoneyLine extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: emphasise ? AppColors.ink : AppColors.muted,
-                  fontWeight: emphasise ? FontWeight.w800 : FontWeight.w600,
+                  fontWeight: emphasise ? FontWeight.w700 : FontWeight.w600,
                 ),
               ),
             ),
@@ -499,7 +499,7 @@ class _MoneyLine extends StatelessWidget {
                   : NumberFormat.simpleCurrency().format(cents / 100),
               style: TextStyle(
                 fontSize: emphasise ? 20 : 15,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: cents == null ? AppColors.muted : AppColors.ink,
               ),
             ),

@@ -1012,7 +1012,7 @@ class _ItemTile extends StatelessWidget {
                 key: const Key('ppl-item-price-text'),
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.cobaltDeep,
                 ),
               ),

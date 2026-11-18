@@ -2290,7 +2290,7 @@ class PackageRequestSentScreen extends StatelessWidget {
                     key: const Key('request-sent-code'),
                     style: const TextStyle(
                       fontSize: 26,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 1.5,
                       color: AppColors.cobaltDeep,
                     ),

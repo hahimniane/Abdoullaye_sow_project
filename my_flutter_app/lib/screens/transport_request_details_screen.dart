@@ -1175,7 +1175,7 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
                 l10n.transportQuotesTitle,
                 style: const TextStyle(
                   fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 ),
               ),
@@ -1338,7 +1338,7 @@ class _TransportQuoteCard extends StatelessWidget {
                     Text(
                       quote.businessName,
                       style: const TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
                     ),
@@ -1346,7 +1346,7 @@ class _TransportQuoteCard extends StatelessWidget {
                       price,
                       style: const TextStyle(
                         fontSize: 24,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.cobalt,
                       ),
                     ),
@@ -1433,7 +1433,7 @@ class _QuoteNotice extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),
@@ -1650,7 +1650,7 @@ class _CustomerRequestInfo extends StatelessWidget {
               Text(
                 l10n.customerRequest,
                 style: const TextStyle(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 ),
               ),

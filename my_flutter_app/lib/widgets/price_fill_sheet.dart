@@ -205,7 +205,7 @@ class _PriceFillSheetState extends State<PriceFillSheet> {
                 key: const Key('fill-qty'),
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               IconButton(
@@ -226,7 +226,7 @@ class _PriceFillSheetState extends State<PriceFillSheet> {
             key: const Key('fill-price'),
             style: const TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: AppColors.cobaltDeep,
             ),
           ),
@@ -328,7 +328,7 @@ class _ChoiceRow extends StatelessWidget {
                 price,
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.cobaltDeep,
                 ),
               ),

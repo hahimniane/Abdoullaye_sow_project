@@ -1466,7 +1466,7 @@ class _ReservationActionArea extends StatelessWidget {
                         viewingStatusLabel(l10n, viewing.purchaseStatus),
                         style: const TextStyle(
                           color: AppColors.brandRed,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1551,7 +1551,7 @@ class _AccountSummary extends StatelessWidget {
                   name,
                   style: Theme.of(
                     context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1587,7 +1587,7 @@ class _SheetInfoPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Row(
@@ -1598,7 +1598,7 @@ class _SheetInfoPanel extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: AppColors.cobaltDeep.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: AppColors.cobaltDeep),
           ),
@@ -1611,7 +1611,7 @@ class _SheetInfoPanel extends StatelessWidget {
                   title,
                   style: const TextStyle(
                     color: AppColors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1650,7 +1650,7 @@ class _BusinessLocationCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
         boxShadow: [
           BoxShadow(
@@ -1668,7 +1668,7 @@ class _BusinessLocationCard extends StatelessWidget {
             height: 46,
             decoration: BoxDecoration(
               color: AppColors.brandRed.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
               Icons.storefront_outlined,
@@ -1684,13 +1684,13 @@ class _BusinessLocationCard extends StatelessWidget {
                   l10n.businessLocation,
                   style: const TextStyle(
                     color: AppColors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   businessName,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1872,7 +1872,7 @@ class _RebuiltTitleDisclosure extends StatelessWidget {
               children: [
                 Text(
                   l10n.rebuiltTitle,
-                  style: TextStyle(color: color, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
                 Text(

@@ -333,7 +333,7 @@ class _DestinationCountriesScreenState
                       style: const TextStyle(
                         color: AppColors.ink,
                         fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -375,7 +375,7 @@ class _DestinationCountriesScreenState
                         return Container(
                           decoration: BoxDecoration(
                             border: Border.all(color: borderColor),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                             color: AppColors.lightSurface,
                           ),
                           padding: const EdgeInsets.all(12),
@@ -386,7 +386,7 @@ class _DestinationCountriesScreenState
                                 l10n.servicesForDestination,
                                 style: const TextStyle(
                                   color: AppColors.ink,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -473,7 +473,7 @@ class _DestinationCountriesScreenState
                       l10n.dstPickupTitle,
                       style: const TextStyle(
                         color: AppColors.ink,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1220,7 +1220,7 @@ class _DestinationServiceToggle extends StatelessWidget {
               ? AppColors.cobalt.withValues(alpha: 0.45)
               : AppColors.lightOutline,
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         color: value
             ? AppColors.mist.withValues(alpha: 0.35)
             : AppColors.lightBg,
@@ -1240,7 +1240,7 @@ class _DestinationServiceToggle extends StatelessWidget {
                       title,
                       style: const TextStyle(
                         color: AppColors.ink,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1287,7 +1287,7 @@ class _DestinationSummaryChip extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.lightOutline),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1303,7 +1303,7 @@ class _DestinationSummaryChip extends StatelessWidget {
               style: TextStyle(
                 color: foreground,
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1351,7 +1351,7 @@ class _AddCountrySheetState extends State<_AddCountrySheet> {
               style: const TextStyle(
                 color: AppColors.ink,
                 fontSize: 20,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 12),

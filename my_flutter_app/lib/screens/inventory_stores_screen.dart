@@ -499,7 +499,7 @@ class _InventoryTeamAccessState extends State<InventoryTeamAccess> {
         const SizedBox(height: AppSpacing.md),
         Text(
           l10n.inventoryStaffAccessTitle,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
         for (final member in widget.members)

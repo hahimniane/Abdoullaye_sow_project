@@ -99,7 +99,7 @@ class _RecipientNameFieldState extends State<RecipientNameField> {
           offset: const Offset(0, 58),
           child: Material(
             elevation: 4,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

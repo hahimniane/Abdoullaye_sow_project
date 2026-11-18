@@ -1021,7 +1021,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   child: Text(
                     l10n.freightNoPriceForItemTitle,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1078,7 +1078,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             Text(
               l10n.couldNotLoadFreightOptions,
               style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
               textAlign: TextAlign.center,
             ),
@@ -1107,7 +1107,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             Text(
               l10n.noFreightBusinessesYet,
               style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
               textAlign: TextAlign.center,
             ),
@@ -1325,7 +1325,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                     Text(
                       o.businessName,
                       style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     if (o.reviewCount > 0) ...[
@@ -1591,7 +1591,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           Text(
             feeLabel,
             style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -1631,7 +1631,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   child: Text(
                     freightCategoryLabel(l10n, selected),
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1766,14 +1766,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   child: Text(
                     l10n.freightQuoteChosenTitle,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
                 Text(
                   freightMoney(_price),
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: theme.colorScheme.primary,
                   ),
                 ),
@@ -1847,14 +1847,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   child: Text(
                     l10n.freightSetPriceTitle,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
                 Text(
                   freightMoney(pricing.flatPrice),
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: theme.colorScheme.primary,
                   ),
                 ),
@@ -1907,7 +1907,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               child: Text(
                 l10n.whenDoYouPay,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1972,7 +1972,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   child: Text(
                     l10n.freightCoverageSectionTitle,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -2044,7 +2044,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               child: Text(
                 l10n.freightDestinationDeliveryTitle,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -2159,7 +2159,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             ),
             title: Text(
               o.businessName,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             subtitle: Text(l10n.toDestination(o.country.name)),
             trailing: TextButton(
@@ -2372,7 +2372,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   Text(
                     '\$${_totalPrice.toStringAsFixed(2)}',
                     style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -2518,7 +2518,7 @@ class _ModeCard extends StatelessWidget {
               Text(
                 isAir ? l10n.airFreight : l10n.seaFreight,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 3),

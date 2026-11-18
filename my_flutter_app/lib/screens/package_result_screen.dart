@@ -1094,7 +1094,7 @@ class _CodeCard extends StatelessWidget {
                   key: const Key('pkg-code'),
                   style: TextStyle(
                     fontSize: line.trackingCode.isEmpty ? 15 : 24,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: line.trackingCode.isEmpty ? 0 : 1.2,
                     color: line.trackingCode.isEmpty
                         ? AppColors.muted

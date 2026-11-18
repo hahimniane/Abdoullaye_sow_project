@@ -53,15 +53,9 @@ class HomePrimaryAction extends StatelessWidget {
         height: 52,
         alignment: Alignment.center,
         decoration: BoxDecoration(
+          // Flat logo navy, like the website's main button.
           color: AppColors.cobalt,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.cobaltDeep.withValues(alpha: 0.18),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -77,9 +71,9 @@ class HomePrimaryAction extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.1,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
                 ),
               ),
             ),
@@ -90,6 +84,10 @@ class HomePrimaryAction extends StatelessWidget {
   }
 }
 
+/// The part of the business a place belongs to, named the way the web
+/// console's menu names it.
+enum HomeSection { shipping, cars, money }
+
 /// One place the business can go.
 class HomeDestination {
   const HomeDestination({
@@ -99,7 +97,11 @@ class HomeDestination {
     this.subtitle = '',
     required this.onTap,
     this.trailing,
+    this.section,
   });
+
+  /// Which heading this place sits under when the list is shown in sections.
+  final HomeSection? section;
 
   final Key rowKey;
   final IconData icon;
@@ -117,31 +119,92 @@ class HomeDestination {
 /// on the platform: one surface, hairlines between the rows, a chevron saying
 /// each one leads somewhere.
 class HomeDestinationGroup extends StatelessWidget {
-  const HomeDestinationGroup({super.key, required this.rows});
+  const HomeDestinationGroup({
+    super.key,
+    required this.rows,
+    this.sectionLabels = const {},
+  });
 
   final List<HomeDestination> rows;
+
+  /// With labels, the rows are shown under the heading of their
+  /// [HomeDestination.section] (Cars, Shipping, Money), in the order each
+  /// section first appears. Without them it is one plain list.
+  final Map<HomeSection, String> sectionLabels;
+
+  /// The rows split by section, keeping the order they were given in. Rows
+  /// without a section (or without a label for it) form their own group.
+  @visibleForTesting
+  static List<(HomeSection?, List<HomeDestination>)> grouped(
+    List<HomeDestination> rows,
+    Map<HomeSection, String> labels,
+  ) {
+    final groups = <(HomeSection?, List<HomeDestination>)>[];
+    for (final row in rows) {
+      final section = labels.containsKey(row.section) ? row.section : null;
+      final at = groups.indexWhere((g) => g.$1 == section);
+      if (at < 0) {
+        groups.add((section, [row]));
+      } else {
+        groups[at].$2.add(row);
+      }
+    }
+    return groups;
+  }
 
   @override
   Widget build(BuildContext context) {
     if (rows.isEmpty) return const SizedBox.shrink();
+    if (sectionLabels.isEmpty) return _card(rows);
+    final groups = grouped(rows, sectionLabels);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < groups.length; i++) ...[
+          if (i > 0) const SizedBox(height: 18),
+          if (groups[i].$1 != null) ...[
+            HomeSectionLabel(sectionLabels[groups[i].$1]!),
+            const SizedBox(height: 8),
+          ],
+          _card(groups[i].$2),
+        ],
+      ],
+    );
+  }
+
+  Widget _card(List<HomeDestination> rows) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.paper,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.rule),
+        border: Border.all(color: AppColors.hairline),
       ),
       child: Column(
         children: [
           for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0)
-              // Inset to start under the text, so the icons read as one column.
-              const Padding(
-                padding: EdgeInsets.only(left: 60),
-                child: Divider(height: 1, thickness: 1),
-              ),
+            if (i > 0) const Divider(height: 1, thickness: 1),
             _HomeDestinationRow(row: rows[i]),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// The small grey heading over a group on the home: sentence case, quiet.
+class HomeSectionLabel extends StatelessWidget {
+  const HomeSectionLabel(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppColors.muted,
       ),
     );
   }
@@ -165,15 +228,10 @@ class _HomeDestinationRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.mist,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-              ),
-              child: Icon(row.icon, size: 18, color: AppColors.cobaltDeep),
+            // A plain line icon: no tinted tile behind it.
+            SizedBox(
+              width: 28,
+              child: Icon(row.icon, size: 22, color: AppColors.ink),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -185,9 +243,9 @@ class _HomeDestinationRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
                       color: AppColors.ink,
                     ),
                   ),
@@ -198,7 +256,7 @@ class _HomeDestinationRow extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         height: 1.35,
                         color: AppColors.muted,
                       ),
@@ -212,7 +270,7 @@ class _HomeDestinationRow extends StatelessWidget {
               row.trailing!,
               const SizedBox(width: AppSpacing.xs),
             ],
-            const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
+            const Icon(Icons.chevron_right, size: 20, color: Color(0xFFB0B0B0)),
           ],
         ),
       ),
@@ -246,7 +304,7 @@ class BusinessHomeTail extends StatelessWidget {
             l10n.businessMoreTools,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: AppColors.muted,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),

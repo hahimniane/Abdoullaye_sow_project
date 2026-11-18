@@ -245,7 +245,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Text(
                       l10n.settings,
                       style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w900),
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
                   const CustomerNotificationBell(),
@@ -610,7 +610,7 @@ class _SettingsSectionLabel extends StatelessWidget {
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
           color: AppColors.lightMuted,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -719,7 +719,7 @@ class _RolePill extends StatelessWidget {
         style: const TextStyle(
           color: AppColors.brandRed,
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

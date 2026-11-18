@@ -327,7 +327,7 @@ class _BusinessRegistrationScreenState
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           fontSize: 18,
                         ),
                       ),
@@ -729,12 +729,12 @@ class _ProfileImagePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPick,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.paper,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.rule),
         ),
         child: Row(
@@ -756,7 +756,7 @@ class _ProfileImagePicker extends StatelessWidget {
                 children: [
                   Text(
                     AppLocalizations.of(context)!.businessProfilePicture,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -794,20 +794,20 @@ class _ServiceChoiceTile extends StatelessWidget {
       color: selected
           ? AppColors.cobalt.withValues(alpha: 0.08)
           : AppColors.lightSurface,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: CheckboxListTile(
         value: selected,
         onChanged: (value) => onChanged(value ?? false),
         controlAffinity: ListTileControlAffinity.trailing,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: selected ? AppColors.cobalt : AppColors.rule),
         ),
         secondary: Icon(service.icon, color: AppColors.cobaltDeep),
         title: Text(
           businessServiceLabel(AppLocalizations.of(context)!, service.key),
-          style: const TextStyle(fontWeight: FontWeight.w900),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         subtitle: Text(
           businessServiceDescription(AppLocalizations.of(context)!, service.key),
@@ -826,7 +826,7 @@ class _BusinessRegistrationHero extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: Row(
@@ -846,7 +846,7 @@ class _BusinessRegistrationHero extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -882,7 +882,7 @@ class _Section extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
@@ -901,7 +901,7 @@ class _Section extends StatelessWidget {
                       style: const TextStyle(
                         color: AppColors.ink,
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(

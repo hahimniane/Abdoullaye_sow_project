@@ -726,7 +726,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                       child: Text(
                         l10n.businessProfileTitle,
                         style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w900),
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
                     const LanguageToggle(),
@@ -1092,7 +1092,7 @@ class _FeaturingRequestPanel extends StatelessWidget {
           Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 child: Container(
                   width: 72,
                   height: 72,
@@ -1126,7 +1126,7 @@ class _FeaturingRequestPanel extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: AppColors.saffron,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           height: 1.25,
                         ),
                       ),
@@ -1170,7 +1170,7 @@ class _FeaturingRequestPanel extends StatelessWidget {
                 : null,
             title: Text(
               l10n.featureConsentLabel,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(height: 10),
@@ -1216,7 +1216,7 @@ class _FeatureStatusBadge extends StatelessWidget {
         status,
         style: const TextStyle(
           color: AppColors.cobaltDeep,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
       ),
@@ -1442,7 +1442,7 @@ class _ProfileHeader extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.cobaltDeep,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: AppColors.cobaltDeep.withValues(alpha: 0.14),
@@ -1502,7 +1502,7 @@ class _ProfileHeader extends StatelessWidget {
                 Text(
                   business.name,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: Colors.white,
                     height: 1.05,
                   ),
@@ -1547,7 +1547,7 @@ class _MiniStatusChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
       child: Row(
@@ -1559,7 +1559,7 @@ class _MiniStatusChip extends StatelessWidget {
             label,
             style: const TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               fontSize: 12,
             ),
           ),
@@ -2411,7 +2411,7 @@ class _ProfileSection extends StatelessWidget {
         color: hasError
             ? AppColors.errorRed.withValues(alpha: 0.035)
             : AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: hasError
               ? AppColors.errorRed.withValues(alpha: 0.58)
@@ -2432,7 +2432,7 @@ class _ProfileSection extends StatelessWidget {
                   color: hasError
                       ? AppColors.errorRed.withValues(alpha: 0.09)
                       : AppColors.mist.withValues(alpha: 0.65),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: accentColor),
               ),
@@ -2444,7 +2444,7 @@ class _ProfileSection extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: hasError ? AppColors.errorRed : AppColors.ink,
                       ),
                     ),
@@ -2473,7 +2473,7 @@ class _ProfileSection extends StatelessWidget {
                               errorText!,
                               style: const TextStyle(
                                 color: AppColors.errorRed,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 height: 1.25,
                                 fontSize: 12,
                               ),
@@ -2638,7 +2638,7 @@ class _ServiceChoiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: enabled ? () => onChanged(!selected) : null,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(12),
@@ -2646,7 +2646,7 @@ class _ServiceChoiceCard extends StatelessWidget {
           color: selected
               ? AppColors.mist.withValues(alpha: 0.42)
               : AppColors.lightSurfaceVariant,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: selected ? AppColors.cobalt : AppColors.rule,
             width: selected ? 1.4 : 1,
@@ -2661,7 +2661,7 @@ class _ServiceChoiceCard extends StatelessWidget {
                 color: selected
                     ? AppColors.cobalt.withValues(alpha: 0.12)
                     : AppColors.paper,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 service.icon,
@@ -2679,7 +2679,7 @@ class _ServiceChoiceCard extends StatelessWidget {
                       service.key,
                     ),
                     style: const TextStyle(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),
@@ -2725,7 +2725,7 @@ class _Panel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
@@ -2736,7 +2736,7 @@ class _Panel extends StatelessWidget {
               title!,
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
           ],

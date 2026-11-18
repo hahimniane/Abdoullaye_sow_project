@@ -565,7 +565,7 @@ class _Stat extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 9.5,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
                 color: AppColors.muted,
               ),
@@ -1505,7 +1505,7 @@ class _MoneyRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = TextStyle(
       fontSize: bold ? 17 : 13.5,
-      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+      fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
       fontFeatures: const [FontFeature.tabularFigures()],
       color: color ?? (bold ? AppColors.ink : AppColors.muted),
     );
@@ -1614,7 +1614,7 @@ class _SectionTitle extends StatelessWidget {
           title.toUpperCase(),
           style: const TextStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             letterSpacing: 0.6,
             color: AppColors.muted,
           ),

@@ -605,7 +605,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                 l10n.supportAttachmentSheetTitle,
                 style: Theme.of(
                   context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 14),
               LayoutBuilder(
@@ -1185,7 +1185,7 @@ class _AttachmentReviewSheetState extends State<_AttachmentReviewSheet> {
                       child: Text(
                         l10n.supportReviewAttachmentTitle,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -1350,7 +1350,7 @@ class _AttachmentPreview extends StatelessWidget {
                       attachment.file.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
@@ -1393,7 +1393,7 @@ class _AttachmentTypePlaceholder extends StatelessWidget {
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -1447,11 +1447,11 @@ class _AttachmentActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: Ink(
         decoration: BoxDecoration(
           color: AppColors.mist.withValues(alpha: 0.36),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.rule),
         ),
         child: Column(
@@ -1465,7 +1465,7 @@ class _AttachmentActionTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(
                 context,
-              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -1651,7 +1651,7 @@ class _SupportContextCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
@@ -1784,7 +1784,7 @@ class _SupportEscalationBar extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 2),
               Text(
@@ -1996,7 +1996,7 @@ class _SupportBubble extends StatelessWidget {
                     senderLabel,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.cobalt,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -2008,7 +2008,7 @@ class _SupportBubble extends StatelessWidget {
                     color: (mine ? Colors.white : AppColors.cobalt).withValues(
                       alpha: 0.14,
                     ),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${replySenderLabel(message.replyTo!)}: ${message.replyTo!.content}',
@@ -2019,7 +2019,7 @@ class _SupportBubble extends StatelessWidget {
                 ),
               if (message.messageType == 'image' && message.fileUrl.isNotEmpty)
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   child: Image.network(message.fileUrl, fit: BoxFit.cover),
                 ),
               if ((message.messageType == 'file' ||
@@ -2126,7 +2126,7 @@ class _AttachmentOpenTileState extends State<_AttachmentOpenTile> {
         : _formatFileSize(l10n, widget.message.fileSize);
     return InkWell(
       onTap: _opening ? null : _open,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         constraints: const BoxConstraints(minWidth: 220),
         padding: const EdgeInsets.all(10),
@@ -2134,7 +2134,7 @@ class _AttachmentOpenTileState extends State<_AttachmentOpenTile> {
           color: (widget.mine ? Colors.white : AppColors.cobalt).withValues(
             alpha: 0.14,
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2167,7 +2167,7 @@ class _AttachmentOpenTileState extends State<_AttachmentOpenTile> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: widget.textColor,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   Text(
@@ -2272,7 +2272,7 @@ class _Composer extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: AppColors.mist.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [

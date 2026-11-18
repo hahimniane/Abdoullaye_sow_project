@@ -34,9 +34,18 @@ abstract final class AppTheme {
       onError: Colors.white,
     );
 
+    final hairline = isDark ? AppColors.darkOutline : AppColors.hairline;
     final inputBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
       borderSide: BorderSide(color: outline),
+    );
+    final buttonShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+    );
+    const buttonText = TextStyle(
+      fontWeight: FontWeight.w600,
+      fontSize: 15,
+      letterSpacing: 0,
     );
 
     return ThemeData(
@@ -45,11 +54,14 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: bg,
       colorScheme: colorScheme,
       textTheme: AppTypography.textTheme(brightness),
-      dividerColor: outline,
+      dividerColor: hairline,
       appBarTheme: AppBarTheme(
         backgroundColor: surface,
         foregroundColor: onSurface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: Border(bottom: BorderSide(color: hairline)),
         centerTitle: true,
         titleTextStyle: AppTypography.textTheme(
           brightness,
@@ -60,14 +72,16 @@ abstract final class AppTheme {
           backgroundColor: AppColors.brandRed,
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          ),
-          textStyle: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-            letterSpacing: 0,
-          ),
+          shape: buttonShape,
+          textStyle: buttonText,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: onSurface,
+          side: BorderSide(color: outline),
+          shape: buttonShape,
+          textStyle: buttonText,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -75,18 +89,17 @@ abstract final class AppTheme {
           backgroundColor: AppColors.brandRed,
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          ),
+          shape: buttonShape,
+          textStyle: buttonText,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surfaceVariant,
+        fillColor: surface,
         border: inputBorder,
         enabledBorder: inputBorder,
         focusedBorder: inputBorder.copyWith(
-          borderSide: const BorderSide(color: AppColors.brandRed, width: 2),
+          borderSide: BorderSide(color: onSurface, width: 1.5),
         ),
         errorBorder: inputBorder.copyWith(
           borderSide: const BorderSide(color: AppColors.errorRed),
@@ -101,14 +114,10 @@ abstract final class AppTheme {
         labelStyle: TextStyle(color: muted),
         hintStyle: TextStyle(color: muted.withValues(alpha: 0.7)),
         // A field's helper and its error are sentences, and sentences belong
-        // in the reading face. Flutter falls back to bodySmall here, which is
-        // the mono used for short meta labels — set even and wide, so a line
-        // of guidance under a field came out looking like code.
-        helperStyle: AppTypography.textTheme(brightness).bodyMedium?.copyWith(
-          fontSize: 12,
-          height: 1.35,
-          color: muted,
-        ),
+        // in the reading face at a readable size, in the muted color.
+        helperStyle: AppTypography.textTheme(
+          brightness,
+        ).bodyMedium?.copyWith(fontSize: 12, height: 1.35, color: muted),
         errorStyle: AppTypography.textTheme(brightness).bodyMedium?.copyWith(
           fontSize: 12,
           height: 1.35,
@@ -121,19 +130,34 @@ abstract final class AppTheme {
         shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          side: BorderSide(color: outline),
+          side: BorderSide(color: hairline),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: Colors.transparent,
         labelStyle: TextStyle(
           color: onSurface,
-          fontSize: 10,
-          letterSpacing: 1.2,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0,
         ),
         side: BorderSide(color: outline),
+        shape: const StadiumBorder(),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.radiusXl),
+          ),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
@@ -148,7 +172,7 @@ abstract final class AppTheme {
         unselectedItemColor: muted,
         type: BottomNavigationBarType.fixed,
       ),
-      dividerTheme: DividerThemeData(color: outline, thickness: 1),
+      dividerTheme: DividerThemeData(color: hairline, thickness: 1),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppColors.brandRed,
       ),

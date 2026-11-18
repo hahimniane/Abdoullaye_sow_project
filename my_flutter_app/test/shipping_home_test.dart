@@ -44,23 +44,26 @@ const _air = ShippingHomeFacts(shipsByAir: true, hasSeaContainer: false);
 const _airAndSea = ShippingHomeFacts(shipsByAir: true, hasSeaContainer: true);
 const _seaOnly = ShippingHomeFacts(shipsByAir: false, hasSeaContainer: true);
 
-PackageRequest _request(String id, String status) => PackageRequest.fromMap(id, {
-  'businessId': 'b1',
-  'businessName': 'Test Express',
-  'code': 'R-${id.toUpperCase()}AAAA',
-  'token': 'tok_abcdefghijklmnopqrstuvwxyz0123456789ABCDE',
-  'handoff': 'bring_in',
-  'plannedDate': '2026-10-24',
-  'sender': {'name': 'Test Sender', 'phoneE164': '+15555550101', 'uid': 'u1'},
-  'receiver': {'name': 'Test Receiver', 'phoneE164': '+15555550102'},
-  'destinationCountryId': 'guinea',
-  'destinationCountryName': 'Guinea',
-  'pieces': [
-    {'id': 'p1', 'kind': 'barrel', 'estimateCents': 12000},
-  ],
-  'status': status,
-  'createdAt': DateTime(2026, 10, 22, 12),
-});
+PackageRequest _request(String id, String status) => PackageRequest.fromMap(
+  id,
+  {
+    'businessId': 'b1',
+    'businessName': 'Test Express',
+    'code': 'R-${id.toUpperCase()}AAAA',
+    'token': 'tok_abcdefghijklmnopqrstuvwxyz0123456789ABCDE',
+    'handoff': 'bring_in',
+    'plannedDate': '2026-10-24',
+    'sender': {'name': 'Test Sender', 'phoneE164': '+15555550101', 'uid': 'u1'},
+    'receiver': {'name': 'Test Receiver', 'phoneE164': '+15555550102'},
+    'destinationCountryId': 'guinea',
+    'destinationCountryName': 'Guinea',
+    'pieces': [
+      {'id': 'p1', 'kind': 'barrel', 'estimateCents': 12000},
+    ],
+    'status': status,
+    'createdAt': DateTime(2026, 10, 22, 12),
+  },
+);
 
 class _Opened {
   final List<(ContainersEntry, bool)> calls = [];
@@ -142,10 +145,7 @@ void main() {
   group('who gets the simple home', () {
     test('package shipping only: barrels, freight, or both', () {
       expect(_layout(), ShippingHomeLayout.simple);
-      expect(
-        _layout(services: ['barrelShipping']),
-        ShippingHomeLayout.simple,
-      );
+      expect(_layout(services: ['barrelShipping']), ShippingHomeLayout.simple);
       expect(_layout(services: ['freight']), ShippingHomeLayout.simple);
     });
 
@@ -245,7 +245,11 @@ void main() {
   group('the rows, top to bottom', () {
     test('air only: Packages here, On the way', () {
       expect(
-        shippingHomePlaces(facts: _air, openRequests: 0, canUseDeliveries: false),
+        shippingHomePlaces(
+          facts: _air,
+          openRequests: 0,
+          canUseDeliveries: false,
+        ),
         [ShippingHomePlace.packagesHere, ShippingHomePlace.onTheWay],
       );
     });
@@ -265,7 +269,11 @@ void main() {
 
     test('Requests only while some wait, first; Deliveries last', () {
       expect(
-        shippingHomePlaces(facts: _air, openRequests: 3, canUseDeliveries: true),
+        shippingHomePlaces(
+          facts: _air,
+          openRequests: 3,
+          canUseDeliveries: true,
+        ),
         [
           ShippingHomePlace.requests,
           ShippingHomePlace.packagesHere,
@@ -490,7 +498,8 @@ void main() {
         "Key('open-containers')",
         "Key('open-invoices')",
         "Key('open-staff-balances')",
-        'HomeDestinationGroup(rows: destinations)',
+        'HomeDestinationGroup(',
+        'rows: destinations,',
         'BusinessHomeTail(',
       ]) {
         expect(src, contains(key), reason: key);
@@ -508,7 +517,10 @@ void main() {
       expect(branch, greaterThan(0));
       expect(standard, greaterThan(branch));
       expect(src.substring(standard), contains('_ServicesSection('));
-      expect(src.substring(branch, standard), isNot(contains('_ServicesSection(')));
+      expect(
+        src.substring(branch, standard),
+        isNot(contains('_ServicesSection(')),
+      );
     });
 
     test('the standard home keeps its header row for the simple one too', () {
@@ -530,7 +542,12 @@ void main() {
       // Deliveries is one definition for both homes; the standard home still
       // lists it only for destination staff without Containers.
       expect(src, contains('_deliveriesDestination('));
-      expect(src, contains('auth.hasDeliveriesAccess &&\n      !auth.hasContainersAccess'));
+      expect(
+        src,
+        contains(
+          'auth.hasDeliveriesAccess &&\n      !auth.hasContainersAccess',
+        ),
+      );
     });
 
     test('the activity feed shows under it only when it has records', () {

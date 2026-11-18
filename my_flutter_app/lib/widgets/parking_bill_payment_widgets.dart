@@ -562,7 +562,7 @@ class _Preview extends StatelessWidget {
           key: const Key('bill-payment-left'),
           style: const TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: AppColors.ink,
           ),
         ),

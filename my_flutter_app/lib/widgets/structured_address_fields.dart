@@ -337,17 +337,17 @@ class _StructuredAddressFieldsState extends State<StructuredAddressFields> {
       helperText: helper,
       helperMaxLines: 2,
       prefixIcon: prefixIcon,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.rule),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.brandRed, width: 2),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.errorRed),
       ),
       filled: true,
@@ -450,7 +450,7 @@ class _StructuredAddressFieldsState extends State<StructuredAddressFields> {
               alignment: Alignment.topLeft,
               child: Material(
                 elevation: 4,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
                     maxHeight: 240,
@@ -560,17 +560,17 @@ class _LocateMeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: isLocating ? null : onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         splashColor: AppColors.cobaltDeep.withValues(alpha: 0.08),
         highlightColor: AppColors.cobaltDeep.withValues(alpha: 0.05),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: AppColors.cobaltDeep.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: AppColors.cobaltDeep.withValues(alpha: 0.18),
             ),

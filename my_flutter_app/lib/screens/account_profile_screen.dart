@@ -716,7 +716,7 @@ class _ProfileSection extends StatelessWidget {
               title!,
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 14),
           ],

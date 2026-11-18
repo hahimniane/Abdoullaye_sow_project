@@ -169,7 +169,7 @@ class _InventoryTransferReceiveScreenState
                   key: const Key('inv-tr-receive-from'),
                   style: const TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),
@@ -440,7 +440,7 @@ class _InventoryTransferMissingSheetState
                     '−${row.line.quantitySent - row.counted}',
                     style: const TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.errorRed,
                     ),
                   ),

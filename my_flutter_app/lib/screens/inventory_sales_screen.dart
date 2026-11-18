@@ -752,7 +752,7 @@ class InventorySaleCard extends StatelessWidget {
             formatLotCents(sale.totalCents),
             style: TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: sale.voided ? AppColors.muted : AppColors.ink,
               decoration: sale.voided ? TextDecoration.lineThrough : null,
             ),

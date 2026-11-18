@@ -124,7 +124,7 @@ class _ReviewComposerScreenState extends State<ReviewComposerScreen> {
                       l10n.reviewComposerTitle,
                       style: const TextStyle(
                         fontSize: 22,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
                     ),
@@ -137,7 +137,7 @@ class _ReviewComposerScreenState extends State<ReviewComposerScreen> {
                   args.businessName,
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),
@@ -157,7 +157,7 @@ class _ReviewComposerScreenState extends State<ReviewComposerScreen> {
                 l10n.reviewRatingLabel,
                 style: const TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 ),
               ),

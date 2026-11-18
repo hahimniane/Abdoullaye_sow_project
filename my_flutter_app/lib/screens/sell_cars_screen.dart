@@ -812,7 +812,7 @@ class _FilterButton extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1642,7 +1642,7 @@ class _RangeValueLabel extends StatelessWidget {
           textAlign: textAlign,
           style: Theme.of(
             context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
       ],
     );
@@ -1855,7 +1855,7 @@ class _BrowseHeader extends StatelessWidget {
               height: 38,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
               ),
               child: const Icon(
@@ -1876,7 +1876,7 @@ class _BrowseHeader extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 0,
                       height: 1.05,
                     ),
@@ -1938,7 +1938,7 @@ class _HeaderCountBadge extends StatelessWidget {
             countText,
             style: const TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               fontSize: 12,
               height: 1,
             ),
@@ -1970,7 +1970,7 @@ class _SearchField extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.lightOutline),
         boxShadow: [
           BoxShadow(
@@ -2010,7 +2010,7 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.lightOutline),
       ),
       child: Column(
@@ -2065,14 +2065,14 @@ class _CarListTile extends StatelessWidget {
     final featurePreview = car.allFeatures.take(3).toList();
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.lightOutline),
             boxShadow: [
               BoxShadow(
@@ -2144,7 +2144,7 @@ class _CarListTile extends StatelessWidget {
                           child: Text(
                             car.title,
                             style: const TextStyle(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               fontSize: 16,
                               height: 1.15,
                             ),
@@ -2158,7 +2158,7 @@ class _CarListTile extends StatelessWidget {
                           height: 34,
                           decoration: BoxDecoration(
                             color: AppColors.mist,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
                             Icons.arrow_forward,
@@ -2183,7 +2183,7 @@ class _CarListTile extends StatelessWidget {
                             style: const TextStyle(
                               color: AppColors.cobaltDeep,
                               fontSize: 13,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2360,7 +2360,7 @@ class _ActiveViewingBanner extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.brandRed.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.brandRed.withValues(alpha: 0.18)),
       ),
       child: Row(
@@ -2370,7 +2370,7 @@ class _ActiveViewingBanner extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
               Icons.event_available_outlined,
@@ -2388,7 +2388,7 @@ class _ActiveViewingBanner extends StatelessWidget {
                   style: const TextStyle(
                     color: AppColors.brandRed,
                     fontSize: 12,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -2427,7 +2427,7 @@ class _SpecChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: emphasized ? AppColors.mist : AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2487,14 +2487,14 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.cobaltDeep.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         label,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 10,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0,
         ),
       ),
@@ -2513,7 +2513,7 @@ class _PriceBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.16),
@@ -2525,7 +2525,7 @@ class _PriceBadge extends StatelessWidget {
       child: Text(
         priceText,
         style: const TextStyle(
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           fontSize: 15,
           color: AppColors.cobaltDeep,
         ),

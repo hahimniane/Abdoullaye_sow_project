@@ -494,7 +494,7 @@ class _ShipmentCard extends StatelessWidget {
                     key: const Key('my-package-parking-line'),
                     style: const TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 0.2,
                       color: AppColors.cobaltDeep,
                     ),
@@ -505,7 +505,7 @@ class _ShipmentCard extends StatelessWidget {
                     item.trackingCode,
                     style: const TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 0.2,
                       color: AppColors.cobaltDeep,
                     ),
@@ -615,7 +615,7 @@ class _SectionTitle extends StatelessWidget {
         text,
         style: const TextStyle(
           fontSize: 18,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: AppColors.ink,
         ),
       ),
@@ -686,7 +686,7 @@ class _Message extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(
                   context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.xs),
             ],

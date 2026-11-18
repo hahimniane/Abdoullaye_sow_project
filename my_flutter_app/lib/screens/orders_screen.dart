@@ -426,7 +426,7 @@ class _OrdersHeader extends StatelessWidget {
               title,
               style: const TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: AppColors.ink,
               ),
             ),
@@ -685,7 +685,7 @@ class _OrderCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 15.5,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                   color: AppColors.ink,
                                 ),
                               ),
@@ -780,7 +780,7 @@ class _StatusPill extends StatelessWidget {
         style: TextStyle(
           color: color,
           fontSize: 11.5,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -812,7 +812,7 @@ class _ReviewedPill extends StatelessWidget {
             label,
             style: const TextStyle(
               color: AppColors.sage,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               fontSize: 12.5,
             ),
           ),

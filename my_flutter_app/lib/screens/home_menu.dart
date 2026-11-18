@@ -62,24 +62,6 @@ import 'staff_car_management_screen.dart';
 
 export '../services/business_service_overview.dart' show ServiceCategory;
 
-/// The tint a service carries wherever it appears - tile, chip or record card.
-Color _categoryColor(ServiceCategory category) {
-  switch (category) {
-    case ServiceCategory.parking:
-      return AppColors.sage;
-    case ServiceCategory.barrels:
-      return AppColors.cobalt;
-    case ServiceCategory.freight:
-      return AppColors.cobalt;
-    case ServiceCategory.transport:
-      return AppColors.sage;
-    case ServiceCategory.sales:
-      return AppColors.saffron;
-    case ServiceCategory.all:
-      return AppColors.ink;
-  }
-}
-
 IconData _categoryIcon(ServiceCategory category) {
   switch (category) {
     case ServiceCategory.parking:
@@ -970,8 +952,7 @@ class _HomeMenuState extends State<HomeMenu> {
       historyLoaded: _historyStarted,
       isLoading: _isLoading,
       denseList: _parkingDenseList,
-      onDenseListChanged: (dense) =>
-          setState(() => _parkingDenseList = dense),
+      onDenseListChanged: (dense) => setState(() => _parkingDenseList = dense),
       selectedCategory: _selectedCategory,
       onCategoryChanged: _selectCategory,
       facets: _parkingFacets,
@@ -982,9 +963,7 @@ class _HomeMenuState extends State<HomeMenu> {
       },
       onTogglePayment: (payment) {
         setState(() {
-          _parkingFacets = _parkingFacets.togglePayment(
-            payment,
-          );
+          _parkingFacets = _parkingFacets.togglePayment(payment);
         });
       },
       onClearFacets: () {
@@ -1034,7 +1013,18 @@ class _HomeMenuState extends State<HomeMenu> {
                         Row(
                           children: [
                             if (widget.showBackButton) const BackButton(),
-                            const Spacer(),
+                            // The business's own name heads its home, as it
+                            // heads the web console.
+                            Expanded(
+                              child: Text(
+                                tiles.isEmpty ? '' : (auth.businessName ?? ''),
+                                key: const Key('home-business-name'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.displaySmall,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
                             // Same bell customers have: a business's
                             // notifications (paid links, new opportunities,
                             // viewing requests) were stored but reachable
@@ -1181,7 +1171,8 @@ class _HomeMenuState extends State<HomeMenu> {
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(pad, 12, pad, pad),
                 sliver: SliverToBoxAdapter(
-                  child: shopOnly ||
+                  child:
+                      shopOnly ||
                           (simpleShipping && !showRecords) ||
                           _isLoading ||
                           _businessId.isEmpty
@@ -1342,14 +1333,6 @@ class _ServicesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final services = auth.effectiveBusinessServices;
-    final showSales =
-        business_services.hasBusinessService(
-          services,
-          business_services.BusinessServiceKey.carSales,
-        ) &&
-        (auth.hasBusinessPermission(BusinessPermission.listings) ||
-            auth.hasBusinessPermission(BusinessPermission.purchases));
     // Same gate as the parkedCars subscription in _HomeMenuState: the lot that
     // can see its parked cars is the lot that can add one, so the list and the
     // way to extend it appear together or not at all.
@@ -1358,85 +1341,68 @@ class _ServicesSection extends StatelessWidget {
     );
     final destinations = _businessDestinations(context, auth, l10n);
     final moreTools = _businessTools(context, auth, l10n);
-    return Container(
-      padding: EdgeInsets.all(width * 0.06),
-      decoration: BoxDecoration(
-        color: AppColors.paper,
-        border: Border.all(color: AppColors.rule),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.businessOperations,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+    // No frame around the whole home: each group below is its own white card
+    // on the page, so nothing sits in a box inside a box.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        HomeSectionLabel(l10n.businessOperations),
+        const SizedBox(height: 10),
+        _ServiceOverviewGrid(
+          key: const Key('service-overview-grid'),
+          l10n: l10n,
+          tiles: tiles,
+          isLoading: isLoading,
+          selectedCategory: selectedCategory,
+          onCategoryTapped: onCategoryTapped,
+          // A shop's service is Inventory, switched on separately: "no
+          // services are switched on" was simply untrue for it. Someone
+          // there without the inventory permission is told what to ask for.
+          emptyText:
+              business_services.hasBusinessService(
+                auth.businessServices,
+                business_services.BusinessServiceKey.inventory,
+              )
+              ? l10n.shopHomeNoInventoryAccess
+              : l10n.businessServiceOverviewEmpty,
+        ),
+        // The daily action, and so the loudest thing on the screen.
+        // ParkCarScreen picks its own flow from auth.hasBusinessDashboardAccess
+        // (see its build), so pushing the screen directly opens the walk-up
+        // intake for a business - no flag to pass, and no named customer route.
+        if (canRecordParkedCar) ...[
           const SizedBox(height: 16),
-          _ServiceOverviewGrid(
-            key: const Key('service-overview-grid'),
-            l10n: l10n,
-            tiles: tiles,
-            isLoading: isLoading,
-            selectedCategory: selectedCategory,
-            onCategoryTapped: onCategoryTapped,
-            // A shop's service is Inventory, switched on separately: "no
-            // services are switched on" was simply untrue for it. Someone
-            // there without the inventory permission is told what to ask for.
-            emptyText:
-                business_services.hasBusinessService(
-                  auth.businessServices,
-                  business_services.BusinessServiceKey.inventory,
-                )
-                ? l10n.shopHomeNoInventoryAccess
-                : l10n.businessServiceOverviewEmpty,
+          HomePrimaryAction(
+            buttonKey: const Key('record-parked-car'),
+            icon: Icons.add,
+            label: l10n.recordAParkedCar,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const ParkCarScreen()),
+              );
+            },
           ),
-          if (showSales) ...[
-            const SizedBox(height: 12),
-            Text(
-              l10n.businessCarsMobileNote,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 12.5,
-                height: 1.4,
-                color: AppColors.muted,
-              ),
-            ),
-          ],
-          // The daily action, and so the loudest thing on the screen.
-          // ParkCarScreen picks its own flow from auth.hasBusinessDashboardAccess
-          // (see its build), so pushing the screen directly opens the walk-up
-          // intake for a business - no flag to pass, and no named customer route.
-          if (canRecordParkedCar) ...[
-            const SizedBox(height: 16),
-            HomePrimaryAction(
-              buttonKey: const Key('record-parked-car'),
-              icon: Icons.add,
-              label: l10n.recordAParkedCar,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ParkCarScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
-          // The ledger and the transport board are places, not commands, so
-          // they read as a list you can walk into rather than as two more
-          // buttons competing with the one action above them. Each says what
-          // is inside, because a name alone makes people guess.
-          if (destinations.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            HomeDestinationGroup(rows: destinations),
-          ],
-          // Everything else the console offers, by the same permissions it
-          // uses, then the console and the assistant: the tail the simple
-          // shipping home ends with too.
-          BusinessHomeTail(tools: moreTools, businessId: auth.businessId ?? ''),
         ],
-      ),
+        // The ledger and the transport board are places, not commands, so
+        // they read as a list you can walk into rather than as two more
+        // buttons competing with the one action above them. Each says what
+        // is inside, because a name alone makes people guess.
+        if (destinations.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          HomeDestinationGroup(
+            rows: destinations,
+            sectionLabels: {
+              HomeSection.cars: l10n.navCars,
+              HomeSection.shipping: l10n.hubShipping,
+              HomeSection.money: l10n.shhMoneyTitle,
+            },
+          ),
+        ],
+        // Everything else the console offers, by the same permissions it
+        // uses, then the console and the assistant: the tail the simple
+        // shipping home ends with too.
+        BusinessHomeTail(tools: moreTools, businessId: auth.businessId ?? ''),
+      ],
     );
   }
 }
@@ -1517,6 +1483,7 @@ HomeDestination _deliveriesDestination(
   String businessId,
 ) => HomeDestination(
   rowKey: const Key('open-deliveries'),
+  section: HomeSection.shipping,
   icon: Icons.how_to_reg_outlined,
   title: l10n.dlvTitle,
   subtitle: l10n.dlvSubtitle,
@@ -1594,6 +1561,7 @@ List<HomeDestination> _businessDestinations(
     if (canUseLotLedger)
       HomeDestination(
         rowKey: const Key('open-lot-ledger'),
+        section: HomeSection.cars,
         icon: Icons.receipt_long_outlined,
         title: l10n.lotLedgerTitle,
         subtitle: l10n.lotLedgerSubtitle,
@@ -1609,6 +1577,7 @@ List<HomeDestination> _businessDestinations(
     if (canUseContainers)
       HomeDestination(
         rowKey: const Key('open-containers'),
+        section: HomeSection.shipping,
         icon: Icons.view_in_ar_outlined,
         title: l10n.ctrTitle,
         subtitle: l10n.ctrSubtitle,
@@ -1626,6 +1595,7 @@ List<HomeDestination> _businessDestinations(
     if (canUseInventory && includeInventory)
       HomeDestination(
         rowKey: const Key('open-inventory'),
+        section: HomeSection.money,
         icon: Icons.qr_code_scanner,
         title: l10n.inventoryTitle,
         subtitle: l10n.inventorySubtitle,
@@ -1646,6 +1616,7 @@ List<HomeDestination> _businessDestinations(
     if (canUseInvoices)
       HomeDestination(
         rowKey: const Key('open-invoices'),
+        section: HomeSection.money,
         icon: Icons.receipt_long_outlined,
         title: l10n.invMenuTitle,
         subtitle: l10n.invMenuSubtitle,
@@ -1663,6 +1634,7 @@ List<HomeDestination> _businessDestinations(
     if (canUseStaffBalances)
       HomeDestination(
         rowKey: const Key('open-staff-balances'),
+        section: HomeSection.money,
         icon: Icons.account_balance_wallet_outlined,
         title: l10n.sbalTitle,
         subtitle: l10n.sbalMenuSubtitle,
@@ -1688,6 +1660,7 @@ List<HomeDestination> _businessDestinations(
     if (canWorkTransport)
       HomeDestination(
         rowKey: const Key('open-transport-jobs'),
+        section: HomeSection.cars,
         icon: Icons.local_shipping_outlined,
         title: l10n.businessTransportTitle,
         subtitle: l10n.businessTransportRowSubtitle,
@@ -1897,6 +1870,16 @@ class _ShopMoreSection extends StatelessWidget {
 /// owed; for the shipping services, what is still moving. A tile with nothing
 /// outstanding still appears - "nothing to chase today" is an answer, and a
 /// grid that changed shape as work arrived would be unreadable.
+/// How many count tiles share a row: one alone takes the full width, three
+/// sit in one row (never two and a lonely third), and larger sets fall back
+/// to rows of two or three so no row is left with a single tile.
+@visibleForTesting
+int serviceOverviewColumns(int count) {
+  if (count <= 1) return 1;
+  if (count == 2 || count == 4) return 2;
+  return 3;
+}
+
 class _ServiceOverviewGrid extends StatelessWidget {
   const _ServiceOverviewGrid({
     super.key,
@@ -1930,10 +1913,8 @@ class _ServiceOverviewGrid extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        const gap = 12.0;
-        // Two to a row on a phone; a single service gets the full width rather
-        // than a lonely half-tile.
-        final columns = tiles.length == 1 ? 1 : 2;
+        const gap = 10.0;
+        final columns = serviceOverviewColumns(tiles.length);
         final tileWidth =
             (constraints.maxWidth - gap * (columns - 1)) / columns;
         return Wrap(
@@ -1977,7 +1958,6 @@ class _ServiceOverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = _categoryColor(tile.category);
     final name = _categoryLabel(tile.category, l10n);
     // The same digit means three different things across the grid, and this
     // caption is the only thing that says which: money owed, records open, or
@@ -2006,12 +1986,13 @@ class _ServiceOverviewCard extends StatelessWidget {
       // decoration where the tile actually is, and still clips the tap splash
       // to the rounded corners.
       child: Material(
-        color: isSelected ? tint.withValues(alpha: 0.12) : AppColors.paper,
+        // White on a hairline; the chosen tile is marked in the logo navy.
+        color: isSelected ? AppColors.mist : AppColors.paper,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           side: BorderSide(
-            color: tint.withValues(alpha: isSelected ? 1 : 0.45),
-            width: isSelected ? 2 : 1,
+            color: isSelected ? AppColors.cobalt : AppColors.hairline,
+            width: isSelected ? 1.5 : 1,
           ),
         ),
         clipBehavior: Clip.antiAlias,
@@ -2023,7 +2004,11 @@ class _ServiceOverviewCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(_categoryIcon(tile.category), color: tint, size: 22),
+                Icon(
+                  _categoryIcon(tile.category),
+                  color: isSelected ? AppColors.cobalt : AppColors.muted,
+                  size: 20,
+                ),
                 const SizedBox(height: 10),
                 Text(
                   name,
@@ -2031,7 +2016,8 @@ class _ServiceOverviewCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                    fontWeight: FontWeight.w600,
                     color: AppColors.ink,
                   ),
                 ),
@@ -2045,7 +2031,7 @@ class _ServiceOverviewCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 24,
                         height: 1,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         // Nothing outstanding is not news; it must not shout.
                         color: tile.count == 0 || isLoading
                             ? AppColors.muted
@@ -2908,7 +2894,7 @@ class _ParkingListRow extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 color: AppColors.ink,
                                 decoration: strike,
                               ),
@@ -2919,7 +2905,7 @@ class _ParkingListRow extends StatelessWidget {
                             total > 0 ? currency.format(total) : '—',
                             style: TextStyle(
                               fontSize: 15,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               color: AppColors.ink,
                               decoration: strike,
                               // Digits line up down the column.

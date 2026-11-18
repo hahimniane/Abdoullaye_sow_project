@@ -64,7 +64,7 @@ class BusinessReviewsScreen extends StatelessWidget {
                       average.toStringAsFixed(1),
                       style: const TextStyle(
                         fontSize: 34,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(width: 12),

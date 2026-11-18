@@ -180,7 +180,7 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
         leading: const AppBackButton(),
         title: Text(
           l10n.requestCarTransport,
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
       body: SafeArea(child: _buildBody()),
@@ -521,7 +521,7 @@ class _SectionLabel extends StatelessWidget {
         text,
         style: const TextStyle(
           fontSize: 14,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: AppColors.ink,
         ),
       ),
@@ -568,7 +568,7 @@ class _EmptyState extends StatelessWidget {
             Text(
               l10n.noTransportBusinessesYet,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
@@ -601,7 +601,7 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               l10n.couldNotLoadTransportOptions,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(

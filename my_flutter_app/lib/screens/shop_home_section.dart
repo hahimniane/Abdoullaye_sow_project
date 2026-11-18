@@ -679,7 +679,7 @@ class _Header extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 22,
                       height: 1.2,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.4,
                       color: AppColors.ink,
                     ),
@@ -843,7 +843,7 @@ class ShopSellButton extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 22,
                         height: 1.15,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -0.3,
                       ),
                     ),
@@ -1102,7 +1102,7 @@ class _Figure extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 28,
                       height: 1.15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.5,
                       color: quiet ? AppColors.muted : AppColors.ink,
                       fontFeatures: const [FontFeature.tabularFigures()],
@@ -1252,7 +1252,7 @@ class _QuickLinkTile extends StatelessWidget {
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -1522,7 +1522,7 @@ class _SaleRow extends StatelessWidget {
                     formatLotCents(sale.totalCents),
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: sale.voided ? AppColors.muted : AppColors.ink,
                       decoration: sale.voided
                           ? TextDecoration.lineThrough

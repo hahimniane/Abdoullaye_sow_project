@@ -1066,7 +1066,7 @@ class _MoneyTile extends StatelessWidget {
               formatLotCents(cents),
               style: TextStyle(
                 fontSize: 19,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 height: 1.05,
                 // Large text needs the letters pulled back together.
                 letterSpacing: -0.6,
@@ -1144,7 +1144,7 @@ class _LotStatChip extends StatelessWidget {
             value,
             style: TextStyle(
               fontSize: 17,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               letterSpacing: -0.4,
               color: alert ? AppColors.errorRed : AppColors.ink,
               fontFeatures: const [FontFeature.tabularFigures()],
@@ -2216,7 +2216,7 @@ class _ActivityCard extends StatelessWidget {
                         formatLotCents(activity.feeCents),
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: -0.3,
                           color: AppColors.ink,
                           decoration: strike,
@@ -3199,7 +3199,7 @@ class _ActivityDetailSheet extends StatelessWidget {
                 formatLotCents(activity.feeCents),
                 style: TextStyle(
                   fontSize: 26,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -0.8,
                   height: 1.05,
                   color: AppColors.ink,
@@ -3710,7 +3710,7 @@ class _PaymentRow extends StatelessWidget {
             formatLotCents(payment.amountCents),
             style: const TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               letterSpacing: -0.2,
               color: AppColors.ink,
               fontFeatures: [FontFeature.tabularFigures()],
@@ -4578,7 +4578,7 @@ class ExpenseLineCard extends StatelessWidget {
               formatLotCents(amount),
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 letterSpacing: -0.3,
                 color: AppColors.ink,
                 decoration: strike,
@@ -5754,7 +5754,7 @@ class _ReportsPanel extends StatelessWidget {
                       margin == null ? '—' : '$margin%',
                       style: const TextStyle(
                         fontSize: 19,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         height: 1.05,
                         letterSpacing: -0.6,
                         color: AppColors.ink,
@@ -5991,7 +5991,7 @@ class _RevenueBreakdown extends StatelessWidget {
                 formatLotCents(totalCents),
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -0.2,
                   color: AppColors.ink,
                   fontFeatures: [FontFeature.tabularFigures()],
@@ -6345,7 +6345,7 @@ class _YearChartPainter extends CustomPainter {
           text: initials[i],
           style: TextStyle(
             fontSize: 10,
-            fontWeight: i == selected ? FontWeight.w800 : FontWeight.w500,
+            fontWeight: i == selected ? FontWeight.w700 : FontWeight.w500,
             color: i == selected ? AppColors.cobaltDeep : AppColors.muted,
           ),
         ),

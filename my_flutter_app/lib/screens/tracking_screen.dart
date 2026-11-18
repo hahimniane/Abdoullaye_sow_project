@@ -617,7 +617,7 @@ class _ShipmentsHeader extends StatelessWidget {
               title,
               style: Theme.of(
                 context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           if (onCodeLookup != null)
@@ -674,7 +674,7 @@ class _ShipmentGroupCard extends StatelessWidget {
       elevation: 0,
       color: AppColors.paper,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppColors.rule),
       ),
       child: Padding(
@@ -690,7 +690,7 @@ class _ShipmentGroupCard extends StatelessWidget {
                   height: 42,
                   decoration: BoxDecoration(
                     color: AppColors.cobalt.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
                     Icons.inventory_2_outlined,
@@ -705,7 +705,7 @@ class _ShipmentGroupCard extends StatelessWidget {
                       Text(
                         l10n.barrelOrder,
                         style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w900),
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -781,7 +781,7 @@ class _ShipmentGroupLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       onTap: () => Navigator.pushNamed(
         context,
         '/barrel-shipment-details',
@@ -797,7 +797,7 @@ class _ShipmentGroupLine extends StatelessWidget {
                 shipment.destinationCountryName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(width: 10),
@@ -807,7 +807,7 @@ class _ShipmentGroupLine extends StatelessWidget {
                 children: [
                   Text(
                     shipment.trackingCode,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -842,7 +842,7 @@ class _InfoChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Row(
@@ -855,7 +855,7 @@ class _InfoChip extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.ink,
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -931,7 +931,7 @@ class _FreightNextStepCallout extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
@@ -950,14 +950,14 @@ class _FreightNextStepCallout extends StatelessWidget {
                       l10n.freightNextStep,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: AppColors.cobaltDeep,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1036,7 +1036,7 @@ class _FreightSummaryChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Row(
@@ -1049,7 +1049,7 @@ class _FreightSummaryChip extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.ink,
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -1109,13 +1109,13 @@ class _ShipmentCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         side: focused
             ? BorderSide(color: AppColors.cobalt.withValues(alpha: 0.32))
             : BorderSide.none,
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         onTap: shipment.isFreight
             ? null
             : () => Navigator.pushNamed(
@@ -1138,7 +1138,7 @@ class _ShipmentCard extends StatelessWidget {
                         Text(
                           shipment.trackingCode,
                           style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w900),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -1428,7 +1428,7 @@ class _StatusPill extends StatelessWidget {
         style: TextStyle(
           color: color,
           fontSize: 12,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -1644,7 +1644,7 @@ class _StatusSegment extends StatelessWidget {
               '$label  $count',
               style: TextStyle(
                 color: selected ? AppColors.cobaltDeep : AppColors.muted,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 fontSize: 13,
               ),
             ),

@@ -497,7 +497,7 @@ class _TotalsCard extends StatelessWidget {
               key: const Key('credit-total-owed'),
               style: const TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: AppColors.ink,
               ),
             ),
@@ -619,7 +619,7 @@ class _CreditRow extends StatelessWidget {
               key: Key('credit-owed-${sale.id}'),
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: overdue ? AppColors.errorRed : AppColors.ink,
               ),
             ),

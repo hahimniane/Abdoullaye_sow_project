@@ -63,7 +63,7 @@ class ShipmentTrackingSection extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
@@ -77,7 +77,7 @@ class ShipmentTrackingSection extends StatelessWidget {
                 child: Text(
                   l10n.trackingUpdatesTitle,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 15.5,
                     color: AppColors.ink,
                   ),
@@ -169,7 +169,7 @@ class _TrackingEventRow extends StatelessWidget {
                 Text(
                   event.label,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),

@@ -134,7 +134,7 @@ class _ParkingMessagesSectionState extends State<ParkingMessagesSection> {
                   child: Text(
                     l10n.parkingWaMessagesTitle,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -177,7 +177,7 @@ class _MessageRow extends StatelessWidget {
             children: [
               Text(
                 parkingMessageKindText(l10n, message.kind),
-                style: theme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+                style: theme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               if (at.isNotEmpty || message.phone.isNotEmpty)
                 Text(
@@ -196,7 +196,7 @@ class _MessageRow extends StatelessWidget {
         Text(
           parkingMessageStatusText(l10n, message),
           style: theme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: problem
                 ? AppColors.errorRed
                 : message.status == ParkingMessageStatus.sent

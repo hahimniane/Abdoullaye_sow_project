@@ -167,7 +167,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0B3B38), Color(0xFF101827)],
+            colors: [Color(0xFF032346), Color(0xFF0B2F5B)],
           ),
         ),
         child: SafeArea(
@@ -185,7 +185,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -207,7 +207,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                     child: Column(
                       children: [
                         TabBar(
-                          labelColor: const Color(0xFF0B3B38),
+                          labelColor: const Color(0xFF032346),
                           unselectedLabelColor: const Color(0xFF64748B),
                           tabs: [
                             Tab(text: AppLocalizations.of(context)!.openBarrelsTabOpen),
@@ -397,7 +397,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                                 style: Theme.of(sheetContext)
                                     .textTheme
                                     .titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w800),
+                                    ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -480,7 +480,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                                       participant.senderName,
                                       style: const TextStyle(
                                         fontSize: 16,
-                                        fontWeight: FontWeight.w800,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                     const SizedBox(height: 5),
@@ -508,7 +508,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                                         ),
                                       ),
                                       style: const TextStyle(
-                                        color: Color(0xFF047857),
+                                        color: Color(0xFF008A05),
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
@@ -848,7 +848,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                         Text(
                           AppLocalizations.of(context)!.openBarrelsRequestShareTitle,
                           style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -1181,7 +1181,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                         Text(
                           AppLocalizations.of(context)!.openBarrelsPostTitle,
                           style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -1437,7 +1437,7 @@ class _PickupSection extends StatelessWidget {
                 onChanged: onPickupRequestedChanged,
                 title: Text(
                   AppLocalizations.of(context)!.openBarrelsRequestPickup,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 subtitle: Text(
                   pickupRequested
@@ -1638,10 +1638,10 @@ class _PoolCard extends StatelessWidget {
             Row(
               children: [
                 const CircleAvatar(
-                  backgroundColor: Color(0xFFE6FFFA),
+                  backgroundColor: Color(0xFFE8EDF4),
                   child: Icon(
                     Icons.inventory_2_outlined,
-                    color: Color(0xFF0D9488),
+                    color: Color(0xFF032346),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1652,7 +1652,7 @@ class _PoolCard extends StatelessWidget {
                       Text(
                         pool.destinationCountryName,
                         style: const TextStyle(
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),
                       ),
@@ -1757,14 +1757,14 @@ class _StateMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 42, color: const Color(0xFF0D9488)),
+            Icon(icon, size: 42, color: const Color(0xFF032346)),
             const SizedBox(height: 12),
             Text(
               title,
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(

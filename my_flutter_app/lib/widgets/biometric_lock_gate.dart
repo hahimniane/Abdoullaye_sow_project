@@ -115,7 +115,7 @@ class _BiometricLockGateState extends State<BiometricLockGate>
                 Text(
                   l10n.appLocked,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                   textAlign: TextAlign.center,
                 ),

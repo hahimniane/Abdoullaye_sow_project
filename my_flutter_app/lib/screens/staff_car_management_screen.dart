@@ -709,7 +709,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: AppColors.paper,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -721,7 +721,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: AppColors.ink,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -2039,7 +2039,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
@@ -2055,7 +2055,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                   style: const TextStyle(
                     color: AppColors.ink,
                     fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -2108,13 +2108,13 @@ class _CarFormSheetState extends State<_CarFormSheet> {
         if (_images.isEmpty)
           InkWell(
             onTap: _pickImages,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             child: Container(
               width: double.infinity,
               height: 170,
               decoration: BoxDecoration(
                 color: AppColors.mist,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.rule),
               ),
               child: Column(
@@ -2131,7 +2131,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: AppColors.cobaltDeep,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -2687,7 +2687,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -2718,7 +2718,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
             color: missing.isEmpty
                 ? AppColors.sage.withValues(alpha: 0.12)
                 : AppColors.saffron.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             children: [
@@ -2734,7 +2734,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                   missing.isEmpty
                       ? l10n.readyToPublish
                       : '${l10n.missingRequiredInfo}: ${missing.join(', ')}',
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -2857,7 +2857,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                               style: const TextStyle(
                                 color: AppColors.ink,
                                 fontSize: 17,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -2907,7 +2907,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.errorRed.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: AppColors.errorRed.withValues(alpha: 0.35),
                         ),
@@ -2924,7 +2924,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                               '${l10n.fixRequiredFields}: $_stepError',
                               style: const TextStyle(
                                 color: AppColors.errorRed,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -3389,7 +3389,7 @@ class _EmptyCarsState extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 ),
               ),
@@ -3415,7 +3415,7 @@ class _EmptyCarsState extends StatelessWidget {
                     backgroundColor: AppColors.brandRed,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),

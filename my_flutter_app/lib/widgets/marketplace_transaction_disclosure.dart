@@ -65,7 +65,7 @@ class _MarketplaceTransactionDisclosureDialogState
             if (widget.transactionSummary.trim().isNotEmpty) ...[
               Text(
                 widget.transactionSummary,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
             ],

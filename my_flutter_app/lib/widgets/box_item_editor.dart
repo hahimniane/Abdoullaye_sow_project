@@ -134,7 +134,7 @@ class _QuantityPill extends StatelessWidget {
               '$quantity',
               textAlign: TextAlign.center,
               style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -280,7 +280,7 @@ class _BoxItemPickerSheetState extends State<_BoxItemPickerSheet> {
                 child: Text(
                   l10n.freightAddAnItem,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -331,7 +331,7 @@ class _BoxItemPickerSheetState extends State<_BoxItemPickerSheet> {
                             Text(
                               '\$${(item.priceCents! / 100).toStringAsFixed(2)}',
                               style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 color: theme.colorScheme.primary,
                               ),
                             ),
@@ -397,7 +397,7 @@ class _BoxItemPickerSheetState extends State<_BoxItemPickerSheet> {
                 child: Text(
                   naming.label,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),

@@ -362,7 +362,7 @@ class _InventoryItemScreenState extends State<InventoryItemScreen> {
                           key: const Key('inv-item-count'),
                           style: const TextStyle(
                             fontSize: 30,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             height: 1.05,
                             color: AppColors.ink,
                           ),
@@ -630,7 +630,7 @@ class _MovementRow extends StatelessWidget {
               inventoryDeltaText(movement.delta),
               style: TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: movement.delta == 0
                     ? AppColors.muted
                     : (up ? AppColors.sage : AppColors.warn),

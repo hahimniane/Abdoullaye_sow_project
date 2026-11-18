@@ -1134,7 +1134,7 @@ class _Figures extends StatelessWidget {
               key: const Key('hist-kpi-total'),
               style: const TextStyle(
                 fontSize: 24,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 letterSpacing: -0.4,
                 color: AppColors.ink,
               ),

@@ -49,7 +49,7 @@ class BusinessManagementScreen extends StatelessWidget {
                         business == null ? l10n.addBusiness : l10n.editBusiness,
                         style: const TextStyle(
                           fontSize: 17,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 16),

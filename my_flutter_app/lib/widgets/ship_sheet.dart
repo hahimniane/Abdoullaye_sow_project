@@ -85,7 +85,7 @@ class _ShipSheet extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   fontSize: 21,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                   height: 1.1,
                   // Large text reads too loose at default tracking.

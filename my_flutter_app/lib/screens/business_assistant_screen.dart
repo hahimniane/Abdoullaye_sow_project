@@ -236,7 +236,7 @@ class _BusinessAssistantScreenState extends State<BusinessAssistantScreen> {
           l10n.businessAssistantTitle,
           style: const TextStyle(
             color: AppColors.ink,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -337,7 +337,7 @@ class _EmptyState extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.ink,
               fontSize: 22,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               height: 1.2,
             ),
           ),
@@ -479,7 +479,7 @@ class _ActionCard extends StatelessWidget {
                     action.title,
                     style: const TextStyle(
                       color: AppColors.ink,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),

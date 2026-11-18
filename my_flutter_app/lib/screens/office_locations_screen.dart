@@ -57,7 +57,7 @@ class _OfficeLocationsScreenState extends State<OfficeLocationsScreen> {
                   style: const TextStyle(
                     color: AppColors.ink,
                     fontSize: 20,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),

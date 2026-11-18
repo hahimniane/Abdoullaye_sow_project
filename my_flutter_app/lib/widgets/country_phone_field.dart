@@ -304,7 +304,7 @@ class _CountryCodeButton extends StatelessWidget {
                   option.dialCode,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: enabled ? AppColors.ink : AppColors.muted,
                   ),
                 ),
@@ -403,7 +403,7 @@ class _CountryCodeSheetState extends State<_CountryCodeSheet> {
                     child: Text(
                       l10n.selectCountryCode,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -463,7 +463,7 @@ class _CountryCodeSheetState extends State<_CountryCodeSheet> {
                               Text(
                                 option.dialCode,
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               if (selected) ...[

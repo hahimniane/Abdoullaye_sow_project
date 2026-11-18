@@ -186,7 +186,7 @@ class _ParkingInvoicesCardState extends State<ParkingInvoicesCard> {
                 child: Text(
                   l10n.parkingInvCardTitle,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -418,7 +418,7 @@ class _ParkingInvoicesSheetState extends State<ParkingInvoicesSheet> {
                       parkingMonthLabel(widget.monthKey, locale),
                     ),
               style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -637,7 +637,7 @@ class _InvoiceRecipientTile extends StatelessWidget {
       title: Text(
         title,
         style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: color,
         ),
       ),

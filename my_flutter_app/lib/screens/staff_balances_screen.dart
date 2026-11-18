@@ -221,7 +221,7 @@ class _StaffBalancesBadgeState extends State<StaffBalancesBadge> {
                 '$waiting',
                 style: const TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
@@ -854,7 +854,7 @@ class _SectionTitle extends StatelessWidget {
               text,
               style: const TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: AppColors.ink,
               ),
             ),
@@ -871,7 +871,7 @@ class _SectionTitle extends StatelessWidget {
                 '$count',
                 style: const TextStyle(
                   fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
@@ -986,7 +986,7 @@ class _BalanceCard extends StatelessWidget {
                       textAlign: TextAlign.end,
                       style: TextStyle(
                         fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: _netColor(row.netCents),
                       ),
                     ),
@@ -1400,7 +1400,7 @@ class StaffBalanceDetailSheet extends StatelessWidget {
                 key: key,
                 style: TextStyle(
                   fontSize: 13.5,
-                  fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
+                  fontWeight: strong ? FontWeight.w700 : FontWeight.w600,
                   color: AppColors.ink,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -1425,7 +1425,7 @@ class StaffBalanceDetailSheet extends StatelessWidget {
                   key: const Key('sbal-months'),
                   style: const TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),
@@ -1485,7 +1485,7 @@ class StaffBalanceDetailSheet extends StatelessWidget {
                         l10n.sbalNet,
                         style: const TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.ink,
                         ),
                       ),
@@ -1495,7 +1495,7 @@ class StaffBalanceDetailSheet extends StatelessWidget {
                       key: const Key('sbal-detail-net'),
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: _netColor(row.netCents),
                       ),
                     ),
@@ -1516,7 +1516,7 @@ class StaffBalanceDetailSheet extends StatelessWidget {
                 l10n.sbalHistory,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 ),
               ),
@@ -1637,7 +1637,7 @@ class _MonthCardState extends State<_MonthCard> {
                       title,
                       style: const TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
                     ),
@@ -1694,7 +1694,7 @@ class _MonthCardState extends State<_MonthCard> {
                           textAlign: TextAlign.end,
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: _runningColor(m.runningNetCents),
                           ),
                         ),
@@ -1741,7 +1741,7 @@ class _MonthLines extends StatelessWidget {
         text,
         style: const TextStyle(
           fontSize: 12,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: AppColors.muted,
         ),
       ),

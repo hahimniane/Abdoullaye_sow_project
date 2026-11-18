@@ -390,7 +390,7 @@ class _StaffInviteScreenState extends State<StaffInviteScreen> {
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontSize: 18,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             height: 1.35,
           ),
         ),

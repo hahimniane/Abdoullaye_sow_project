@@ -261,7 +261,7 @@ class _ParkingWelcomeSheetState extends State<ParkingWelcomeSheet> {
                   ? l10n.parkingWaWelcomeResultTitle
                   : l10n.parkingWaWelcomeTitle,
               style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -459,7 +459,7 @@ class _RecipientTile extends StatelessWidget {
       title: Text(
         title,
         style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: color,
         ),
       ),

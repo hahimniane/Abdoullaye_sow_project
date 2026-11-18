@@ -56,7 +56,7 @@ class BusinessParkingPaymentBadge extends StatelessWidget {
             isPaid ? l10n.paid : l10n.notPaid,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
               color: foreground,
             ),

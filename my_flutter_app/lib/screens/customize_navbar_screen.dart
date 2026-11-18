@@ -88,7 +88,7 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
                 Text(
                   l10n.inYourNavbar,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -135,7 +135,7 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
                 Text(
                   l10n.addServices,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 8),

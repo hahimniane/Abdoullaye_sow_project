@@ -272,7 +272,7 @@ class _GuestTrackingLookupState extends State<GuestTrackingLookup> {
               child: Text(
                 l10n.trackShipment,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -415,7 +415,7 @@ class _GuestTrackingSuccess extends StatelessWidget {
                 child: Text(
                   l10n.guestTrackingSuccessTitle,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -426,7 +426,7 @@ class _GuestTrackingSuccess extends StatelessWidget {
             record.trackingCode,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: AppColors.cobaltDeep,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -558,7 +558,7 @@ class _GuestPhoneSignIn extends StatelessWidget {
             l10n.phaHintTitle,
             style: Theme.of(
               context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -610,7 +610,7 @@ class _GuestTrackingNotFound extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -688,7 +688,7 @@ class _GuestFact extends StatelessWidget {
             value,
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
       ],
@@ -719,7 +719,7 @@ class _GuestParts extends StatelessWidget {
         children: [
           Text(
             l10n.pcsTrackingParts,
-            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -742,7 +742,7 @@ class _GuestParts extends StatelessWidget {
                       SelectableText(
                         part.trackingCode,
                         style: theme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: part.trackingCode == record.trackingCode
                               ? AppColors.cobaltDeep
                               : null,
@@ -769,7 +769,7 @@ class _GuestParts extends StatelessWidget {
                   Text(
                     formatLotCents(part.priceCents!),
                     style: theme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
               ],
@@ -827,7 +827,7 @@ class _GuestPayment extends StatelessWidget {
         children: [
           Text(
             l10n.pcsTrackingMoney,
-            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           for (final (label, value, key) in rows) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -846,7 +846,7 @@ class _GuestPayment extends StatelessWidget {
                   value,
                   key: key,
                   style: theme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -922,7 +922,7 @@ class _GuestParkingMoney extends StatelessWidget {
         children: [
           Text(
             l10n.parkingTrackMoneyTitle,
-            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           for (final (label, value, key) in rows) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -945,7 +945,7 @@ class _GuestParkingMoney extends StatelessWidget {
                     key: key,
                     textAlign: TextAlign.end,
                     style: theme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -977,7 +977,7 @@ class _GuestParkingMoney extends StatelessWidget {
                       l10n.parkingTrackPaidInFull,
                       style: theme.titleSmall?.copyWith(
                         color: AppColors.sage,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -994,7 +994,7 @@ class _GuestParkingMoney extends StatelessWidget {
                         ? l10n.parkingTrackBalanceNow
                         : l10n.parkingTrackBalance,
                     style: theme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1005,7 +1005,7 @@ class _GuestParkingMoney extends StatelessWidget {
                     key: const Key('guest-parking-balance'),
                     textAlign: TextAlign.end,
                     style: theme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.errorRed,
                     ),
                   ),
@@ -1047,7 +1047,7 @@ class _GuestShippingDetails extends StatelessWidget {
         children: [
           Text(
             l10n.guestTrackingShippingTitle,
-            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -1078,7 +1078,7 @@ class _GuestShippingDetails extends StatelessWidget {
                   child: SelectableText(
                     value,
                     style: theme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),

@@ -292,7 +292,7 @@ class _CarViewingNegotiationPanelState
                   viewingStatusLabel(l10n, state.purchaseStatus),
                   style: const TextStyle(
                     color: AppColors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -678,7 +678,7 @@ class _ViewingNotice extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Row(

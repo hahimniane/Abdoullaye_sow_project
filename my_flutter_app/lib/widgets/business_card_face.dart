@@ -58,7 +58,7 @@ class BusinessCardFace extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   height: 1.15,
                   color: signature ? Colors.white : color,
                 ),
@@ -123,7 +123,7 @@ class BusinessCardFace extends StatelessWidget {
                       card.person!.name,
                       style: const TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
                     ),
@@ -243,7 +243,7 @@ class _CardLogo extends StatelessWidget {
         cardInitials(name),
         style: TextStyle(
           fontSize: 20,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: color,
         ),
       ),

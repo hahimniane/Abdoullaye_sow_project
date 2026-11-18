@@ -349,7 +349,7 @@ class _BusinessInvitationsSectionState
                 l10n.pendingInvitations,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -441,7 +441,7 @@ class _InvitationRow extends StatelessWidget {
                       row.fullName.isEmpty ? row.contact : row.fullName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     Text(
                       details,

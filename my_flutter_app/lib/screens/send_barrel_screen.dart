@@ -629,7 +629,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                         AppLocalizations.of(context)!.sendBarrels,
                         style: const TextStyle(
                           fontSize: 17,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                         textAlign: TextAlign.center,
@@ -952,7 +952,7 @@ class _BarrelHero extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: Row(
@@ -969,7 +969,7 @@ class _BarrelHero extends StatelessWidget {
               height: 74,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
               ),
               child: const Icon(
@@ -989,7 +989,7 @@ class _BarrelHero extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     height: 1.05,
                   ),
                   maxLines: 2,
@@ -1025,10 +1025,10 @@ class _SharedBarrelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -1037,12 +1037,12 @@ class _SharedBarrelCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE6FFFA),
-                  borderRadius: BorderRadius.circular(8),
+                  color: const Color(0xFFE8EDF4),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.group_add_outlined,
-                  color: Color(0xFF0D9488),
+                  color: Color(0xFF032346),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1053,7 +1053,7 @@ class _SharedBarrelCard extends StatelessWidget {
                     Text(
                       AppLocalizations.of(context)!.sendBarrelSharedPromoTitle,
                       style: const TextStyle(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         fontSize: 16,
                         color: Color(0xFF0F172A),
                       ),
@@ -1099,7 +1099,7 @@ class _FormSection extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
         boxShadow: [
           BoxShadow(
@@ -1121,7 +1121,7 @@ class _FormSection extends StatelessWidget {
                   height: 42,
                   decoration: BoxDecoration(
                     color: AppColors.mist,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: AppColors.cobaltDeep, size: 22),
                 ),
@@ -1135,7 +1135,7 @@ class _FormSection extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.ink,
                           fontSize: 17,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1174,7 +1174,7 @@ class _InlineNotice extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.saffron.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.saffron.withValues(alpha: 0.32)),
       ),
       child: Row(
@@ -1296,7 +1296,7 @@ class _BusinessOptionSelectorState extends State<_BusinessOptionSelector> {
                   l10n.businessesShippingToCountry,
                   style: Theme.of(
                     context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
                 if (shouldOfferServiceSort(options, 'barrelShipping'))
@@ -1388,7 +1388,7 @@ class _BusinessOptionCard extends StatelessWidget {
       inMutuallyExclusiveGroup: true,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           width: double.infinity,
@@ -1397,7 +1397,7 @@ class _BusinessOptionCard extends StatelessWidget {
             color: selected
                 ? AppColors.cobalt.withValues(alpha: 0.08)
                 : AppColors.paper,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected ? AppColors.cobalt : AppColors.rule,
               width: selected ? 1.5 : 1,
@@ -1427,7 +1427,7 @@ class _BusinessOptionCard extends StatelessWidget {
                     Text(
                       option.businessName,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     if (option.reviewCount > 0) ...[
                       const SizedBox(height: 2),
@@ -1493,7 +1493,7 @@ class _BusinessOptionCard extends StatelessWidget {
                     price,
                     style: const TextStyle(
                       color: AppColors.cobaltDeep,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1517,7 +1517,7 @@ class BarrelDeliveryEstimateChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.sage.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.sage.withValues(alpha: 0.28)),
       ),
       child: Row(
@@ -1534,7 +1534,7 @@ class BarrelDeliveryEstimateChip extends StatelessWidget {
               style: const TextStyle(
                 color: AppColors.sage,
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1574,7 +1574,7 @@ class _SubmitButton extends StatelessWidget {
             foregroundColor: Colors.white,
             disabledForegroundColor: AppColors.muted,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
             elevation: 0,
             splashFactory: NoSplash.splashFactory,
@@ -1601,7 +1601,7 @@ class _SubmitButton extends StatelessWidget {
           label: Text(
             isSubmitting ? l10n.processingPayment : l10n.payAndRequestShipment,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
         ),
       ),
@@ -1683,7 +1683,7 @@ class _PickupChoice extends StatelessWidget {
           }),
           side: const WidgetStatePropertyAll(BorderSide(color: AppColors.rule)),
           shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
       ),
@@ -1737,7 +1737,7 @@ class _PickupScopeChoice extends StatelessWidget {
           }),
           side: const WidgetStatePropertyAll(BorderSide(color: AppColors.rule)),
           shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
       ),
@@ -1764,7 +1764,7 @@ class _PickupDateTimeTile extends FormField<DateTime> {
                Material(
                  color: AppColors.lightSurfaceVariant,
                  shape: RoundedRectangleBorder(
-                   borderRadius: BorderRadius.circular(8),
+                   borderRadius: BorderRadius.circular(12),
                    side: BorderSide(
                      color: state.hasError
                          ? AppColors.errorRed
@@ -1823,7 +1823,7 @@ class _QuantityStepper extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Row(
@@ -1833,7 +1833,7 @@ class _QuantityStepper extends StatelessWidget {
           Expanded(
             child: Text(
               l10n.barrelsForThisDestination,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
           IconButton.filledTonal(
@@ -1846,7 +1846,7 @@ class _QuantityStepper extends StatelessWidget {
             child: Text(
               value.toString(),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w900),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
           IconButton.filledTonal(
@@ -1915,14 +1915,14 @@ class _DestinationCartCard extends StatelessWidget {
     final qty = line.quantity;
     return Material(
       color: AppColors.paper,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onEdit,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.rule),
           ),
           child: Row(
@@ -1939,7 +1939,7 @@ class _DestinationCartCard extends StatelessWidget {
                   children: [
                     Text(
                       line.country.name,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -1972,7 +1972,7 @@ class _DestinationCartCard extends StatelessWidget {
                 children: [
                   Text(
                     price,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -2020,7 +2020,7 @@ class _PickupSummaryChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.mist,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Row(
@@ -2041,7 +2041,7 @@ class _PickupSummaryChip extends StatelessWidget {
               style: const TextStyle(
                 color: AppColors.cobaltDeep,
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -2090,7 +2090,7 @@ class _PriceEstimateCard extends StatelessWidget {
               value,
               style: const TextStyle(
                 color: AppColors.ink,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -2105,7 +2105,7 @@ class _PriceEstimateCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.cobaltDeep,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: AppColors.cobaltDeep.withValues(alpha: 0.18),
@@ -2124,7 +2124,7 @@ class _PriceEstimateCard extends StatelessWidget {
                 height: 38,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.payments_outlined,
@@ -2139,7 +2139,7 @@ class _PriceEstimateCard extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -2148,7 +2148,7 @@ class _PriceEstimateCard extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 17,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -2158,7 +2158,7 @@ class _PriceEstimateCard extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               children: [
@@ -2249,17 +2249,17 @@ class BarrelTextFormField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: icon == null ? null : Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.rule),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.brandRed, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.errorRed, width: 2),
         ),
         filled: true,
@@ -2287,7 +2287,7 @@ class _AddDestinationButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14),
           foregroundColor: AppColors.cobaltDeep,
           side: const BorderSide(color: AppColors.cobalt),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );
@@ -2307,7 +2307,7 @@ class _EmptyDestinations extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
@@ -2327,7 +2327,7 @@ class _EmptyDestinations extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             l10n.whereAreBarrelsGoing,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
           ),
           const SizedBox(height: 4),
           Text(
@@ -2660,7 +2660,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                           : l10n.destinationNumber(widget.ordinal),
                       style: const TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -2733,21 +2733,21 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                         initialCountryCode: _country?.displayCode ?? 'US',
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(color: AppColors.rule),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(
                               color: AppColors.brandRed,
                               width: 2,
                             ),
                           ),
                           errorBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(
                               color: AppColors.errorRed,
                               width: 2,
@@ -2903,7 +2903,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                         currency.format(_lineFee + _pickupFee),
                         style: const TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -2917,7 +2917,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                             disabledBackgroundColor: AppColors.rule,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           onPressed: _business == null ? null : _save,

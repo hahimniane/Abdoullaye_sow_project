@@ -189,7 +189,7 @@ class _GateScreen extends StatelessWidget {
                       height: 72,
                       decoration: BoxDecoration(
                         color: AppColors.cobalt.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(icon, color: AppColors.cobaltDeep, size: 34),
                     ),
@@ -198,7 +198,7 @@ class _GateScreen extends StatelessWidget {
                       title,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w900),
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 10),
                     Text(

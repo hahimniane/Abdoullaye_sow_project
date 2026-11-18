@@ -880,7 +880,7 @@ class InventoryTransferSentScreen extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),
@@ -922,7 +922,7 @@ class InventoryTransferSentScreen extends StatelessWidget {
                                 '${line.quantity}',
                                 style: const TextStyle(
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                   color: AppColors.ink,
                                 ),
                               ),

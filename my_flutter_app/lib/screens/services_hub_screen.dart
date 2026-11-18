@@ -201,7 +201,7 @@ class _ShipHero extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         height: 1.12,
                         // Large text reads too loose at default tracking.
                         letterSpacing: -0.4,
@@ -234,7 +234,7 @@ class _ShipHero extends StatelessWidget {
                             style: const TextStyle(
                               color: AppColors.cobaltDeep,
                               fontSize: 14,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -574,7 +574,7 @@ class _CategoryHeader extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   fontSize: 26,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                   letterSpacing: -0.3,
                 ),
@@ -606,7 +606,7 @@ class _SectionHeader extends StatelessWidget {
         title,
         style: const TextStyle(
           fontSize: 15,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: AppColors.ink,
           letterSpacing: 0.1,
         ),
@@ -648,7 +648,7 @@ class _GreetingHeader extends StatelessWidget {
                   initial,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     fontSize: 18,
                   ),
                 ),
@@ -674,7 +674,7 @@ class _GreetingHeader extends StatelessWidget {
                 style: const TextStyle(
                   color: AppColors.ink,
                   fontSize: 19,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -780,7 +780,7 @@ class _ServiceRow extends StatelessWidget {
                     item.title,
                     style: const TextStyle(
                       fontSize: 15.5,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),

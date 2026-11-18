@@ -63,7 +63,7 @@ class _BusinessReviewsSheet extends StatelessWidget {
                     : businessName,
                 style: const TextStyle(
                   fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 ),
               ),

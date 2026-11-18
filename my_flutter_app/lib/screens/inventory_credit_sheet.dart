@@ -472,7 +472,7 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
             key: const Key('credit-standing'),
             style: TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: _sale.voided
                   ? AppColors.muted
                   : overdue

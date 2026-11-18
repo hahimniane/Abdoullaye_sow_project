@@ -481,7 +481,7 @@ class _TransportOpportunityCard extends StatelessWidget {
                     ),
                     style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),
@@ -752,7 +752,7 @@ class _TransportJobCardState extends State<_TransportJobCard> {
           Text(
             l10n.transportJobMoveTitle,
             style: const TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: AppColors.ink,
             ),
           ),

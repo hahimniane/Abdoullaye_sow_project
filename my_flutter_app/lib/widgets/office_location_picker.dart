@@ -125,7 +125,7 @@ class _OfficeLocationPickerState extends State<OfficeLocationPicker> {
                 l10n.locationsAvailableChooseOne(locations.length),
                 style: const TextStyle(
                   color: AppColors.cobaltDeep,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
               ),
@@ -190,7 +190,7 @@ class _OfficeLocationChoice extends StatelessWidget {
                       location.label,
                       style: const TextStyle(
                         color: AppColors.ink,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -230,7 +230,7 @@ class _OfficeLocationsProblem extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
       decoration: BoxDecoration(
         color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Row(
@@ -277,7 +277,7 @@ class OfficeDropOffTile extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.rule),
       ),
       child: Row(
@@ -292,7 +292,7 @@ class OfficeDropOffTile extends StatelessWidget {
                   AppLocalizations.of(context)!.dropOffOffice,
                   style: const TextStyle(
                     color: AppColors.ink,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 3),

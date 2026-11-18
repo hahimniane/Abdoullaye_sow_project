@@ -1162,7 +1162,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
                           key: const Key('inv-total'),
                           style: const TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.ink,
                           ),
                         ),
