@@ -9,9 +9,9 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 - Public/platform brand: Laawol Digital. Do not use Veyra/Verya in new brand-facing docs, PDFs, public website copy, or admin design language unless explicitly working on legacy mobile labels.
 - Domain: car sales, parking, transport, barrel shipping, account and staff workflows.
 - Stack: Flutter Material 3 with shared theme files under `lib/theme/`.
-- Current palette uses deep teal foundations, clean slate/white surfaces, warm amber highlights, and semantic green/red states.
+- Palette (since the 2026-11-17 redesign, one design with the website and the web consoles; `docs/APP_NEW_LOOK.md`): near-black `#222222` text on white and `#f7f7f7`, hairline `#ebebeb` cards, logo navy `#032346` as the ONLY brand colour; amber, green and red carry meaning only (not paid, paid, a problem). Typeface Plus Jakarta Sans.
 - Shared design primitives include `AppColors`, `AppSpacing`, `AppTypography`, `AppTheme`, `AppCard`, `GradientHeader`, `BrandBackground`, `StatusChip`, `AppBottomNav`, `LanguageToggle`, and `ThemeToggle`.
-- Radius scale is restrained: `AppSpacing.radiusSm = 6`, larger radii currently cap at `8`.
+- Radius scale: 12 for fields and small controls (`radiusSm`), 16 for cards (`radiusMd`/`radiusLg`), 20 for sheets and dialogs (`radiusXl`); primary buttons are 50 high with a 14 radius.
 
 ## Key Screens And Workflows
 
@@ -231,3 +231,4 @@ Return:
   the amounts did not change. "From the price list" is a quiet text action on
   a piece, not a new field.
 - Web consoles use the public website's design (owner, 2026-11-15: "use the same design as the public website", then "look at the fonts style as well"). One system for the business, admin and customer consoles, all in `admin_web/src/app/globals.css`: Plus Jakarta Sans (self-hosted in `admin_web/public/fonts/`), weights 400/500/600/700 only, no text under 12px, headings at -0.02em, sentence-case labels (only small status tags and code fields stay uppercase), text `#222`/`#6a6a6a`, hairlines `#ddd`/`#ebebeb`, flat `#f7f7f7` page, white cards with 16px corners and no gradients, 12px buttons and fields, a white header and white side menu. The logo navy `#032346` is the only brand color (primary buttons, the selected menu row, chart series); amber, green and red are kept for meaning only. The old teal palette is retired on the web. `admin_web/src/lib/console-design.test.ts` guards the scale. The Flutter app still uses its own theme.
+- App redesign (owner, 2026-11-15 to 11-17): he rejected the teal look (bordered teal tiles, a card inside a card, tinted icon squares, filled teal tab) and approved the website's design for the app, drawn first on a design canvas. Design every screen and get his OK before building; a "go" on one screen is not a go to build the app. Home rule: "The home page should not look very complicated. It should not show things that are not related to that business": one loud button for the business's main work, three numbers, the few daily places, each other service as a small block, one More row. On a design mockup every row and button must open something; a dead tap reads as broken. Anything not in the app today must be marked as a proposal, never slipped in.

@@ -2395,6 +2395,11 @@ void main() {
       expect(find.byKey(const Key('inv-category-filter-all')), findsOneWidget);
       expect(find.byKey(const ValueKey('inv-item-i1')), findsOneWidget);
       expect(find.byKey(const ValueKey('inv-item-i2')), findsOneWidget);
+      // The chips scroll sideways; one further along is brought in first.
+      await tester.ensureVisible(
+        find.byKey(const Key('inv-category-filter-c2')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('inv-category-filter-c2')));
       await tester.pumpAndSettle();
       // i2 by id, i1 (typed "Body") is not in Hair.
@@ -3489,11 +3494,19 @@ void main() {
       expect(find.byKey(const ValueKey('inv-item-i1')), findsOneWidget);
       expect(find.byKey(const ValueKey('inv-item-i5')), findsOneWidget);
 
+      await tester.ensureVisible(
+        find.byKey(const Key('inv-brand-filter-br1')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('inv-brand-filter-br1')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('inv-item-i5')), findsOneWidget);
       expect(find.byKey(const ValueKey('inv-item-i1')), findsNothing);
 
+      await tester.ensureVisible(
+        find.byKey(const Key('inv-brand-filter-$inventoryNoBrandFilter')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const Key('inv-brand-filter-$inventoryNoBrandFilter')),
       );
@@ -3501,6 +3514,10 @@ void main() {
       expect(find.byKey(const ValueKey('inv-item-i1')), findsOneWidget);
       expect(find.byKey(const ValueKey('inv-item-i5')), findsNothing);
 
+      await tester.ensureVisible(
+        find.byKey(const Key('inv-brand-filter-all')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('inv-brand-filter-all')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('inv-item-i5')), findsOneWidget);

@@ -165,7 +165,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(chosen, ['biz-2']);
 
+      // The state chips are one row that scrolls sideways and builds what is
+      // on screen: a chip further along is scrolled to, as on the phone.
+      final chipRow = find.descendant(
+        of: find.byKey(const Key('purchase-status-filter')),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(
+        find.text('Review pending'),
+        80,
+        scrollable: chipRow,
+      );
       expect(find.text('Review pending'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('purchase-status:reserved')),
+        -80,
+        scrollable: chipRow,
+      );
       await tester.tap(
         find.byKey(const ValueKey('purchase-status:reserved')),
       );
