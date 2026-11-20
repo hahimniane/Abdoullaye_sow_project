@@ -164,3 +164,41 @@ describe("fleet billing: who drove", () => {
     });
   }
 });
+
+describe("fleet billing: a late fee paid on time is taken back (Q2)", () => {
+  const {lateFeesPaidOnTime} = require("../fleet_billing");
+  const rent = (id, due, amount = 35000) => ({id, kind: "rent",
+    status: "open", amountCents: amount, paidCents: 0, dueDayKey: due});
+  const fee = (forId, day, extra = {}) => ({id: `${forId}_late`,
+    kind: "late_fee", status: "open", amountCents: 5000, paidCents: 0,
+    dueDayKey: day, lateFeeForBillId: forId, ...extra});
+  const bills = [rent("r1", "2026-12-01"), fee("r1", "2026-12-05")];
+
+  it("a payment dated on or before the fee day that covers the rent", () => {
+    assert.deepEqual(lateFeesPaidOnTime(bills, "2026-12-05", 35000),
+        ["r1_late"]);
+    assert.deepEqual(lateFeesPaidOnTime(bills, "2026-12-02", 40000),
+        ["r1_late"]);
+  });
+  it("not after the fee day, not when the rent is not covered", () => {
+    assert.deepEqual(lateFeesPaidOnTime(bills, "2026-12-06", 35000), []);
+    assert.deepEqual(lateFeesPaidOnTime(bills, "2026-12-05", 34999), []);
+    assert.deepEqual(lateFeesPaidOnTime(bills, "", 35000), []);
+  });
+  it("not a fee that is partly paid, waived, or for another bill", () => {
+    assert.deepEqual(lateFeesPaidOnTime([bills[0],
+      fee("r1", "2026-12-05", {paidCents: 100})], "2026-12-05", 35000), []);
+    assert.deepEqual(lateFeesPaidOnTime([bills[0],
+      fee("r1", "2026-12-05", {status: "waived"})], "2026-12-05", 35000), []);
+    assert.deepEqual(lateFeesPaidOnTime([fee("gone", "2026-12-05")],
+        "2026-12-05", 35000), []);
+  });
+  it("fees are paid first, so a fee whose rent the money cannot cover " +
+      "stays and takes the money first", () => {
+    const two = [rent("r1", "2026-12-01"), fee("r1", "2026-12-05"),
+      rent("r2", "2027-01-01"), fee("r2", "2027-01-05")];
+    assert.deepEqual(lateFeesPaidOnTime(two, "2026-12-04", 35000), []);
+    assert.deepEqual(lateFeesPaidOnTime(two, "2026-12-04", 70000).sort(),
+        ["r1_late", "r2_late"]);
+  });
+});

@@ -9,6 +9,8 @@
 const fleetBilling = require("./fleet_billing");
 const fleetBank = require("./fleet_bank");
 const fleetWhatsApp = require("./fleet_whatsapp");
+const fleetClaims = require("./fleet_claims");
+const {messageDocId} = require("./whatsapp_conversations");
 const {parseFleetSheet, previousMonth} = require("./fleet_import");
 
 const STAFF = "fleet";
@@ -47,6 +49,11 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_no_phone:
       "This driver has no WhatsApp number. Add one in Edit details.",
   fleet_driver_left: "This driver has left.",
+  fleet_deposit_not_waiting: "That deposit is not waiting for the office.",
+  fleet_claim_closed: "This report is closed or was already paid.",
+  fleet_claim_no_driver: "This report has no driver yet.",
+  fleet_bad_name: "That is not a person's name (at least two words, not an " +
+    "account or an app).",
 });
 
 const text = (v, max = 200) => String(v ?? "").trim().slice(0, max);
@@ -70,6 +77,9 @@ const MONTH = /^\d{4}-\d{2}$/;
 function createFleetHandlers(deps) {
   const {admin, HttpsError, FieldValue} = deps;
   const db = () => admin.firestore();
+  // Tests inject a clock for the claim timers.
+  const nowMs = () => (typeof deps.now === "function" ? deps.now() :
+    Date.now());
   const refuse = (code, status = "failed-precondition") =>
     new HttpsError(status, FLEET_REFUSALS[code] || code, {reason: code});
 
@@ -240,26 +250,17 @@ function createFleetHandlers(deps) {
         fields.tlcLicenseSince = fields.tlcLicense ? deps.dayKeyNow() : null;
       }
       await doc.ref.set(fields, {merge: true});
-      // A driver who comes back may hold cents someone took meanwhile.
-      if (fields.status === "active") await ensurePersonalCents(businessId);
       await audit(businessId, uid, "fleet_driver", driverId,
           "fleet_driver_saved", `Driver ${name} edited`);
       return {success: true, driverId};
     }
     const ref = col.doc();
-    await db().runTransaction(async (tx) => {
-      const active = await tx.get(col.where("businessId", "==", businessId)
-          .where("status", "==", "active"));
-      const drivers = active.docs.map((x) => ({id: x.id,
-        personalCents: x.get("personalCents"), createdAt: joinedMs(x.data())}));
-      drivers.push({id: ref.id, createdAt: Date.now()});
-      const cents = fleetBilling.assignPersonalCents(drivers);
-      tx.set(ref, {...fields, status: "active", creditCents: 0,
-        licenseHistory: [],
-        tlcLicenseSince: fields.tlcLicense ? deps.dayKeyNow() : null,
-        personalCents: cents[ref.id] ?? null, rememberedSenders: [],
-        createdAt: FieldValue.serverTimestamp()});
-    });
+    // No personal cents any more (docs/FLEET_PAYMENT_PROOF.md Q6).
+    await ref.set({...fields, status: "active", creditCents: 0,
+      licenseHistory: [],
+      tlcLicenseSince: fields.tlcLicense ? deps.dayKeyNow() : null,
+      rememberedSenders: [],
+      createdAt: FieldValue.serverTimestamp()});
     await audit(businessId, uid, "fleet_driver", ref.id, "fleet_driver_added",
         `Driver ${name} added`);
     return {success: true, driverId: ref.id};
@@ -464,8 +465,6 @@ function createFleetHandlers(deps) {
         "fleet_assignment_started",
         `Plate given to driver from ${startDayKey}, ` +
         `$${(rentCents / 100).toFixed(2)} ${period}`);
-    // Giving a car makes the driver active again: keep their cents unique.
-    await ensurePersonalCents(businessId);
     return {success: true, assignmentId: ref.id};
   }
 
@@ -890,12 +889,17 @@ function createFleetHandlers(deps) {
 
   /**
    * One payment inside a transaction: the driver's open bills, oldest and
-   * late fees first, the rest to credit. Reads before writes.
+   * late fees first, the rest to credit. Reads before writes. A payment
+   * that comes from a bank deposit and whose bank date is on or before a
+   * late fee's day, and that covers that fee's rent bill, takes the unpaid
+   * fee back first (`void`, `voidReason: "paid_on_time"`, docs/
+   * FLEET_PAYMENT_PROOF.md Q2).
    *
    * @param {object} tx The transaction.
    * @param {object} ref The new fleetPayments document.
    * @param {object} p {businessId, driverId, amount, method, paidDayKey,
-   *   byUid, note, bank?: {creditId, senderName, how}}.
+   *   byUid, note, requireActive, claimId, bank?: {creditId, senderName,
+   *   how}}.
    * @return {Promise<object>} The allocation plan.
    */
   async function applyPayment(tx, ref, p) {
@@ -908,8 +912,14 @@ function createFleetHandlers(deps) {
     if (!driver.exists || driver.get("businessId") !== p.businessId) {
       throw refuse("fleet_not_found", "not-found");
     }
+    if (p.requireActive && driver.get("status") !== "active") {
+      throw refuse("fleet_driver_left");
+    }
     const bills = open.docs.map((d) => ({id: d.id, ...d.data()}));
-    const plan = fleetBilling.allocatePayment(bills, p.amount);
+    const feesBack = p.bank ?
+      fleetBilling.lateFeesPaidOnTime(bills, p.paidDayKey, p.amount) : [];
+    const plan = fleetBilling.allocatePayment(
+        bills.filter((b) => !feesBack.includes(b.id)), p.amount);
     if (!plan.ok) throw refuse(plan.reason, "invalid-argument");
     for (const a of plan.allocations) {
       const bill = bills.find((b) => b.id === a.billId);
@@ -920,6 +930,11 @@ function createFleetHandlers(deps) {
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
+    for (const feeId of feesBack) {
+      tx.update(db().collection("fleetBills").doc(feeId), {
+        status: "void", voidReason: "paid_on_time", voidedAtMs: nowMs(),
+        voidedByPaymentId: ref.id, updatedAt: FieldValue.serverTimestamp()});
+    }
     const driverPatch = {};
     if (plan.creditAddedCents > 0) {
       driverPatch.creditCents = FieldValue.increment(plan.creditAddedCents);
@@ -928,7 +943,7 @@ function createFleetHandlers(deps) {
     // (a person's Zelle only: never an account, an app, cash or a check).
     if (p.bank && fleetBank.senderRememberable(p.bank)) {
       driverPatch.rememberedSenders =
-        FieldValue.arrayUnion(fleetBank.senderKey(p.bank.senderName));
+        FieldValue.arrayUnion(fleetBank.matchKey(p.bank.senderName));
     }
     if (Object.keys(driverPatch).length) {
       tx.update(driverRef, {...driverPatch,
@@ -940,6 +955,8 @@ function createFleetHandlers(deps) {
       allocations: plan.allocations,
       creditAddedCents: plan.creditAddedCents, creditUsedCents: 0,
       status: "recorded", imported: false, note: p.note || "",
+      ...(feesBack.length ? {lateFeesVoided: feesBack} : {}),
+      ...(p.claimId ? {claimId: p.claimId} : {}),
       ...(p.bank ? {bankTxnId: p.bank.creditId,
         bankSenderName: p.bank.senderName || "",
         matchedBy: p.bank.how} : {}),
@@ -991,6 +1008,9 @@ function createFleetHandlers(deps) {
         tx.get(db().collection("fleetBills").doc(a.billId))));
       const driverRef = db().collection("fleetDrivers").doc(p.driverId);
       const driver = await tx.get(driverRef);
+      // The late fees this payment took back (paid on time) are owed again.
+      const feeDocs = await Promise.all((p.lateFeesVoided || []).map((id) =>
+        tx.get(db().collection("fleetBills").doc(String(id)))));
       // The extra this payment left as credit may have paid later bills
       // since: what is no longer held is taken back from the driver's
       // bills, newest first, so what they owe is right again (the credit
@@ -1064,15 +1084,26 @@ function createFleetHandlers(deps) {
         tx.update(b.ref, {paidCents: paid, status,
           updatedAt: FieldValue.serverTimestamp()});
       }
+      for (const fee of feeDocs) {
+        if (fee.exists && fee.get("status") === "void" &&
+            fee.get("voidReason") === "paid_on_time") {
+          tx.update(fee.ref, {status: "open",
+            voidReason: FieldValue.delete(), voidedAtMs: FieldValue.delete(),
+            voidedByPaymentId: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp()});
+        }
+      }
       const driverPatch = {};
       if (creditOut > 0) {
         driverPatch.creditCents = Math.max(0, held - creditOut);
       }
       // The match was wrong: this sender is no longer this driver's, or the
-      // next deposit would go to the same wrong driver by itself.
+      // next deposit would go to the same wrong driver by itself (stored
+      // under the old key or the cleaned one).
       if (p.bankSenderName) {
         driverPatch.rememberedSenders = FieldValue.arrayRemove(
-            fleetBank.senderKey(p.bankSenderName));
+            fleetBank.senderKey(p.bankSenderName),
+            fleetBank.matchKey(p.bankSenderName));
       }
       if (driver.exists && Object.keys(driverPatch).length) {
         tx.update(driverRef, {...driverPatch,
@@ -1082,36 +1113,29 @@ function createFleetHandlers(deps) {
         undoneAtMs: Date.now(),
         ...(returned > 0 ? {returnCreditTakenCents: returned} : {}),
         ...(creditTakenBack.length ? {creditTakenBack} : {})});
-      // The bank deposit goes back to "waiting" for the right driver.
+      // The bank deposit goes back to "waiting" for the right driver, and
+      // never pays by itself again (`fleetUndone`, also carried to the
+      // bank's posted copy).
       for (const c of credits) {
         const used = c.get("consumedBy");
         if (used && used.id && used.id !== paymentId) continue;
         tx.set(c.ref, {
           consumedBy: FieldValue.delete(), consumedAt: FieldValue.delete(),
-          consumedByUid: FieldValue.delete(),
+          consumedByUid: FieldValue.delete(), fleetUndone: true,
           ...(c.get("removed") === true ? {} :
             {fleetWaiting: true, fleetWaitingReason: "undone"}),
         }, {merge: true});
       }
       amount = Number(p.amountCents) || 0;
     });
+    // A report that this payment answered goes back to the office.
+    await reopenClaimsOf(paymentId);
     await audit(businessId, uid, "fleet_payment", paymentId,
         "fleet_payment_undone", `Payment $${(amount / 100).toFixed(2)} undone`);
     return {success: true};
   }
 
   // ---- bank deposits (phase 1b, docs/FLEET.md §8) ----------------------
-
-  /**
-   * Where matching starts for a business: go-live, or Fleet's own start.
-   *
-   * @param {object} business The business.
-   * @return {number} The earliest deposit time.
-   */
-  function matchSince(business) {
-    return Math.max(fleetBank.BANK_MATCH_START_MS,
-        Number(business?.fleet?.enabledAtMs) || 0);
-  }
 
   async function activeDrivers(businessId) {
     const snap = await db().collection("fleetDrivers")
@@ -1121,65 +1145,26 @@ function createFleetHandlers(deps) {
   }
 
   /**
-   * When a driver joined, in ms, for the personal-cents order: createdAt,
-   * else importedAt (imported drivers), else 0.
-   *
-   * @param {object} driver A fleetDrivers record.
-   * @return {number} Milliseconds.
-   */
-  function joinedMs(driver) {
-    const v = driver?.createdAt ?? driver?.importedAt;
-    if (v && typeof v.toMillis === "function") return v.toMillis();
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  /**
-   * Keeps personal cents unique across a business's active drivers: the
-   * driver who joined first keeps a shared value, the other gets the lowest
-   * free one. Runs after an import, when a driver comes back, and daily.
-   *
-   * @param {string} businessId The business.
-   * @return {Promise<number>} How many drivers got new cents.
-   */
-  async function ensurePersonalCents(businessId) {
-    const snap = await db().collection("fleetDrivers")
-        .where("businessId", "==", businessId)
-        .where("status", "==", "active").get();
-    const cents = fleetBilling.assignPersonalCents(snap.docs.map((d) => ({
-      id: d.id, personalCents: d.get("personalCents"),
-      createdAt: joinedMs(d.data())})));
-    const changed = snap.docs.filter((d) =>
-      (d.get("personalCents") ?? null) !== (cents[d.id] ?? null));
-    for (let i = 0; i < changed.length; i += 400) {
-      const batch = db().batch();
-      for (const d of changed.slice(i, i + 400)) {
-        batch.update(d.ref, {personalCents: cents[d.id] ?? null,
-          updatedAt: FieldValue.serverTimestamp()});
-      }
-      await batch.commit();
-    }
-    if (changed.length) {
-      deps.logger.info("Fleet personal cents made unique",
-          {businessId, changed: changed.length});
-    }
-    return changed.length;
-  }
-
-  /**
    * One deposit paying one driver: claims the deposit (consumedBy) and
    * records the payment in one transaction, so a deposit is never used
-   * twice (a shop sale, another driver, a second sync).
+   * twice (a shop sale, another driver, a second sync). Paying from a
+   * driver's report (`claimId`) marks the report paid in the same
+   * transaction. The payment's day is the bank's date (Q2).
    *
-   * @param {object} p {businessId, creditId, driverId, how, byUid}.
+   * @param {object} p {businessId, creditId, driverId, how, byUid, claimId,
+   *   requireWaiting (the office's "Pay this driver": the deposit must be on
+   *   the waiting list), requireActive}.
    * @return {Promise<object>} {paymentId, amountCents}.
    */
   async function payFromDeposit(p) {
     const creditRef = db().collection("businessBankCredits").doc(p.creditId);
     const ref = db().collection("fleetPayments").doc();
+    const claimRef = p.claimId ?
+      db().collection("fleetClaims").doc(p.claimId) : null;
     let amount = 0;
     await db().runTransaction(async (tx) => {
       const doc = await tx.get(creditRef);
+      const claim = claimRef ? await tx.get(claimRef) : null;
       const credit = doc.exists ? doc.data() || {} : null;
       if (!credit || credit.businessId !== p.businessId ||
           credit.removed === true) {
@@ -1188,30 +1173,181 @@ function createFleetHandlers(deps) {
       if (credit.consumedBy && credit.consumedBy.kind) {
         throw refuse("fleet_deposit_used");
       }
+      if (p.requireWaiting && credit.fleetWaiting !== true) {
+        throw refuse("fleet_deposit_not_waiting");
+      }
+      if (claim && (!claim.exists ||
+          claim.get("businessId") !== p.businessId ||
+          claim.get("driverId") !== p.driverId ||
+          !fleetClaims.OPEN_STATES.includes(claim.get("state")))) {
+        throw refuse("fleet_claim_closed");
+      }
       amount = Number(credit.amountCents) || 0;
       const day = String(credit.dateKey || "") || deps.dayKeyNow();
       await applyPayment(tx, ref, {businessId: p.businessId,
         driverId: p.driverId, amount, method: "zelle", paidDayKey: day,
-        byUid: p.byUid, note: "",
+        byUid: p.byUid, note: "", requireActive: p.requireActive !== false,
+        claimId: p.claimId || "",
         bank: {creditId: p.creditId, senderName: credit.senderName || "",
           zelle: credit.zelle, how: p.how}});
       tx.set(creditRef, {consumedBy: {kind: "fleet_payment", id: ref.id},
         consumedAt: FieldValue.serverTimestamp(), consumedByUid: p.byUid,
         fleetWaiting: false, fleetWaitingReason: FieldValue.delete()},
       {merge: true});
+      if (claimRef) {
+        tx.update(claimRef, {state: fleetClaims.STATE.PAID, open: false,
+          creditId: p.creditId, paymentId: ref.id, paidAtMs: nowMs(),
+          updatedAt: FieldValue.serverTimestamp()});
+      }
     });
     await audit(p.businessId, p.byUid, "fleet_payment", ref.id,
         "fleet_payment_recorded",
         `Zelle $${(amount / 100).toFixed(2)} from the bank ` +
-        `(${p.how === "office" ? "picked by the office" : p.how === "sender" ?
-          "known sender" : "driver's cents"})`);
+        `(${p.how === "office" ? "picked by the office" :
+          p.how === "sender" ? "known sender" :
+            "from the driver's report"})`);
+    if (!p.claimId) {
+      await settleClaimsFor(p.driverId, amount, ref.id, p.creditId);
+    }
     await sendReceipt(p.businessId, ref.id);
     return {paymentId: ref.id, amountCents: amount};
   }
 
   /**
+   * A deposit paid a driver by a remembered name while the driver also had a
+   * report of the same amount: that report is answered. Best effort.
+   *
+   * @param {string} driverId The driver.
+   * @param {number} amountCents The deposit.
+   * @param {string} paymentId The payment.
+   * @param {string} creditId The deposit.
+   * @return {Promise<void>}
+   */
+  async function settleClaimsFor(driverId, amountCents, paymentId, creditId) {
+    try {
+      const snap = await db().collection("fleetClaims")
+          .where("driverId", "==", driverId).get();
+      const claim = snap.docs.find((d) =>
+        fleetClaims.takesDeposit({...d.data()}) &&
+        Number(d.get("amountCents")) === amountCents);
+      if (!claim) return;
+      await claim.ref.update({state: fleetClaims.STATE.PAID, open: false,
+        paymentId, creditId, paidAtMs: nowMs(),
+        updatedAt: FieldValue.serverTimestamp()});
+    } catch (error) {
+      deps.logger.warn("Fleet report not settled", {driverId,
+        error: String(error?.message || error)});
+    }
+  }
+
+  /**
+   * An undone payment: the report it answered goes back to the office.
+   *
+   * @param {string} paymentId The undone payment.
+   * @return {Promise<void>}
+   */
+  async function reopenClaimsOf(paymentId) {
+    try {
+      const snap = await db().collection("fleetClaims")
+          .where("paymentId", "==", paymentId).get();
+      for (const d of snap.docs) {
+        if (d.get("state") !== fleetClaims.STATE.PAID) continue;
+        await d.ref.update({state: fleetClaims.STATE.OFFICE, open: true,
+          reason: fleetClaims.REASON.PAYMENT_UNDONE,
+          paymentId: null, creditId: null,
+          updatedAt: FieldValue.serverTimestamp()});
+      }
+    } catch (error) {
+      deps.logger.warn("Fleet report not reopened", {paymentId,
+        error: String(error?.message || error)});
+    }
+  }
+
+  /**
+   * A business's reports a deposit can pay, as matchDeposit wants them.
+   *
+   * @param {string} businessId The business.
+   * @return {Promise<Array<object>>} [{id, driverId, amountCents, payerName,
+   *   dayKey, createdAtMs}].
+   */
+  async function claimsForMatching(businessId) {
+    const snap = await db().collection("fleetClaims")
+        .where("businessId", "==", businessId)
+        .where("open", "==", true).get();
+    return snap.docs.map((d) => ({id: d.id, ...d.data()}))
+        .filter((c) => fleetClaims.takesDeposit(c))
+        .map((c) => ({id: c.id, driverId: c.driverId,
+          amountCents: Number(c.amountCents) || 0,
+          payerName: c.payerName || "", dayKey: c.read?.dayKey || "",
+          createdAtMs: Number(c.createdAtMs) || 0}));
+  }
+
+  /**
+   * One stored deposit: it pays its driver, or waits for the office. Throws
+   * on a failure of its own (the caller carries on with the next deposit).
+   *
+   * @param {object} env {businessId, since, drivers, claims (mutable)}.
+   * @param {object} doc The deposit's snapshot.
+   * @return {Promise<string>} "paid" | "waiting" | "skipped".
+   */
+  async function matchOneDeposit(env, doc) {
+    const {businessId} = env;
+    const credit = doc.exists ? doc.data() || {} : null;
+    if (!credit || credit.businessId !== businessId) return "skipped";
+    if (!fleetBank.depositMatchable(credit, env.since)) return "skipped";
+    const sameAmount = await db().collection("businessBankCredits")
+        .where("businessId", "==", businessId)
+        .where("amountCents", "==", Number(credit.amountCents) || 0)
+        .orderBy("createdAt", "desc").limit(50).get();
+    const stored = sameAmount.docs.map((d) => ({id: d.id, ...d.data()}));
+    const repeat = fleetBank.possibleDuplicateOf({id: doc.id, ...credit},
+        stored);
+    const others = stored.filter((o) => o.id !== doc.id &&
+      o.removed !== true && !(o.consumedBy && o.consumedBy.kind));
+    const match = repeat ?
+      {reason: repeat.fleetUndone === true ? "undone" : "possible_duplicate"} :
+      fleetBank.matchDeposit({id: doc.id, ...credit}, env.drivers,
+          {claims: env.claims, others});
+    if (match.driverId) {
+      try {
+        await payFromDeposit({businessId, creditId: doc.id,
+          driverId: match.driverId, how: match.how, byUid: "bank",
+          claimId: match.claimId || ""});
+        const taken = Number(credit.amountCents) || 0;
+        env.claims = env.claims.filter((c) => c.id !== match.claimId &&
+          !(c.driverId === match.driverId && c.amountCents === taken));
+        return "paid";
+      } catch (error) {
+        // The bank often sends two notices in the same second and both
+        // runs try the same deposit: the one that lost has nothing to
+        // do. It must not put a paid deposit on the waiting list.
+        const now = await doc.ref.get();
+        const used = now.exists ? now.data()?.consumedBy : null;
+        if (used && used.kind) return "skipped";
+        deps.logger.warn("Fleet deposit not applied", {businessId,
+          creditId: doc.id, error: String(error?.message || error)});
+      }
+    }
+    const reason = match.reason || "unknown";
+    if (credit.fleetWaiting !== true ||
+        credit.fleetWaitingReason !== reason || !credit.fleetLookedAtMs) {
+      await doc.ref.set({fleetWaiting: true, fleetWaitingReason: reason,
+        fleetLookedAtMs: nowMs()}, {merge: true});
+    }
+    // Two reports could have been this deposit: the office sees why.
+    for (const claimId of match.claimIds || []) {
+      await db().collection("fleetClaims").doc(claimId).set({
+        reason: fleetClaims.REASON.TWO_CLAIMS,
+        updatedAt: FieldValue.serverTimestamp()}, {merge: true})
+          .catch(() => undefined);
+    }
+    return "waiting";
+  }
+
+  /**
    * After a bank sync: each new deposit from a person pays its driver, or
-   * waits for the office. Never throws (a sync must not fail over Fleet).
+   * waits for the office. Never throws (a sync must not fail over Fleet),
+   * and one failing deposit does not stop the others.
    *
    * @param {string} businessId The business.
    * @param {Array<string>} creditIds The deposits the sync wrote.
@@ -1224,7 +1360,8 @@ function createFleetHandlers(deps) {
       if (ids.length === 0) return out;
       const {data: business} = await businessOf(businessId);
       if (!fleetOn(business)) return out;
-      const since = matchSince(business);
+      const link = (await db().collection("businessBankLinks")
+          .doc(businessId).get()).data() || {};
       const refs = ids.map((id) =>
         db().collection("businessBankCredits").doc(id));
       const docs = [];
@@ -1232,50 +1369,73 @@ function createFleetHandlers(deps) {
         docs.push(...await db().getAll(...refs.slice(i, i + 100)));
       }
       // Every driver, not only the active ones: a sender who paid for a
-      // driver who left must not be given to whoever has their cents now.
+      // driver who left must not be given to someone else.
       const drivers = (await db().collection("fleetDrivers")
           .where("businessId", "==", businessId).get())
           .docs.map((d) => ({id: d.id, ...d.data()}));
+      const env = {businessId, since: fleetBank.matchStartMs(business, link),
+        drivers, claims: await claimsForMatching(businessId)};
       for (const doc of docs) {
-        const credit = doc.exists ? doc.data() || {} : null;
-        if (!credit || credit.businessId !== businessId) continue;
-        if (!fleetBank.depositMatchable(credit, since)) continue;
-        const sameAmount = await db().collection("businessBankCredits")
-            .where("businessId", "==", businessId)
-            .where("amountCents", "==", Number(credit.amountCents) || 0)
-            .orderBy("createdAt", "desc").limit(50).get();
-        const repeat = fleetBank.possibleDuplicateOf({id: doc.id, ...credit},
-            sameAmount.docs.map((d) => ({id: d.id, ...d.data()})));
-        const match = repeat ? {reason: "possible_duplicate"} :
-          fleetBank.matchDeposit(credit, drivers);
-        if (match.driverId) {
-          try {
-            await payFromDeposit({businessId, creditId: doc.id,
-              driverId: match.driverId, how: match.how, byUid: "bank"});
-            out.paid += 1;
-            continue;
-          } catch (error) {
-            // The bank often sends two notices in the same second and both
-            // runs try the same deposit: the one that lost has nothing to
-            // do. It must not put a paid deposit on the waiting list.
-            const now = await doc.ref.get();
-            const used = now.exists ? now.data()?.consumedBy : null;
-            if (used && used.kind) continue;
-            deps.logger.warn("Fleet deposit not applied", {businessId,
-              creditId: doc.id, error: String(error?.message || error)});
-          }
+        try {
+          const result = await matchOneDeposit(env, doc);
+          if (result === "paid") out.paid += 1;
+          if (result === "waiting") out.waiting += 1;
+        } catch (error) {
+          deps.logger.warn("Fleet deposit skipped after an error",
+              {businessId, creditId: doc.id,
+                error: String(error?.message || error)});
         }
-        if (credit.fleetWaiting !== true) {
-          await doc.ref.set({fleetWaiting: true,
-            fleetWaitingReason: match.reason || "unknown"}, {merge: true});
-        }
-        out.waiting += 1;
       }
     } catch (error) {
       deps.logger.error("Fleet deposit matching failed", {businessId,
         error: String(error?.message || error)});
     }
     return out;
+  }
+
+  /**
+   * The deposits waiting for the office are looked at again (a new report
+   * or answer may now name them).
+   *
+   * @param {string} businessId The business.
+   * @return {Promise<object>} {paid, waiting}.
+   */
+  async function rematchWaiting(businessId) {
+    const snap = await db().collection("businessBankCredits")
+        .where("businessId", "==", businessId)
+        .where("fleetWaiting", "==", true).get();
+    const ids = snap.docs.filter((d) => d.get("removed") !== true &&
+      !(d.get("consumedBy") && d.get("consumedBy").kind)).map((d) => d.id);
+    return ids.length ? matchBankDeposits(businessId, ids) :
+      {paid: 0, waiting: 0};
+  }
+
+  /**
+   * A sweep for deposits nobody looked at (a sync that stopped before
+   * matching, a failure): recent, matchable, never marked as looked at.
+   * Deposits younger than ten minutes are left to their own sync.
+   *
+   * @param {string} businessId The business.
+   * @param {object} business Its record.
+   * @return {Promise<object>} {paid, waiting}.
+   */
+  async function sweepDeposits(businessId, business) {
+    const link = (await db().collection("businessBankLinks")
+        .doc(businessId).get()).data() || {};
+    const since = fleetBank.matchStartMs(business, link);
+    const snap = await db().collection("businessBankCredits")
+        .where("businessId", "==", businessId)
+        .orderBy("createdAt", "desc").limit(100).get();
+    const cutoff = nowMs() - 10 * 60 * 1000;
+    const ids = snap.docs.filter((d) => {
+      const c = d.data() || {};
+      const created = typeof c.createdAt?.toMillis === "function" ?
+        c.createdAt.toMillis() : 0;
+      return created <= cutoff && fleetBank.depositMatchable(c, since) &&
+        !c.fleetLookedAtMs && c.fleetWaiting !== true;
+    }).map((d) => d.id);
+    return ids.length ? matchBankDeposits(businessId, ids) :
+      {paid: 0, waiting: 0};
   }
 
   /**
@@ -1330,8 +1490,43 @@ function createFleetHandlers(deps) {
         .sort((a, b) => b.removedAtMs - a.removedAtMs).slice(0, 50);
     return {success: true, schedule,
       quote: fleetBank.bankScheduleQuote(schedule, centsEach),
-      bank: link, waiting, removed,
+      bank: link, waiting, removed, claims: await openClaimsView(businessId),
       lastScheduledMs: Number(business?.fleet?.bankLastScheduledMs) || 0};
+  }
+
+  /**
+   * The reports the office still has to look at: every open one, newest
+   * first (up to 100).
+   *
+   * @param {string} businessId The business.
+   * @return {Promise<Array<object>>} The list `bank_status` returns.
+   */
+  async function openClaimsView(businessId) {
+    const snap = await db().collection("fleetClaims")
+        .where("businessId", "==", businessId)
+        .where("open", "==", true).get();
+    const list = snap.docs.map((d) => ({id: d.id, ...d.data()}))
+        .sort((a, b) => (Number(b.createdAtMs) || 0) -
+          (Number(a.createdAtMs) || 0)).slice(0, 100);
+    const driverIds = [...new Set(list.map((c) => c.driverId)
+        .filter(Boolean))];
+    const names = new Map();
+    for (let i = 0; i < driverIds.length; i += 100) {
+      const docs = await db().getAll(...driverIds.slice(i, i + 100)
+          .map((id) => db().collection("fleetDrivers").doc(id)));
+      for (const d of docs) {
+        if (d.exists) names.set(d.id, d.get("name") || "");
+      }
+    }
+    return list.map((c) => ({id: c.id, driverId: c.driverId || null,
+      driverName: c.driverId ? String(names.get(c.driverId) || "") : "",
+      amountCents: Number(c.amountCents) > 0 ? Number(c.amountCents) : null,
+      state: c.state, reason: c.reason || null,
+      createdAtMs: Number(c.createdAtMs) || 0,
+      hasPhoto: Boolean(c.caseId && c.messageId),
+      fromPhone: String(c.fromPhone || ""),
+      payerName: c.payerName || null,
+      toldLateAtMs: Number(c.toldLateAtMs) || null}));
   }
 
   async function bankScheduleSave(uid, businessId, data) {
@@ -1433,8 +1628,14 @@ function createFleetHandlers(deps) {
     if (!creditId || !driverId) {
       throw refuse("fleet_bad_input", "invalid-argument");
     }
+    // An active driver of this business, and a deposit that is waiting.
+    const driver = await db().collection("fleetDrivers").doc(driverId).get();
+    if (!driver.exists || driver.get("businessId") !== businessId) {
+      throw refuse("fleet_not_found", "not-found");
+    }
+    if (driver.get("status") !== "active") throw refuse("fleet_driver_left");
     const result = await payFromDeposit({businessId, creditId, driverId,
-      how: "office", byUid: uid});
+      how: "office", byUid: uid, requireWaiting: true, requireActive: true});
     return {success: true, ...result};
   }
 
@@ -1474,6 +1675,17 @@ function createFleetHandlers(deps) {
           deps.logger.warn("Fleet reminders failed", {businessId: b.id,
             error: String(error?.message || error)});
         }
+      }
+    }
+    // Drivers' payment reports against the clock, and (once an hour) a sweep
+    // for deposits nobody looked at.
+    for (const b of businesses.docs) {
+      try {
+        await runClaimTimers(b.id, b.data() || {}, nowMs);
+        if (now.minute < 15) await sweepDeposits(b.id, b.data() || {});
+      } catch (error) {
+        deps.logger.warn("Fleet report timers failed", {businessId: b.id,
+          error: String(error?.message || error)});
       }
     }
     for (const b of businesses.docs) {
@@ -1599,6 +1811,13 @@ function createFleetHandlers(deps) {
       list.push(bill);
       billsByDriver.set(bill.driverId, list);
     }
+    // While a driver's report is open, their "late" reminder is paused.
+    const reports = await db().collection("fleetClaims")
+        .where("businessId", "==", businessId)
+        .where("open", "==", true).get();
+    const paused = new Set(reports.docs.filter((d) =>
+      fleetClaims.PAUSES_LATE_REMINDER_STATES.includes(d.get("state")))
+        .map((d) => d.get("driverId")));
     let tried = 0;
     for (const driver of drivers) {
       if (!whatsappAllows(business, driver.id)) continue;
@@ -1607,6 +1826,7 @@ function createFleetHandlers(deps) {
       if (!oldest) continue;
       const kind = fleetWhatsApp.reminderKind(oldest.dueDayKey, todayKey);
       if (!kind) continue;
+      if (kind === "late" && paused.has(driver.id)) continue;
       const message = reminderMessage({businessId, business, driver, bills,
         oldest, kind, todayKey});
       if (!message) continue;
@@ -1635,8 +1855,7 @@ function createFleetHandlers(deps) {
     const values = fleetWhatsApp.reminderValues({
       driverName: driver.name, businessName: business.name,
       businessPhone: business.phone, settings: business.fleet?.settings,
-      kind, dueDayKey: oldest.dueDayKey, owedCents: balance.owedCents,
-      personalCents: driver.personalCents});
+      kind, dueDayKey: oldest.dueDayKey, owedCents: balance.owedCents});
     const base = fleetWhatsApp.messageId("reminder",
         {driverId: driver.id, billId: oldest.id, todayKey});
     return {
@@ -1770,10 +1989,591 @@ function createFleetHandlers(deps) {
     const reminder = await send("reminder", fleetWhatsApp.REMINDER_TEMPLATE,
         fleetWhatsApp.reminderValues({...sample,
           settings: business.fleet?.settings, kind: "soon",
-          dueDayKey: today, owedCents: 35000, personalCents: 17}));
+          dueDayKey: today, owedCents: 35000}));
     await audit(businessId, uid, "fleet_settings", businessId,
         "fleet_whatsapp_test", `Test WhatsApp sent to ${phone}`);
     return {success: true, receipt, reminder};
+  }
+
+  // ---- drivers' payment reports (docs/FLEET_PAYMENT_PROOF.md) -----------
+  //
+  // A driver's screenshot is only a claim; the bank deposit is the proof.
+  // The pure decisions are in fleet_claims.js; this is the Firestore and
+  // WhatsApp side. Everything that talks to the network is injected
+  // (deps.readPicture, deps.sendFleetText, deps.fleetScheduledRefresh).
+
+  const claimsCol = () => db().collection("fleetClaims");
+
+  async function claimIn(businessId, claimId) {
+    const doc = await claimsCol().doc(claimId || "-").get();
+    if (!doc.exists || doc.get("businessId") !== businessId) {
+      throw refuse("fleet_not_found", "not-found");
+    }
+    return doc;
+  }
+
+  /**
+   * "This deposit is theirs": the office gives a waiting deposit to the
+   * driver a report names. The bank's amount is what is recorded.
+   *
+   * @param {string} uid The caller (Fleet staff).
+   * @param {string} businessId The business.
+   * @param {object} data {claimId, creditId}.
+   * @return {Promise<object>} {success, claimId, paymentId, amountCents}.
+   */
+  async function claimAssign(uid, businessId, data) {
+    await requireStaff(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const claimId = text(data.claimId, 180);
+    const creditId = text(data.creditId, 300);
+    if (!claimId || !creditId) {
+      throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    const claim = await claimIn(businessId, claimId);
+    if (!fleetClaims.OPEN_STATES.includes(claim.get("state"))) {
+      throw refuse("fleet_claim_closed");
+    }
+    const driverId = String(claim.get("driverId") || "");
+    if (!driverId) throw refuse("fleet_claim_no_driver");
+    const result = await payFromDeposit({businessId, creditId, driverId,
+      how: "office", byUid: uid, claimId, requireWaiting: true,
+      requireActive: true});
+    return {success: true, claimId, ...result};
+  }
+
+  /**
+   * The office closes a report (nothing will be paid from it).
+   *
+   * @param {string} uid The caller (Fleet staff).
+   * @param {string} businessId The business.
+   * @param {object} data {claimId}.
+   * @return {Promise<object>} {success}.
+   */
+  async function claimClose(uid, businessId, data) {
+    await requireStaff(uid, businessId);
+    const claim = await claimIn(businessId, text(data.claimId, 180));
+    if (!fleetClaims.OPEN_STATES.includes(claim.get("state"))) {
+      throw refuse("fleet_claim_closed");
+    }
+    await claim.ref.update({state: fleetClaims.STATE.CLOSED, open: false,
+      closedByUid: uid, closedAtMs: nowMs(),
+      updatedAt: FieldValue.serverTimestamp()});
+    await audit(businessId, uid, "fleet_claim", claim.id,
+        "fleet_claim_closed", "Driver's payment report closed by the office");
+    return {success: true};
+  }
+
+  /**
+   * A report's screenshot, for Fleet staff: the file of the message in the
+   * business's support thread (the same stored file and download link every
+   * WhatsApp picture in Support has; deleted after 12 months).
+   *
+   * @param {string} uid The caller (Fleet staff).
+   * @param {string} businessId The business.
+   * @param {object} data {claimId}.
+   * @return {Promise<object>} {success, url: string|null, deleted}.
+   */
+  async function claimPhoto(uid, businessId, data) {
+    await requireStaff(uid, businessId);
+    const claim = await claimIn(businessId, text(data.claimId, 180));
+    const caseId = String(claim.get("caseId") || "");
+    const wamid = String(claim.get("messageId") || "");
+    if (!caseId || !wamid) return {success: true, url: null, deleted: false};
+    const message = await db().collection("supportCases").doc(caseId)
+        .collection("messages").doc(messageDocId("in", wamid)).get();
+    const meta = message.exists ? message.get("metadata") || {} : {};
+    return {success: true, url: String(meta.fileUrl || "") || null,
+      deleted: meta.mediaDeleted === true};
+  }
+
+  /**
+   * "Names this driver pays from": replaces the driver's remembered sender
+   * names (at most 10). Account-like and app names, one-word names and
+   * stop-listed words are refused; a name already remembered may stay.
+   *
+   * @param {string} uid The caller (Fleet staff).
+   * @param {string} businessId The business.
+   * @param {object} data {driverId, names: string[]}.
+   * @return {Promise<object>} {success, names} (the stored keys).
+   */
+  async function payerNamesSave(uid, businessId, data) {
+    await requireStaff(uid, businessId);
+    const driverId = text(data.driverId, 180);
+    if (!driverId || !Array.isArray(data.names) || data.names.length > 10) {
+      throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    const doc = await db().collection("fleetDrivers").doc(driverId).get();
+    if (!doc.exists || doc.get("businessId") !== businessId) {
+      throw refuse("fleet_not_found", "not-found");
+    }
+    const had = new Set((doc.get("rememberedSenders") || [])
+        .map((n) => fleetBank.matchKey(n)));
+    const keys = [];
+    for (const raw of data.names) {
+      const name = text(raw, 80);
+      if (!name) continue;
+      const key = fleetBank.matchKey(name);
+      if (!key) {
+        throw new HttpsError("invalid-argument", FLEET_REFUSALS.fleet_bad_name,
+            {reason: "fleet_bad_name", name});
+      }
+      const kept = had.has(key) && !fleetBank.senderIsAccount(name) &&
+        !/^(?:ZELLE|VENMO|CASH ?APP|PAYPAL|APPLE CASH)$/.test(key);
+      if (!kept && !fleetBank.nameRememberable(name)) {
+        throw new HttpsError("invalid-argument", FLEET_REFUSALS.fleet_bad_name,
+            {reason: "fleet_bad_name", name});
+      }
+      if (!keys.includes(key)) keys.push(key);
+    }
+    await doc.ref.update({rememberedSenders: keys,
+      updatedAt: FieldValue.serverTimestamp()});
+    await audit(businessId, uid, "fleet_driver", driverId,
+        "fleet_payer_names_saved", `Names ${doc.get("name") || "driver"} ` +
+        `pays from: ${keys.length}`);
+    return {success: true, names: keys};
+  }
+
+  // ---- a driver's message -------------------------------------------------
+
+  const pictureTypeOf = (event) => String(event?.media?.mimeType || "")
+      .split(";")[0].trim().toLowerCase();
+  const isPicture = (event) => Boolean(event?.media) &&
+    event.type !== "sticker" &&
+    fleetClaims.IMAGE_TYPES.includes(pictureTypeOf(event));
+
+  const businessNames = (business) => [business?.fleet?.settings?.zelle?.name,
+    business?.name, business?.fleet?.settings?.zelle?.handle].filter(Boolean);
+
+  /**
+   * Whether Fleet takes this driver's WhatsApp messages: Fleet and its
+   * WhatsApp switch are on for the business, the driver is on the "only
+   * these drivers" list when there is one, and the driver is active.
+   *
+   * @param {object} business The business record.
+   * @param {object} driver {id, status}.
+   * @return {boolean} True when the driver takes part.
+   */
+  function takesPart(business, driver) {
+    return fleetOn(business) && whatsappOn(business) &&
+      whatsappAllows(business, driver.id) && driver.status === "active";
+  }
+
+  /**
+   * The picture, read. A failure of any kind is "could not read" (null).
+   *
+   * @param {object} ctx The inbound context (fetchImage).
+   * @return {Promise<?object>} The validated reading, or null.
+   */
+  async function readPicture(ctx) {
+    try {
+      if (typeof deps.readPicture !== "function") return null;
+      const image = await ctx.fetchImage();
+      if (!image) return null;
+      const parsed = fleetClaims.parseReading(await deps.readPicture(image));
+      return parsed.ok ? parsed.reading : null;
+    } catch (error) {
+      deps.logger.warn("Fleet picture not read",
+          {error: String(error?.message || error).slice(0, 200)});
+      return null;
+    }
+  }
+
+  async function sendClaimText(businessId, phone, text) {
+    try {
+      const result = await deps.sendFleetText({businessId, phone, text});
+      return result?.ok === true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function createClaim(f) {
+    const ref = claimsCol().doc();
+    const t = nowMs();
+    const waiting = f.state === fleetClaims.STATE.WAITING_BANK;
+    const claim = {
+      businessId: f.businessId, driverId: f.driverId || null,
+      fromPhone: f.fromPhone, state: f.state,
+      amountCents: f.amountCents > 0 ? f.amountCents : null,
+      read: f.reading ? {...f.reading} : null, payerName: null,
+      mediaPath: f.mediaPath || null, caseId: f.caseId || null,
+      messageId: f.messageId || null, creditId: null, paymentId: null,
+      reason: f.reason || null, createdAtMs: t,
+      bankCheckDueAtMs: waiting ? t + fleetClaims.BANK_CHECK_DELAY_MS : null,
+      bankCheckedAtMs: null, toldLateAtMs: null,
+      closeAtMs: t + fleetClaims.CLOSE_MS, lang: f.lang === "fr" ? "fr" : "en",
+      attempts: 0, open: fleetClaims.OPEN_STATES.includes(f.state),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    await ref.set(claim);
+    return {id: ref.id, ...claim};
+  }
+
+  async function activeClaimsOf(driverId) {
+    const snap = await claimsCol().where("driverId", "==", driverId).get();
+    return snap.docs.map((d) => ({id: d.id, ...d.data()}));
+  }
+
+  /**
+   * A picture from a driver who takes part: a claim.
+   *
+   * @param {object} ctx The inbound context.
+   * @param {object} driver {id, ...}.
+   * @param {object} business {id, ...data}.
+   * @return {Promise<object>} {handled, outcome, notify}.
+   */
+  async function pictureFromDriver(ctx, driver, business) {
+    const reading = await readPicture(ctx);
+    if (reading && reading.isPayment === false) return {handled: false};
+    const names = businessNames(business.data);
+    const plan = fleetClaims.planNewClaim({reading,
+      recipientOk: reading ? fleetClaims.recipientMatches(reading.recipient,
+          names) : null,
+      todayKey: deps.dayKeyNow()});
+    if (plan.ignore) return {handled: false};
+    const lang = ctx.lang;
+    const vars = {amountCents: plan.amountCents, business: business.data.name,
+      recipient: reading?.recipient};
+    let say = plan.say;
+    let state = plan.state;
+    let reason = plan.reason;
+    let paymentId = null;
+    if (plan.state === fleetClaims.STATE.WAITING_BANK) {
+      // The same payment reported twice, or already recorded (a remembered
+      // name paid it before the picture came): nothing new to wait for.
+      const mine = await activeClaimsOf(driver.id);
+      const probe = {driverId: driver.id, amountCents: plan.amountCents,
+        read: reading};
+      const open = mine.find((c) => fleetClaims.takesDeposit(c) &&
+        Number(c.amountCents) === plan.amountCents &&
+        (!c.read?.dayKey || !reading.dayKey ||
+          c.read.dayKey === reading.dayKey));
+      const payments = await db().collection("fleetPayments")
+          .where("driverId", "==", driver.id).get();
+      const recorded = payments.docs.find((d) =>
+        fleetClaims.isAlreadyRecorded(probe, d.data()));
+      if (open) {
+        const kept = await ctx.keep(business.id, {needsReply: false});
+        await ctx.say(fleetClaims.replyText("already_waiting", lang, vars));
+        return {handled: true, outcome: "claim_duplicate", notify: false,
+          caseId: kept.caseId};
+      }
+      if (recorded) {
+        state = fleetClaims.STATE.PAID;
+        reason = fleetClaims.REASON.ALREADY_RECORDED;
+        paymentId = recorded.id;
+        say = "already_recorded";
+      }
+    }
+    const kept = await ctx.keep(business.id,
+        {needsReply: state === fleetClaims.STATE.OFFICE});
+    const claim = await createClaim({businessId: business.id,
+      driverId: driver.id, fromPhone: ctx.event.from, state,
+      amountCents: plan.amountCents, reading, reason,
+      mediaPath: kept.mediaPath, caseId: kept.caseId,
+      messageId: ctx.event.wamid, lang});
+    if (paymentId) {
+      await claimsCol().doc(claim.id).update({paymentId, open: false,
+        paidAtMs: nowMs()});
+      await db().collection("fleetPayments").doc(paymentId)
+          .update({claimId: claim.id}).catch(() => undefined);
+    }
+    await ctx.say(fleetClaims.replyText(say, lang, vars));
+    if (state === fleetClaims.STATE.WAITING_BANK) {
+      await rematchWaiting(business.id);
+    }
+    return {handled: true, outcome: `claim_${state}`,
+      notify: state === fleetClaims.STATE.OFFICE, claimId: claim.id};
+  }
+
+  /**
+   * The Fleet businesses whose WhatsApp-to-drivers switch is on. No picture
+   * is read when there are none.
+   *
+   * @return {Promise<Array<object>>} [{id, data}].
+   */
+  async function fleetsOnWhatsApp() {
+    const snap = await db().collection("businesses")
+        .where("fleet.enabled", "==", true).get();
+    return snap.docs.map((d) => ({id: d.id, data: d.data() || {}}))
+        .filter((b) => whatsappOn(b.data));
+  }
+
+  /**
+   * A picture from a phone the whole platform does not know (no business
+   * has it on a record, no conversation exists), that reads as a payment
+   * to one Fleet business's Zelle name: which driver is it for?
+   *
+   * @param {object} ctx The inbound context.
+   * @param {Array<object>} fleets The Fleet businesses with WhatsApp on.
+   * @return {Promise<object>} {handled, outcome, notify}.
+   */
+  async function pictureFromStranger(ctx, fleets) {
+    const reading = await readPicture(ctx);
+    if (!reading || reading.isPayment !== true) return {handled: false};
+    const owners = fleets.filter((b) => fleetClaims.recipientMatches(
+        reading.recipient, businessNames(b.data)) === true);
+    if (owners.length !== 1) return {handled: false};
+    const business = owners[0];
+    const lang = ctx.lang;
+    const plan = fleetClaims.planNewClaim({reading, recipientOk: true,
+      todayKey: deps.dayKeyNow()});
+    const tooOld = plan.state === fleetClaims.STATE.OFFICE;
+    const kept = await ctx.keep(business.id, {needsReply: tooOld});
+    await createClaim({businessId: business.id, driverId: null,
+      fromPhone: ctx.event.from,
+      state: tooOld ? fleetClaims.STATE.OFFICE :
+        fleetClaims.STATE.ASKING_DRIVER,
+      amountCents: plan.state === fleetClaims.STATE.WAITING_BANK ?
+        plan.amountCents : null,
+      reading, reason: tooOld ? plan.reason : null,
+      mediaPath: kept.mediaPath, caseId: kept.caseId,
+      messageId: ctx.event.wamid, lang});
+    await ctx.say(fleetClaims.replyText(tooOld ? "too_old" : "ask_driver",
+        lang, {business: business.data.name}));
+    return {handled: true,
+      outcome: tooOld ? "claim_office" : "claim_asking_driver",
+      notify: tooOld};
+  }
+
+  /**
+   * The newest report from this phone that is waiting for an answer.
+   *
+   * @param {string} phone The sender.
+   * @return {Promise<?object>} The claim, or null.
+   */
+  async function askingClaimOf(phone) {
+    const snap = await claimsCol().where("fromPhone", "==", phone)
+        .limit(20).get();
+    const list = snap.docs.map((d) => ({id: d.id, ...d.data()}))
+        .filter((c) => c.open === true &&
+          fleetClaims.ASKING_STATES.includes(c.state) &&
+          nowMs() < (Number(c.closeAtMs) || 0))
+        .sort((a, b) => (Number(b.createdAtMs) || 0) -
+          (Number(a.createdAtMs) || 0));
+    return list[0] || null;
+  }
+
+  /**
+   * A message that answers the question a report is asking: an amount, a
+   * name, or the phone number of the driver the payment is for.
+   *
+   * @param {object} ctx The inbound context.
+   * @param {object} claim The asking report.
+   * @return {Promise<object>} {handled, outcome, notify}.
+   */
+  async function answerClaim(ctx, claim) {
+    const businessDoc = await businessOf(claim.businessId);
+    if (!fleetOn(businessDoc.data)) return {handled: false};
+    if (claim.driverId) {
+      const d = await db().collection("fleetDrivers").doc(claim.driverId)
+          .get();
+      if (!d.exists || !takesPart(businessDoc.data, {id: d.id, ...d.data()})) {
+        return {handled: false};
+      }
+    }
+    const lang = ctx.lang;
+    const event = ctx.event;
+    const reading = claim.state === fleetClaims.STATE.ASKING_AMOUNT &&
+      isPicture(event) ? await readPicture(ctx) : null;
+    const decision = fleetClaims.interpretAnswer(claim,
+        {text: event.text || "", reading});
+    const ref = claimsCol().doc(claim.id);
+    const stamp = {updatedAt: FieldValue.serverTimestamp()};
+    const t = nowMs();
+    const vars = {business: businessDoc.data.name};
+    const say = async (kind, extra = {}) => ctx.say(
+        fleetClaims.replyText(kind, lang, {...vars, ...extra}));
+    const kept = (needsReply) => ctx.keep(claim.businessId, {needsReply});
+    if (decision.type === "again") {
+      await kept(false);
+      await ref.update({attempts: FieldValue.increment(1), lang, ...stamp});
+      await say(decision.say);
+      return {handled: true, outcome: "claim_asked_again", notify: false};
+    }
+    if (decision.type === "give_up") {
+      await kept(true);
+      if (claim.state === fleetClaims.STATE.ASKING_NAME) {
+        // The name is asked once: the report keeps waiting for the bank.
+        await ref.update({state: fleetClaims.STATE.WAITING_BANK,
+          nameAskedAtMs: t, attempts: 0, ...stamp});
+        await say("name_thanks");
+        return {handled: true, outcome: "claim_name_skipped", notify: false};
+      }
+      const reason = claim.state === fleetClaims.STATE.ASKING_DRIVER ?
+        fleetClaims.REASON.NOT_A_DRIVER : fleetClaims.REASON.NO_AMOUNT;
+      await ref.update({state: fleetClaims.STATE.OFFICE, reason,
+        attempts: 0, ...stamp});
+      await say("to_office");
+      return {handled: true, outcome: "claim_office", notify: true};
+    }
+    await kept(false);
+    if (decision.type === "name") {
+      await ref.update({payerName: decision.payerName,
+        state: fleetClaims.STATE.WAITING_BANK, nameAskedAtMs: t, attempts: 0,
+        ...stamp});
+      await say("name_thanks");
+      await rematchWaiting(claim.businessId);
+      return {handled: true, outcome: "claim_named", notify: false};
+    }
+    if (decision.type === "amount") {
+      await ref.update({amountCents: decision.amountCents,
+        state: fleetClaims.STATE.WAITING_BANK, attempts: 0,
+        bankCheckDueAtMs: claim.bankCheckedAtMs ? null :
+          t + fleetClaims.BANK_CHECK_DELAY_MS, ...stamp});
+      await say("ack");
+      await rematchWaiting(claim.businessId);
+      return {handled: true, outcome: "claim_amount", notify: false};
+    }
+    // The phone number of the driver the payment is for (Q7).
+    const found = await db().collection("fleetDrivers")
+        .where("businessId", "==", claim.businessId)
+        .where("phone", "==", decision.phone).get();
+    const drivers = found.docs.map((d) => ({id: d.id, ...d.data()}))
+        .filter((d) => takesPart(businessDoc.data, d));
+    if (drivers.length !== 1) {
+      await ref.update({state: fleetClaims.STATE.OFFICE,
+        reason: fleetClaims.REASON.NOT_A_DRIVER, attempts: 0, ...stamp});
+      await say("to_office");
+      return {handled: true, outcome: "claim_office", notify: true};
+    }
+    const hasAmount = Number(claim.amountCents) > 0;
+    await ref.update({driverId: drivers[0].id,
+      state: hasAmount ? fleetClaims.STATE.WAITING_BANK :
+        fleetClaims.STATE.ASKING_AMOUNT,
+      bankCheckDueAtMs: hasAmount ? t + fleetClaims.BANK_CHECK_DELAY_MS :
+        null, attempts: 0, ...stamp});
+    await say(hasAmount ? "ack" : "ask_amount");
+    if (hasAmount) await rematchWaiting(claim.businessId);
+    return {handled: true, outcome: "claim_driver_found", notify: false};
+  }
+
+  /**
+   * A received WhatsApp message, before ordinary support handling. Returns
+   * {handled: false} for everything that is not a Fleet claim (the message
+   * then goes on exactly as before), and never throws.
+   *
+   * @param {object} ctx {event, lang, fetchImage(), keep(businessId,
+   *   {needsReply}), say(text)} from whatsapp_conversations.handleInbound.
+   * @return {Promise<object>} {handled, outcome, notify}.
+   */
+  async function handleClaimInbound(ctx) {
+    try {
+      const event = ctx.event;
+      const phone = event.from;
+      const asking = await askingClaimOf(phone);
+      if (asking) {
+        const done = await answerClaim(ctx, asking);
+        if (done.handled) return done;
+      }
+      // An ordinary text costs the one query above. A picture is read only
+      // when some business has Fleet WhatsApp on.
+      if (!isPicture(event)) return {handled: false};
+      const fleets = await fleetsOnWhatsApp();
+      if (fleets.length === 0) return {handled: false};
+      const drivers = await db().collection("fleetDrivers")
+          .where("phone", "==", phone).limit(10).get();
+      if (drivers.size === 0) {
+        // Privacy: only a phone nobody on the platform knows is read. A
+        // customer any business already knows goes to ordinary support,
+        // unread.
+        if (typeof ctx.phoneIsKnown !== "function" ||
+            await ctx.phoneIsKnown()) {
+          return {handled: false};
+        }
+        return await pictureFromStranger(ctx, fleets);
+      }
+      if (drivers.size !== 1) return {handled: false};
+      const driver = {id: drivers.docs[0].id, ...drivers.docs[0].data()};
+      const business = await db().collection("businesses")
+          .doc(String(driver.businessId || "-")).get();
+      if (!business.exists ||
+          !takesPart(business.data() || {}, driver)) {
+        return {handled: false};
+      }
+      return await pictureFromDriver(ctx, driver,
+          {id: business.id, data: business.data() || {}});
+    } catch (error) {
+      deps.logger.error("Fleet claim step failed", {
+        error: String(error?.message || error).slice(0, 300)});
+      return {handled: ctx.kept ? ctx.kept() : false, outcome: "claim_error",
+        notify: false};
+    }
+  }
+
+  /**
+   * One business's reports against the clock (docs/FLEET_PAYMENT_PROOF.md,
+   * Timers): one forced bank check for the reports that are due, the
+   * driver's name asked once, the 2-day notice, and closing after 7 days.
+   *
+   * @param {string} businessId The business.
+   * @param {object} business Its record.
+   * @param {number} now Now.
+   * @return {Promise<object>} Counts {closed, checked, asked, told}.
+   */
+  async function runClaimTimers(businessId, business, now) {
+    const out = {closed: 0, checked: 0, asked: 0, told: 0};
+    const snap = await claimsCol().where("businessId", "==", businessId)
+        .where("open", "==", true).get();
+    const due = snap.docs.map((d) => ({ref: d.ref, claim: {id: d.id,
+      ...d.data()}})).map((x) => ({...x,
+      actions: fleetClaims.dueActions(x.claim, now)}));
+    for (const x of due.filter((y) => y.actions.includes("close"))) {
+      await x.ref.update({state: fleetClaims.STATE.CLOSED, open: false,
+        closedAtMs: now, updatedAt: FieldValue.serverTimestamp()});
+      out.closed += 1;
+    }
+    const checks = due.filter((y) => y.actions.includes("bank_check"));
+    if (checks.length > 0) {
+      // One paid refresh and sync for the business, however many reports
+      // are due (counted like a scheduled refresh).
+      try {
+        if (typeof deps.fleetScheduledRefresh === "function") {
+          await deps.fleetScheduledRefresh(businessId);
+        }
+      } catch (error) {
+        deps.logger.warn("Fleet report bank check failed", {businessId,
+          error: String(error?.message || error)});
+      }
+      for (const x of checks) {
+        await x.ref.update({bankCheckedAtMs: now,
+          updatedAt: FieldValue.serverTimestamp()});
+        out.checked += 1;
+      }
+    }
+    if (!whatsappOn(business)) return out;
+    const fresh = async (x) => {
+      const again = await x.ref.get();
+      return again.exists ? {id: again.id, ...again.data()} : null;
+    };
+    for (const x of due.filter((y) => y.actions.includes("ask_name"))) {
+      const claim = await fresh(x);
+      if (!claim || claim.state !== fleetClaims.STATE.WAITING_BANK ||
+          claim.payerName) continue;
+      await x.ref.update({state: fleetClaims.STATE.ASKING_NAME,
+        nameAskedAtMs: now, attempts: 0,
+        updatedAt: FieldValue.serverTimestamp()});
+      await sendClaimText(businessId, claim.fromPhone,
+          fleetClaims.replyText("ask_name", claim.lang, {}));
+      out.asked += 1;
+    }
+    for (const x of due.filter((y) => y.actions.includes("late_notice"))) {
+      const claim = await fresh(x);
+      if (!claim || !fleetClaims.takesDeposit(claim) ||
+          claim.toldLateAtMs) continue;
+      // Outside WhatsApp's 24-hour window a free-form message may not go
+      // through: the report is flagged for the office either way.
+      const ok = await sendClaimText(businessId, claim.fromPhone,
+          fleetClaims.replyText("late", claim.lang,
+              {amountCents: claim.amountCents}));
+      await x.ref.update({toldLateAtMs: now, toldLateSent: ok,
+        reason: claim.reason || fleetClaims.REASON.NO_DEPOSIT,
+        updatedAt: FieldValue.serverTimestamp()});
+      out.told += 1;
+    }
+    return out;
   }
 
   // ---- import ----------------------------------------------------------
@@ -1822,13 +2622,9 @@ function createFleetHandlers(deps) {
     const id = (key) => importId(businessId, key);
     const writes = [];
     const stamp = FieldValue.serverTimestamp();
-    const personal = fleetBilling.assignPersonalCents(parsed.drivers
-        .filter((d) => d.status === "active")
-        .map((d, i) => ({id: id(d.importKey), createdAt: i})));
     for (const d of parsed.drivers) {
       writes.push(["fleetDrivers", id(d.importKey), {...d, businessId,
         creditCents: 0, rememberedSenders: [],
-        personalCents: personal[id(d.importKey)] ?? null,
         importedAt: stamp, updatedAt: stamp}]);
     }
     for (const c of parsed.cars) {
@@ -1869,11 +2665,11 @@ function createFleetHandlers(deps) {
         "fleet_imported", `Spreadsheet imported: ${parsed.drivers.length} ` +
         `drivers, ${parsed.cars.length} cars, ${parsed.payments.length} ` +
         "payments");
-    // The sheet's cents ignore drivers already in Fleet: make them unique.
-    const centsChanged = await ensurePersonalCents(businessId);
+    // `centsChanged` stays in the answer for old callers: the personal cents
+    // are gone (docs/FLEET_PAYMENT_PROOF.md Q6), so it is always 0.
     return {success: true, totals: parsed.totals,
       warnings: parsed.warnings.slice(0, 200), written: writes.length,
-      centsChanged};
+      centsChanged: 0};
   }
 
   // ---- the callable ----------------------------------------------------
@@ -1903,6 +2699,10 @@ function createFleetHandlers(deps) {
     whatsapp_save: whatsappSave,
     whatsapp_test: whatsappTest,
     whatsapp_remind_driver: whatsappRemindDriver,
+    claim_assign: claimAssign,
+    claim_close: claimClose,
+    claim_photo: claimPhoto,
+    payer_names_save: payerNamesSave,
   };
 
   async function fleetAction(request) {
@@ -2043,7 +2843,6 @@ function createFleetHandlers(deps) {
         .where("fleet.enabled", "==", true).get();
     for (const b of businesses.docs) {
       try {
-        await ensurePersonalCents(b.id);
         const counts = await runFleetDay(b.id, b.get("fleet")?.settings || {},
             today);
         deps.logger.info("Fleet day", {businessId: b.id, ...counts});
@@ -2055,8 +2854,9 @@ function createFleetHandlers(deps) {
   }
 
   return {fleetAction, fleetDaily, runFleetDay, matchBankDeposits,
+    handleClaimInbound, runClaimTimers, rematchWaiting, sweepDeposits,
     noteRemovedDeposits,
-    fleetBankTick, sendReceipt, remindBusiness, ensurePersonalCents};
+    fleetBankTick, sendReceipt, remindBusiness};
 }
 
 module.exports = {FLEET_REFUSALS, createFleetHandlers};

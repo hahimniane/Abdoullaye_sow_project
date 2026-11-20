@@ -27,3 +27,14 @@ describe("Fleet functions declare their secrets", () => {
     });
   }
 });
+
+describe("the function that receives WhatsApp pictures can read them", () => {
+  it("whatsappWebhook declares ANTHROPIC_API_KEY (payment screenshots)", () => {
+    const keys = (functions.whatsappWebhook.__endpoint
+        .secretEnvironmentVariables || []).map((s) => s.key);
+    for (const key of ["ANTHROPIC_API_KEY", "WHATSAPP_ACCESS_TOKEN",
+      "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_APP_SECRET"]) {
+      assert.ok(keys.includes(key), `whatsappWebhook is missing ${key}`);
+    }
+  });
+});

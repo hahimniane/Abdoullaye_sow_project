@@ -376,6 +376,41 @@ function allocatePayment(openBills, amountCents) {
 }
 
 /**
+ * The unpaid late fees a payment takes back (docs/FLEET_PAYMENT_PROOF.md
+ * Q2): a payment whose bank date is on or before a late fee's day, and that
+ * covers the rent bill the fee is for, means the rent was paid on time. Fees
+ * are paid first, so the fees that qualify are set aside before the money is
+ * spread; a fee whose rent the money then does not cover stays owed.
+ *
+ * @param {Array<object>} openBills The driver's open bills.
+ * @param {string} paidDayKey The payment's day (the bank's date).
+ * @param {number} amountCents The payment.
+ * @return {Array<string>} The late-fee bill ids to void.
+ */
+function lateFeesPaidOnTime(openBills, paidDayKey, amountCents) {
+  const bills = (openBills || []).filter(Boolean);
+  const rents = new Map(bills.filter((b) => b.kind === "rent" &&
+    b.status === "open").map((b) => [b.id, b]));
+  let voided = new Set(bills.filter((b) => b.kind === "late_fee" &&
+    b.status === "open" && !(Number(b.paidCents) > 0) &&
+    rents.has(b.lateFeeForBillId) && b.dueDayKey &&
+    String(paidDayKey || "") !== "" &&
+    String(paidDayKey) <= String(b.dueDayKey)).map((b) => b.id));
+  for (;;) {
+    const {allocations} = spend(bills.filter((b) => !voided.has(b.id)),
+        amountCents);
+    const paid = new Map(allocations.map((a) => [a.billId, a.cents]));
+    const keep = new Set([...voided].filter((feeId) => {
+      const fee = bills.find((b) => b.id === feeId);
+      const rent = rents.get(fee.lateFeeForBillId);
+      return (paid.get(rent.id) || 0) >= remaining(rent);
+    }));
+    if (keep.size === voided.size) return [...voided];
+    voided = keep;
+  }
+}
+
+/**
  * Use a driver's credit on open bills, same order as a payment.
  *
  * @param {Array<object>} openBills The driver's bills.
@@ -495,6 +530,7 @@ module.exports = {
   billAfterReturn,
   lateFeesToCreate,
   allocatePayment,
+  lateFeesPaidOnTime,
   applyCredit,
   driverBalance,
   assignPersonalCents,

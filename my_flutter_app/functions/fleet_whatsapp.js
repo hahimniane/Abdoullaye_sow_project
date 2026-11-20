@@ -3,7 +3,7 @@
 // Fleet drivers on WhatsApp (docs/FLEET.md §9, owner 2026-11-12): a receipt
 // each time a payment is recorded, and rent reminders (2 days before, on
 // the due day, 3 days late, then weekly), each saying how to pay by Zelle
-// with the driver's exact amount. Off until the business switches it on
+// with the plain amount owed. Off until the business switches it on
 // (after a test to its own phone). Pure: no Firestore, no WhatsApp.
 
 const RECEIPT_TEMPLATE = "fleet_receipt_2lang";
@@ -56,23 +56,6 @@ function dayText(key, lang) {
   const day = Number(m[3]);
   return lang === "fr" ? `${day} ${FR_MONTHS[month]} ${m[1]}` :
     `${EN_MONTHS[month]} ${day}, ${m[1]}`;
-}
-
-/**
- * The amount a driver sends by Zelle: what they owe ROUNDED UP to whole
- * dollars, plus their personal cents (the amount is the code). Rounding up
- * means a driver is never a few cents short: the cents over become credit,
- * taken off the next bill, and stay under about a dollar (owner,
- * 2026-11-12). Same rule as the console's zelleAmountText.
- *
- * @param {number} owedCents What they owe.
- * @param {*} personalCents 1-99.
- * @return {number|null} Cents, or null with no personal cents.
- */
-function zelleAmountCents(owedCents, personalCents) {
-  const p = Number(personalCents);
-  if (!Number.isInteger(p) || p < 1 || p > 99) return null;
-  return Math.ceil(Math.max(0, Number(owedCents) || 0) / 100) * 100 + p;
 }
 
 /**
@@ -146,23 +129,24 @@ function zelleLine(settings, businessName) {
  * The reminder's variables, in the template's order:
  * 1 name, 2 business, 3 status EN, 4 amount EN, 5 Zelle, 6 exact amount EN,
  * 7 business, 8 status FR, 9 amount FR, 10 Zelle, 11 exact amount FR,
- * 12 business phone.
+ * 12 business phone. The amount to send is the plain amount owed (the
+ * personal cents are gone, docs/FLEET_PAYMENT_PROOF.md Q6): variables 6 and
+ * 11 repeat it, so the approved template needs no change.
  *
  * @param {object} p {driverName, businessName, businessPhone, settings,
- *   kind, dueDayKey, owedCents, personalCents}.
+ *   kind, dueDayKey, owedCents}.
  * @return {Array<string>} The 12 values.
  */
 function reminderValues(p) {
   const status = statusLines(p.kind, p.dueDayKey);
-  const exact = zelleAmountCents(p.owedCents, p.personalCents);
   const zelle = zelleLine(p.settings, p.businessName);
   const business = text(p.businessName, 80) || "—";
   return [
     text(p.driverName, 60) || "—",
     business, status.en, money(p.owedCents, "en"), zelle,
-    exact === null ? money(p.owedCents, "en") : money(exact, "en"),
+    money(p.owedCents, "en"),
     business, status.fr, money(p.owedCents, "fr"), zelle,
-    exact === null ? money(p.owedCents, "fr") : money(exact, "fr"),
+    money(p.owedCents, "fr"),
     text(p.businessPhone, 40) || "—",
   ];
 }
@@ -276,6 +260,5 @@ module.exports = {
   reminderValues,
   statusLines,
   templateBody,
-  zelleAmountCents,
   zelleLine,
 };

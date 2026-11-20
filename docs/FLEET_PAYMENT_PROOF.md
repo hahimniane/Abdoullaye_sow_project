@@ -145,3 +145,103 @@ own message opens. The receipt uses the approved `fleet_receipt_2lang`.
 The reminder keeps `fleet_rent_reminder_2lang` with the plain amount until a
 reworded template ("after paying, send the screenshot here") is approved by
 Meta; code never points at a template before it is approved.
+
+## Server choices the spec did not state (built 2026-11-19)
+
+Where the spec was silent the safe side was taken ("wrong is worse than
+slow"; a deposit waits for the office):
+
+- **Matching dates**: for rules 3 and 5 a deposit dated more than a day
+  before the screenshot's day cannot be that payment. Rule 5a (the driver's
+  answer) does not need equal amounts (Q3); 5b does. Two claims, or two
+  deposits, that fit the same way: nothing is guessed; the claims get
+  `reason: "two_claims"`.
+- **Names**: `nameIs` ignores reference numbers (a word with a digit is not
+  part of a name). A remembered name must have two words that are not bank
+  words (MONEY, SENT, PMT, XFER, ZELLE, ...); the cleanup runs on the bank's
+  sender line when it is stored and again when names are compared.
+- **Undone**: `payment_undo` sets `fleetUndone: true` on the deposit (and the
+  bank's replacement copy inherits it in `bank_sync.applySyncPlan`). A later
+  deposit of the same amount from the same sender within 5 days of an undone
+  one also waits as `undone`. Undoing a payment brings back the late fees it
+  took back and sends the claim it paid back to the office (`office`,
+  `reason: "payment_undone"`).
+- **Reading**: a picture the model is not `confident` about, or has no
+  valid amount for, asks the driver for the amount. A covered driver's
+  picture that could not be read is a claim asking the amount; an unknown
+  phone's picture that could not be read is an ordinary support message.
+  **Privacy**: a picture is read by the Claude API only when (1) some
+  business has `fleet.settings.whatsapp.enabled`, and (2) it comes from a
+  covered driver, or from a phone the whole platform does not know (no
+  business has it on a record or has messaged it, no support conversation
+  exists: the lookups `handleInbound` uses to route a message, passed in as
+  `ctx.phoneIsKnown`). A customer any business already knows goes to ordinary
+  support, unread. Text messages are never read.
+- **Already recorded**: a picture of a payment the driver's remembered name
+  already paid (same amount, bank date within a day of the picture, no claim
+  attached) is answered "already recorded" and closes as `paid` with
+  `reason: "already_recorded"`; the same picture sent twice while waiting is
+  "already have it".
+- **Questions**: three unanswered/unclear answers hand a claim to the office
+  (`not_a_driver` for the phone question, `no_amount` for the amount); the
+  name question is asked once and then the claim keeps waiting. Replies and
+  the 2-day notice go to the phone that sent the picture (the driver's own,
+  or the friend who paid for them); the receipt goes to the driver.
+- **Outside the 24-hour window** the 2-day notice may not be delivered
+  (free-form text): the claim is flagged for the office either way
+  (`toldLateAtMs`, `toldLateSent`, `reason: "no_deposit"`).
+- **Timers** act on every open claim, including ones in `office` (closed
+  after 7 days). The "late" reminder is paused only for `asking_amount`,
+  `waiting_bank` and `asking_name` claims.
+- **Sweep**: once an hour the job looks at the last 100 deposits that are
+  matchable, older than 10 minutes and never marked `fleetLookedAtMs`.
+- **Bank connection**: a different login or account stores
+  `businessBankLinks.matchFromMs = now`; matching starts no earlier.
+- **importSheet** no longer assigns personal cents (it still answers
+  `centsChanged: 0`).
+
+## API (`fleetAction`, new and changed actions)
+
+All take `businessId`. Staff = Fleet staff or Fleet admin.
+
+- `bank_status` (staff) also returns `claims`: every open claim of the
+  business (states `asking_driver`, `asking_amount`, `waiting_bank`,
+  `asking_name`, `office`), newest first, at most 100:
+  `[{id, driverId|null, driverName, amountCents|null, state, reason|null,
+  createdAtMs, hasPhoto, fromPhone, payerName|null, toldLateAtMs|null}]`.
+  `reason` is a claim reason (`wrong_recipient`, `too_old`, `not_a_driver`,
+  `two_claims`, `no_amount`, `no_deposit`, `payment_undone`,
+  `deposit_taken`) or null. Waiting deposits (`waiting[].reason`) may now
+  be `unknown`, `shared_payer`, `undone`, `driver_left`, `own_transfer`,
+  `not_zelle`, `possible_duplicate` (`two_drivers` is no longer produced).
+- `claim_assign {claimId, creditId}` (staff): the deposit (it must be on the
+  waiting list) pays the claim's driver, the bank's amount and date are
+  recorded, the claim becomes `paid`, the sender is remembered, the receipt
+  goes out. Returns `{success, claimId, paymentId, amountCents}`. Refusals
+  (`error.details.reason`): `fleet_not_found`, `fleet_claim_closed`,
+  `fleet_claim_no_driver`, `fleet_deposit_used`, `fleet_deposit_not_waiting`,
+  `fleet_driver_left`.
+- `claim_close {claimId}` (staff): the claim becomes `closed`. Returns
+  `{success}`. Refusals: `fleet_not_found`, `fleet_claim_closed`.
+- `claim_photo {claimId}` (staff): `{success, url: string|null, deleted}`,
+  the download link of the screenshot in the business's support thread
+  (null when there is none, or when it was deleted after 12 months). The
+  claim also carries `mediaPath` (a Storage path under
+  `support_cases/{caseId}/whatsapp/`, readable by the business's people
+  through the existing support rules) and `caseId`, `messageId` (the wamid).
+- `payer_names_save {driverId, names: string[]}` (staff): replaces the
+  driver's `rememberedSenders` (at most 10 names; each stored as its sender
+  key, e.g. `AWA SOW`; duplicates collapse). Refuses account-like and app
+  names, one-word names and stop-listed words with
+  `fleet_bad_name` (`details.name` says which); a key already remembered
+  may stay. Returns `{success, names: [keys]}`. Other refusals:
+  `fleet_bad_input` (more than 10), `fleet_not_found`.
+- `bank_assign {creditId, driverId}` now also refuses `fleet_driver_left`
+  (the driver must be active), `fleet_not_found` (not this business's) and
+  `fleet_deposit_not_waiting` (the deposit must be on the waiting list).
+
+`fleetClaims/{id}` is readable by Fleet staff of the business (listener);
+`fromPhone`, `mediaPath`, `caseId`, `messageId`, `state`, `reason`, `open`
+(true until paid or closed), `attempts`, `lang`, `paymentId`, `creditId`,
+`closedByUid` are all stored on it. `fleetPayments` made from a claim carry
+`claimId`; a payment that took back late fees carries `lateFeesVoided`.

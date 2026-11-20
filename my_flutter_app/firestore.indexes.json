@@ -2037,6 +2037,20 @@
       ]
     },
     {
+      "collectionGroup": "businessBankCredits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "inventorySales",
       "queryScope": "COLLECTION",
       "fields": [

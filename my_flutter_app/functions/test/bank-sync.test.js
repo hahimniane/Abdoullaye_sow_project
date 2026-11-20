@@ -84,13 +84,22 @@ describe("bank sync: a Plaid row as a credit", () => {
     assert.equal(senderNameOf(tx({name: "DEPOSIT", merchant_name: "Acme LLC"})),
         "Acme LLC");
     assert.equal(senderNameOf(tx({name: "Zelle Transfer Conf# 12345"})), "");
+    // Reference numbers and MONEY / SENT / PMT / XFER are not part of a name.
+    assert.equal(senderNameOf(tx({counterparties: [{name: "Awa Sow PMT 88391",
+      type: "individual"}]})), "Awa Sow");
+    assert.equal(senderNameOf(tx({name: "ZELLE MONEY SENT FROM AWA SOW XFER"})),
+        "AWA SOW");
+    assert.equal(senderNameOf(tx({counterparties: [{name: "Awa Sow #12"}]})),
+        "Awa Sow");
+    assert.equal(senderNameOf(tx({name: "360 Checking XXXXXXX2820"})),
+        "360 Checking XXXXXXX2820");
   });
 
   it("the app or bank the money came through is never the sender", () => {
     // Some banks list Zelle itself as the counterparty: remembered as a
     // sender, every Zelle would then belong to one driver.
     assert.equal(senderNameOf(tx({name: "Zelle payment from AWA SOW 123",
-      counterparties: [{name: "Zelle", type: "payment_app"}]})), "AWA SOW 123");
+      counterparties: [{name: "Zelle", type: "payment_app"}]})), "AWA SOW");
     assert.equal(senderNameOf(tx({name: "Zelle payment from AWA SOW",
       counterparties: [{name: "Zelle", type: "payment_app"},
         {name: "Awa Sow", type: "individual"}]})), "Awa Sow");

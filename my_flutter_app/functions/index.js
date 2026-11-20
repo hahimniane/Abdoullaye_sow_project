@@ -25412,6 +25412,9 @@ function whatsappConversations() {
     notifyConversation: notifyWhatsAppConversation,
     recordUpdateDelivery: recordWhatsAppUpdateDelivery,
     shipmentQueries: require("./phone_accounts").shipmentQueries,
+    // Fleet payment reports (docs/FLEET_PAYMENT_PROOF.md): offered every
+    // message first; it handles only drivers Fleet takes part for.
+    fleetClaims: {handleInbound: (ctx) => fleet.handleClaimInbound(ctx)},
     packageFlow: {
       openRequest: packageFlow.openRequest,
       open: openPackageFlow,
@@ -25906,8 +25909,9 @@ exports.whatsappWebhook = onRequest(
       memory: "512MiB",
       // WHATSAPP_FLOW_PRIVATE_KEY decrypts the Send a package form
       // (ops/whatsapp/package_flow.py key creates it).
+      // ANTHROPIC_API_KEY reads Fleet payment screenshots.
       secrets: [whatsappAppSecret, whatsappAccessToken, whatsappPhoneNumberId,
-        googleMapsApiKey, whatsappFlowPrivateKey],
+        googleMapsApiKey, whatsappFlowPrivateKey, anthropicApiKey],
     },
     async (req, res) => {
       const secret = safeSecretValue(whatsappAppSecret);
@@ -48285,7 +48289,44 @@ const fleet = createFleetHandlers({
     fleetBankRefresh(businessId, {uid: "schedule", scheduled: true}),
   // Drivers on WhatsApp (docs/FLEET.md section 9).
   sendFleetMessage: sendFleetMessage,
+  // Payment reports (docs/FLEET_PAYMENT_PROOF.md): reading a screenshot, and
+  // free-form replies recorded in the business's thread.
+  readPicture: readFleetPaymentPicture,
+  sendFleetText: (args) => whatsappConversations().sayInThread(args),
 });
+
+/**
+ * Reads one payment screenshot with the Claude Messages API and returns the
+ * model's text (fleet_claims.parseReading validates it strictly). The
+ * picture is untrusted data. Any failure throws: the caller treats that as
+ * "could not read" and asks the driver for the amount.
+ *
+ * @param {object} image {base64, mimeType}.
+ * @return {Promise<string>} The model's answer.
+ */
+async function readFleetPaymentPicture(image) {
+  const fleetClaimsPure = require("./fleet_claims");
+  const apiKey = cleanText(anthropicApiKey.value(), 240);
+  const body = fleetClaimsPure.pictureRequestBody(image);
+  if (!apiKey || apiKey === "unset" || !body) {
+    throw new Error("The picture cannot be read");
+  }
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(45 * 1000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `reading ${response.status}`);
+  }
+  return fleetClaimsPure.responseText(data);
+}
 
 /**
  * One Fleet WhatsApp: its fleetMessages row (created once: a second call
@@ -48935,6 +48976,9 @@ exports.connectBusinessBank = onCall(
           status: "active",
           // The same login and account keeps its place in the feed.
           cursor: sameFeed ? String(old.cursor || "") : "",
+          // A different login or account: Fleet matches deposits from this
+          // moment on (the new bank's old deposits are never paid out).
+          matchFromMs: sameFeed ? Number(old.matchFromMs) || 0 : Date.now(),
           connectedAt: now,
           connectedByUid: uid,
           windowMinutes: zelleCheck.windowMinutesOf(old),

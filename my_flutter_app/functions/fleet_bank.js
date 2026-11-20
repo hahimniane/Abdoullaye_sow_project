@@ -139,67 +139,244 @@ function senderIsAccount(name) {
 const APP_SENDER = /^(?:ZELLE|VENMO|CASH ?APP|PAYPAL|APPLE CASH)$/;
 
 /**
+ * Words a bank puts on a Zelle line that are not part of a name. A key made
+ * only of these (or of one word) is never remembered for a driver.
+ */
+const NAME_STOP_WORDS = Object.freeze(new Set([
+  "MONEY", "SENT", "PMT", "XFER", "ZELLE", "VENMO", "CASH", "CASHAPP",
+  "PAYPAL", "APPLE", "PAYMENT", "TRANSFER", "RECEIVED", "FROM", "CREDIT",
+  "DEPOSIT", "INSTANT", "ONLINE", "MOBILE", "ACH", "WIRE", "BANK", "THE",
+  "CONF", "CONFIRMATION", "REF", "ID", "NAME", "UNKNOWN", "CUSTOMER",
+]));
+
+/** Words on a bank's Zelle line that are never part of a person's name. */
+const BANK_NOISE = new RegExp("^(?:MONEY|SENT|PMT|XFER|ZELLE|PAYMENT|" +
+  "TRANSFER|RECEIVED|FROM|CREDIT|DEPOSIT|INSTANT)$", "i");
+
+/**
+ * A bank's sender line without what is not a name: reference numbers (any
+ * word with a digit in it, "#12", "JPM99abc1234"), and the words MONEY, SENT,
+ * PMT and XFER. A transfer from an account is returned as it is (its digits
+ * are what marks it an account).
+ *
+ * @param {string} name The sender as the bank shows it.
+ * @return {string} The cleaned name ("" when nothing is left).
+ */
+function cleanSenderName(name) {
+  const text = String(name || "").replace(/\s+/g, " ").trim();
+  if (senderIsAccount(text)) return text;
+  return text.split(" ").filter((word) => {
+    const bare = word.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "");
+    if (!bare) return false;
+    if (/\d/.test(word) || word.startsWith("#")) return false;
+    return !BANK_NOISE.test(bare);
+  }).join(" ");
+}
+
+/**
+ * The comparison key of a sender: cleaned, then upper case letters and
+ * digits only.
+ *
+ * @param {string} name The sender.
+ * @return {string} The key.
+ */
+function matchKey(name) {
+  return senderKey(cleanSenderName(name));
+}
+
+/**
+ * The words of a name key that can be part of a person's name: letters only
+ * (a reference number is not a word of the name).
+ *
+ * @param {string} key A key from senderKey/matchKey.
+ * @return {Array<string>} The words.
+ */
+function nameWords(key) {
+  return String(key || "").split(" ").filter((w) => /^[A-Z]+$/.test(w));
+}
+
+/**
+ * Whether two names are the same person's: their keys share every word of
+ * the shorter one and at least two words ("FATOUMATA BAH" is "Fatoumata B.
+ * Bah #12"; "BAH" alone is nobody).
+ *
+ * @param {string} a A name or key.
+ * @param {string} b Another.
+ * @return {boolean} Whether they are the same name.
+ */
+function nameIs(a, b) {
+  const x = [...new Set(nameWords(matchKey(a)))];
+  const y = [...new Set(nameWords(matchKey(b)))];
+  const [short, long] = x.length <= y.length ? [x, new Set(y)] :
+    [y, new Set(x)];
+  return short.length >= 2 && short.every((w) => long.has(w));
+}
+
+/**
  * Whether a deposit's sender may be remembered for a driver, so the next
- * one pays by itself: a person's Zelle only. Never an account, an app's own
- * name, a deposit the bank does not call a Zelle (cash, check, card payout),
+ * one pays by itself: a person's Zelle only, with at least two words of a
+ * name. Never an account, an app's own name, a stop-listed word, a one-word
+ * key, a deposit the bank does not call a Zelle (cash, check, card payout),
  * or no name at all.
  *
  * @param {object} credit {senderName, zelle}.
  * @return {boolean} Whether to remember it.
  */
 function senderRememberable(credit) {
-  const key = senderKey(credit?.senderName);
-  return key !== "" && !APP_SENDER.test(key) && credit?.zelle !== false &&
-    !senderIsAccount(credit?.senderName);
+  const key = matchKey(credit?.senderName);
+  if (key === "" || APP_SENDER.test(key) || credit?.zelle === false ||
+      senderIsAccount(credit?.senderName)) {
+    return false;
+  }
+  const words = nameWords(key).filter((w) => !NAME_STOP_WORDS.has(w));
+  return words.length >= 2;
+}
+
+/**
+ * Whether a typed name (the office's "Names this driver pays from", or a
+ * driver's answer) may be remembered: same test as a deposit's sender.
+ *
+ * @param {string} name A name.
+ * @return {boolean} Whether it may be remembered.
+ */
+function nameRememberable(name) {
+  return senderRememberable({senderName: name, zelle: true});
+}
+
+const DAY_MS = 86400000;
+const dayMs = (key) => Date.parse(`${key || ""}T12:00:00Z`);
+
+/**
+ * Whether a deposit is not older than the photo's day (one day of slack: the
+ * photo's day is the driver's, the deposit's is the bank's). Unknown days
+ * pass.
+ *
+ * @param {string} depositDay The bank's date.
+ * @param {string} photoDay The screenshot's day (may be empty).
+ * @return {boolean} True when it can be the payment.
+ */
+function depositNotBefore(depositDay, photoDay) {
+  const d = dayMs(depositDay);
+  const p = dayMs(photoDay);
+  if (!Number.isFinite(d) || !Number.isFinite(p)) return true;
+  return d >= p - DAY_MS;
 }
 
 /**
  * Which driver a deposit is from, or why it is not known. Wrong is worse
- * than slow: whenever two readings are possible, it waits for the office.
+ * than slow: whenever two readings are possible, it waits for the office
+ * (docs/FLEET_PAYMENT_PROOF.md, "Matching a deposit").
  * 0. A transfer from an account is nobody's. A deposit the bank does not
  *    call a Zelle (stored `zelle: false`) never pays by itself. Neither
  *    does one without a person's name.
- * 1. A sender remembered for exactly one active driver - unless the cents
- *    are another active driver's code (two people can share a name, and a
- *    friend can pay for a friend).
- * 2. A sender remembered only for a driver who left: never by cents (their
- *    old cents may be someone else's now).
- * 3. Else the amount's cents equal exactly one active driver's personal
- *    cents (the amount is the code, decided 2026-11-05).
+ * 1. A deposit once undone by the office (`fleetUndone` or the waiting
+ *    reason "undone"), and the bank's later copy of it, never pays by
+ *    itself again.
+ * 2. A sender remembered for exactly one active driver pays that driver,
+ *    whatever the amount.
+ * 3. A sender remembered for more than one active driver waits
+ *    ("shared_payer") unless exactly one of those drivers has an open claim
+ *    for that amount, who then gets it.
+ * 4. A sender remembered only for a driver who left waits ("driver_left").
+ * 5. An unknown sender: an open claim takes it when (a) the claim's
+ *    payerName (the driver's answer) is that sender, or (b) the claim has
+ *    no payerName, the amounts are equal, the sender is the driver's own
+ *    name, and no other unused deposit and no other open claim fits the
+ *    same way.
+ * 6. Otherwise "unknown".
  *
- * @param {object} credit {amountCents, senderName, zelle}.
- * @param {Array<object>} drivers Every driver of the business {id, status,
- *   personalCents, rememberedSenders}; only active ones are ever paid.
- * @return {object} {driverId, how: "sender"|"cents"} or {reason:
- *   "two_drivers"|"unknown"|"own_transfer"|"not_zelle"|"driver_left"}.
+ * @param {object} credit {id, amountCents, senderName, zelle, dateKey,
+ *   fleetUndone, fleetWaitingReason}.
+ * @param {Array<object>} drivers Every driver of the business {id, name,
+ *   status, rememberedSenders}; only active ones are ever paid.
+ * @param {object} [context] {claims: open claims that can take a deposit
+ *   [{id, driverId, amountCents, payerName, dayKey, createdAtMs}], others:
+ *   the business's other unused deposits [{id, amountCents, senderName,
+ *   dateKey}]}.
+ * @return {object} {driverId, how: "sender"|"claim", claimId?} or {reason,
+ *   claimIds?}; reasons: own_transfer, not_zelle, unknown, undone,
+ *   shared_payer, driver_left. `claimIds` names claims that tie (flagged
+ *   "two_claims").
  */
-function matchDeposit(credit, drivers) {
+function matchDeposit(credit, drivers, context = {}) {
   if (senderIsAccount(credit?.senderName)) return {reason: "own_transfer"};
   if (credit?.zelle === false) return {reason: "not_zelle"};
-  const sender = senderKey(credit?.senderName);
+  const sender = matchKey(credit?.senderName);
   if (!sender || APP_SENDER.test(sender)) return {reason: "unknown"};
+  if (credit?.fleetUndone === true ||
+      credit?.fleetWaitingReason === "undone") {
+    return {reason: "undone"};
+  }
   const all = (drivers || []).filter(Boolean);
   const active = all.filter((d) => d.status === "active");
-  const knows = (d) => (d.rememberedSenders || [])
-      .some((s) => senderKey(s) === sender);
   const amount = Math.round(Number(credit?.amountCents));
-  const tail = Number.isFinite(amount) ? amount % 100 : 0;
-  const byCents = tail > 0 ?
-    active.filter((d) => Number(d.personalCents) === tail) : [];
+  const knows = (d) => (d.rememberedSenders || [])
+      .some((s) => matchKey(s) === sender);
+  const claims = (context.claims || []).filter((c) => c &&
+    active.some((d) => d.id === c.driverId) &&
+    depositNotBefore(credit?.dateKey, c.dayKey));
   const owners = active.filter(knows);
-  if (owners.length > 1) return {reason: "two_drivers"};
-  if (owners.length === 1) {
-    if (byCents.some((d) => d.id !== owners[0].id)) {
-      return {reason: "two_drivers"};
+  if (owners.length === 1) return {driverId: owners[0].id, how: "sender"};
+  if (owners.length > 1) {
+    const mine = claims.filter((c) => Number(c.amountCents) === amount &&
+      owners.some((d) => d.id === c.driverId));
+    const people = new Set(mine.map((c) => c.driverId));
+    if (people.size === 1) {
+      const first = [...mine].sort((a, b) =>
+        (Number(a.createdAtMs) || 0) - (Number(b.createdAtMs) || 0))[0];
+      return {driverId: first.driverId, how: "claim", claimId: first.id};
     }
-    return {driverId: owners[0].id, how: "sender"};
+    return {reason: "shared_payer"};
   }
   if (all.some((d) => d.status !== "active" && knows(d))) {
     return {reason: "driver_left"};
   }
-  if (byCents.length === 1) return {driverId: byCents[0].id, how: "cents"};
-  if (byCents.length > 1) return {reason: "two_drivers"};
+  // An unknown sender: only an open claim can take it.
+  const byName = claims.filter((c) => c.payerName &&
+    nameIs(c.payerName, credit.senderName));
+  if (byName.length === 1) {
+    return {driverId: byName[0].driverId, how: "claim",
+      claimId: byName[0].id};
+  }
+  if (byName.length > 1) {
+    return {reason: "unknown", claimIds: byName.map((c) => c.id)};
+  }
+  const nameOf = (id) => all.find((d) => d.id === id)?.name;
+  const fits = (c, who) => !c.payerName &&
+    Number(c.amountCents) === who.amount &&
+    nameIs(who.sender, nameOf(c.driverId));
+  const ownName = claims.filter((c) =>
+    fits(c, {amount, sender: credit.senderName}));
+  if (ownName.length === 1) {
+    const rival = (context.others || []).some((o) => o && o.id !== credit.id &&
+      fits(ownName[0], {amount: Math.round(Number(o.amountCents)),
+        sender: o.senderName}) &&
+      depositNotBefore(o.dateKey, ownName[0].dayKey));
+    if (!rival) {
+      return {driverId: ownName[0].driverId, how: "claim",
+        claimId: ownName[0].id};
+    }
+    return {reason: "unknown", claimIds: [ownName[0].id]};
+  }
+  if (ownName.length > 1) {
+    return {reason: "unknown", claimIds: ownName.map((c) => c.id)};
+  }
   return {reason: "unknown"};
+}
+
+/**
+ * Where matching starts for a business: go-live, when Fleet was switched
+ * on, and the moment a different bank login (or account) was connected (a
+ * new bank's old deposits are never matched).
+ *
+ * @param {object} business The business record.
+ * @param {object} link Its bank link record (may be empty).
+ * @return {number} The earliest deposit time.
+ */
+function matchStartMs(business, link) {
+  return Math.max(BANK_MATCH_START_MS,
+      Number(business?.fleet?.enabledAtMs) || 0,
+      Number(link?.matchFromMs) || 0);
 }
 
 /**
@@ -234,15 +411,18 @@ function depositMatchable(credit, sinceMs) {
  * @return {?object} The used deposit it may repeat, or null.
  */
 function possibleDuplicateOf(credit, others) {
-  const sender = senderKey(credit?.senderName);
+  const sender = matchKey(credit?.senderName);
   const day = Date.parse(`${credit?.dateKey || ""}T12:00:00Z`);
   if (!sender || !Number.isFinite(day)) return null;
+  // A used deposit that was pending or removed, or one the office undid
+  // (live or not: the bank's copy of an undone deposit never pays by itself).
   return (others || []).find((o) => o && o.id !== credit.id &&
-    o.consumedBy && o.consumedBy.kind &&
-    (o.removed === true || o.pending === true) &&
+    ((o.consumedBy && o.consumedBy.kind &&
+      (o.removed === true || o.pending === true)) ||
+      o.fleetUndone === true) &&
     String(o.accountId || "") === String(credit.accountId || "") &&
     Number(o.amountCents) === Number(credit.amountCents) &&
-    senderKey(o.senderName) === sender &&
+    matchKey(o.senderName) === sender &&
     Math.abs(Date.parse(`${o.dateKey || ""}T12:00:00Z`) - day) <=
       DUPLICATE_DAYS * 24 * 3600 * 1000) || null;
 }
@@ -251,6 +431,14 @@ module.exports = {
   DUPLICATE_DAYS,
   possibleDuplicateOf,
   senderIsAccount,
+  cleanSenderName,
+  matchKey,
+  matchStartMs,
+  nameIs,
+  nameRememberable,
+  nameWords,
+  NAME_STOP_WORDS,
+  depositNotBefore,
   senderRememberable,
   BANK_MATCH_START_MS,
   BANK_REFRESH_EVERY,

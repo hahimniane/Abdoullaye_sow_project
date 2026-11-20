@@ -95,7 +95,7 @@ let car1;
 let assignment;
 
 describe("drivers, cars and a car given to a driver", () => {
-  it("staff add drivers (each with personal cents) and cars", async () => {
+  it("staff add drivers (no personal cents any more) and cars", async () => {
     await assert.rejects(act(PARKING_ONLY, "driver_save",
         {driver: {name: "X"}}), denied);
     driverA = (await act(STAFF, "driver_save", {driver: {name:
@@ -107,8 +107,8 @@ describe("drivers, cars and a car given to a driver", () => {
     const a = await doc("fleetDrivers", driverA);
     const b = await doc("fleetDrivers", driverB);
     assert.equal(a.phone, "+12125550100");
-    assert.notEqual(a.personalCents, b.personalCents);
-    assert.ok(a.personalCents >= 1 && a.personalCents <= 99);
+    assert.equal(a.personalCents, undefined, "none is assigned");
+    assert.equal(b.personalCents, undefined);
     assert.equal((await doc("fleetCars", car1)).plate, "T000001C");
   });
 
