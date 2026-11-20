@@ -7,7 +7,12 @@ import { Panel } from "@/components/panel";
 import { useBusinessStaff } from "@/lib/business-data";
 import { formatDayKey } from "@/lib/format";
 import {
+  centsToInput,
   dollarsToCents,
+  driverDisplayName,
+  driverLeaveConfirm,
+  estimateFeeEffectiveDay,
+  readPlateFeeInput,
   driverFilterCounts,
   driverFilterNarrowed,
   billInView,
@@ -314,7 +319,7 @@ function DriverFormDialog({
 // A driver's page.
 // ---------------------------------------------------------------------------
 
-type Dialog = "edit" | "give" | "return" | "payment" | "charge" | { waive: Row } | { undo: Row } | null;
+type Dialog = "edit" | "give" | "return" | "fee" | "leave" | "payment" | "charge" | { waive: Row } | { undo: Row } | null;
 
 function DriverPage({
   businessId,
@@ -404,6 +409,9 @@ function DriverPage({
         <div className="fleet-actions">
           <button className="lst-btn" type="button" onClick={() => setDialog("payment")}>Record a payment</button>
           <button className="lst-btn ghost" type="button" onClick={() => setDialog("charge")}>Add a charge</button>
+          {s(driver.status) !== "left" && (
+            <button className="lst-btn ghost" type="button" onClick={() => setDialog("leave")}>Driver has left</button>
+          )}
           <FleetRemindButton
             businessId={businessId}
             settings={settings}
@@ -434,7 +442,10 @@ function DriverPage({
               </p>
             </div>
             {isAdmin && (
-              <button className="lst-btn ghost" type="button" onClick={() => setDialog("return")}>Plate returned</button>
+              <div className="fleet-actions">
+                <button className="lst-btn ghost" type="button" onClick={() => setDialog("fee")}>Change plate fee</button>
+                <button className="lst-btn ghost" type="button" onClick={() => setDialog("return")}>Plate returned</button>
+              </div>
             )}
           </div>
         ) : (
@@ -585,6 +596,20 @@ function DriverPage({
       )}
       {dialog === "payment" && <PaymentDialog businessId={businessId} driver={driver} todayKey={state.todayKey} onClose={() => setDialog(null)} />}
       {dialog === "charge" && <ChargeDialog businessId={businessId} driver={driver} todayKey={state.todayKey} onClose={() => setDialog(null)} />}
+      {dialog === "fee" && current && car && (
+        <ChangeFeeDialog
+          assignment={current}
+          bills={bills}
+          businessId={businessId}
+          driver={driver}
+          plate={s(car.plate)}
+          todayKey={state.todayKey}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "leave" && (
+        <DriverLeftDialog businessId={businessId} driver={driver} plate={car ? s(car.plate) : ""} todayKey={state.todayKey} onClose={() => setDialog(null)} />
+      )}
       {dialog === "give" && <GiveCarDialog businessId={businessId} driver={driver} state={state} onClose={() => setDialog(null)} />}
       {dialog === "return" && current && (
         <ReturnCarDialog
@@ -630,7 +655,7 @@ function PaymentDialog({ businessId, driver, todayKey, onClose }: { businessId: 
       setError("Enter an amount.");
       return;
     }
-    const name = s(driver.name);
+    const name = driverDisplayName(driver.name);
     const shown = moneyText(cents, "en");
     const result = await run<{ creditAddedCents?: number }>(
       "payment_record",
@@ -716,7 +741,7 @@ function ChargeDialog({ businessId, driver, todayKey, onClose }: { businessId: s
       setError("Some details are missing or not valid.");
       return;
     }
-    const name = s(driver.name);
+    const name = driverDisplayName(driver.name);
     const result = await run(
       "charge_add",
       { driverId: driver.id, amountCents: cents, label: label.trim(), dueDayKey: due },
@@ -778,7 +803,7 @@ function GiveCarDialog({ businessId, driver, state, onClose }: { businessId: str
       return;
     }
     const car = state.index.carById.get(carId);
-    const name = s(driver.name);
+    const name = driverDisplayName(driver.name);
     const plate = s(car?.plate);
     const result = await run(
       "assignment_start",
@@ -874,7 +899,7 @@ function ReturnCarDialog({
       setError("Some details are missing or not valid.");
       return;
     }
-    const name = s(driver.name);
+    const name = driverDisplayName(driver.name);
     const result = await run<{ creditBackCents?: number }>(
       "assignment_end",
       { assignmentId: assignment.id, endDayKey: day },
@@ -919,6 +944,164 @@ function ReturnCarDialog({
           <p className="lst-hint">{returnRuleText(rule)}</p>
           <label className="lst-field">
             <span>Returned on</span>
+            <input disabled={busy} type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+          </label>
+        </>
+      )}
+    </FleetModal>
+  );
+}
+
+function ChangeFeeDialog({
+  businessId,
+  driver,
+  assignment,
+  bills,
+  plate,
+  todayKey,
+  onClose,
+}: {
+  businessId: string;
+  driver: Row;
+  assignment: Row;
+  bills: FleetBill[];
+  plate: string;
+  todayKey: string;
+  onClose: () => void;
+}) {
+  const lang = fleetLang();
+  const weekly = assignment.period === "weekly";
+  const [amount, setAmount] = useState(centsToInput(assignment.rentCents));
+  const [dueDay, setDueDay] = useState("");
+  const [appliedFrom, setAppliedFrom] = useState("");
+  const { busy, error, setError, run } = useFleetRun(businessId);
+  const estimate = useMemo(() => estimateFeeEffectiveDay(assignment, bills, todayKey), [assignment, bills, todayKey]);
+
+  async function save() {
+    const input = readPlateFeeInput(amount, dueDay, { rentCents: assignment.rentCents, dueDay: assignment.dueDay, period: assignment.period });
+    if (!input.ok) {
+      setError(input.error);
+      return;
+    }
+    const name = driverDisplayName(driver.name);
+    const when = formatDayKey(estimate, "en");
+    const whenFr = formatDayKey(estimate, "fr");
+    const what = input.payload.rentCents !== undefined ? moneyText(input.payload.rentCents, "en") : "";
+    const whatFr = input.payload.rentCents !== undefined ? moneyText(input.payload.rentCents, "fr") : "";
+    const result = await run<{ effectiveDayKey?: string }>(
+      "assignment_update",
+      { assignmentId: assignment.id, ...input.payload },
+      {
+        en: `Change ${name}'s plate fee for ${plate}${what ? ` to ${what}` : ""}${input.payload.dueDay ? `, due day ${input.payload.dueDay}` : ""}? It applies from ${when}. Bills already made are not changed.`,
+        fr: `Modifier les frais de plaque de ${name} pour ${plate}${whatFr ? ` à ${whatFr}` : ""}${input.payload.dueDay ? `, jour d’échéance ${input.payload.dueDay}` : ""} ? Cela s’applique à partir du ${whenFr}. Les factures déjà créées ne sont pas modifiées.`,
+      },
+    );
+    if (result) setAppliedFrom(s(result.effectiveDayKey) || estimate);
+  }
+
+  return (
+    <FleetModal
+      title="Change plate fee"
+      subtitle={<span data-no-translate>{s(driver.name)} · {plate}</span>}
+      onClose={onClose}
+      busy={busy}
+      width={480}
+      footer={
+        appliedFrom ? (
+          <button className="lst-btn" type="button" onClick={onClose}>Close</button>
+        ) : (
+          <>
+            <CancelClose busy={busy} onClose={onClose} />
+            <SaveButton busy={busy} label="Save plate fee" busyLabel="Saving..." onClick={() => void save()} />
+          </>
+        )
+      }
+    >
+      {error && <div className="lst-form-error" role="alert">{error}</div>}
+      {appliedFrom ? (
+        <p>
+          Saved. <span>Applies from</span> <b data-no-translate>{formatDayKey(appliedFrom, lang)}</b>. <span>Bills already made are not changed.</span>
+        </p>
+      ) : (
+        <>
+          <div className="lst-form-grid">
+            <label className="lst-field">
+              <span>{weekly ? "New plate fee a week ($)" : "New plate fee a month ($)"}</span>
+              <input autoFocus data-no-translate disabled={busy} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </label>
+            <label className="lst-field">
+              <span>{weekly ? "Due weekday, optional (1 = Monday … 7 = Sunday)" : "Due day of the month, optional (1–28)"}</span>
+              <input data-no-translate disabled={busy} inputMode="numeric" placeholder={String(assignment.dueDay ?? "")} value={dueDay} onChange={(e) => setDueDay(e.target.value)} />
+            </label>
+          </div>
+          <p className="lst-hint">
+            <span>Applies from</span> <span data-no-translate>{formatDayKey(estimate, lang)}</span>. <span>Bills already made are not changed.</span>
+          </p>
+        </>
+      )}
+    </FleetModal>
+  );
+}
+
+function DriverLeftDialog({
+  businessId,
+  driver,
+  plate,
+  todayKey,
+  onClose,
+}: {
+  businessId: string;
+  driver: Row;
+  plate: string;
+  todayKey: string;
+  onClose: () => void;
+}) {
+  const [day, setDay] = useState(todayKey);
+  const [ended, setEnded] = useState<number | null>(null);
+  const { busy, error, setError, run } = useFleetRun(businessId);
+
+  async function save() {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      setError("Some details are missing or not valid.");
+      return;
+    }
+    const result = await run<{ ended?: number }>(
+      "driver_leave",
+      { driverId: driver.id, endDayKey: day },
+      {
+        en: driverLeaveConfirm(driver.name, plate, formatDayKey(day, "en")).en,
+        fr: driverLeaveConfirm(driver.name, plate, formatDayKey(day, "fr")).fr,
+      },
+    );
+    if (result) setEnded(Number(result.ended) || 0);
+  }
+
+  return (
+    <FleetModal
+      title="Driver has left"
+      subtitle={<span data-no-translate>{s(driver.name)}</span>}
+      onClose={onClose}
+      busy={busy}
+      width={480}
+      footer={
+        ended !== null ? (
+          <button className="lst-btn" type="button" onClick={onClose}>Close</button>
+        ) : (
+          <>
+            <CancelClose busy={busy} onClose={onClose} />
+            <SaveButton danger busy={busy} label="Driver has left" busyLabel="Saving..." onClick={() => void save()} />
+          </>
+        )
+      }
+    >
+      {error && <div className="lst-form-error" role="alert">{error}</div>}
+      {ended !== null ? (
+        <p>The driver is marked as left. Their plate came back and their bills stopped.</p>
+      ) : (
+        <>
+          <p className="lst-hint">{plate ? "The plate comes back on this date and bills stop." : "Bills stop on this date."}</p>
+          <label className="lst-field">
+            <span>Left on</span>
             <input disabled={busy} type="date" value={day} onChange={(e) => setDay(e.target.value)} />
           </label>
         </>

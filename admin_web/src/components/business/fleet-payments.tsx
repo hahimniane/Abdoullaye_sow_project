@@ -14,6 +14,7 @@ import {
   monthOf,
   monthWindow,
   paymentsGrid,
+  plateFeesPaidLine,
   type PaymentsFilter,
 } from "@/lib/fleet";
 import { moneyText } from "@/lib/invoice-ledger";
@@ -29,16 +30,16 @@ const FIRST_MONTHS = 6;
 export function FleetTileGroup({ state }: { state: FleetState }) {
   const tiles = useMemo(() => fleetTiles(state.data, state.index, state.todayKey), [state]);
   const lang = fleetLang();
-  const share = tiles.dueThisMonthCents > 0 ? Math.min(100, Math.round((tiles.collectedCents / tiles.dueThisMonthCents) * 100)) : 0;
+  const share = tiles.plateFeesBilledCents > 0 ? Math.min(100, Math.round((tiles.plateFeesPaidCents / tiles.plateFeesBilledCents) * 100)) : 0;
   return (
     <section className="fleet-kpis" aria-label="Fleet this month">
       <article className="fleet-kpi">
         <span className="fleet-kpi-label">Collected this month</span>
         <strong className="fleet-kpi-value ok" data-no-translate>{moneyText(tiles.collectedCents, lang)}</strong>
-        {tiles.dueThisMonthCents > 0 ? (
+        {tiles.plateFeesBilledCents > 0 ? (
           <>
             <span className="fleet-kpi-bar" aria-hidden="true"><i style={{ width: `${share}%` }} /></span>
-            <small><span data-no-translate>{share}%</span> <span>of</span> <span data-no-translate>{moneyText(tiles.dueThisMonthCents, lang)}</span> <span>billed this month</span></small>
+            <small data-no-translate>{plateFeesPaidLine(tiles.plateFeesBilledCents, tiles.plateFeesPaidCents, lang)}</small>
           </>
         ) : (
           <small>Nothing billed yet this month</small>
@@ -175,13 +176,14 @@ export function FleetPayments({ businessId, state, onOpenDriver }: { businessId:
                     <span
                       className={`num fleet-cell ${cell.state}`}
                       key={cell.month}
-                      title={cellStateLabel(cell.state)}
+                      title={cell.extraOwedCents > 0 ? "A late fee or charge is still owed this month" : cellStateLabel(cell.state)}
                     >
                       {cell.paidCents > 0
                         ? <b data-no-translate>{moneyText(cell.paidCents, lang)}</b>
                         : cell.state === "owed"
                           ? <b><span>Owes</span> <span data-no-translate>{moneyText(cell.dueCents, lang)}</span></b>
                           : <b>—</b>}
+                      {cell.extraOwedCents > 0 && <small className="fleet-cell-fee">+ fee owed</small>}
                     </span>
                   ))}
                   <span className="num"><Money cents={row.totalCents} /></span>

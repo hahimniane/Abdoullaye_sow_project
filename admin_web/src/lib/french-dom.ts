@@ -8940,6 +8940,28 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This driver has left.": "Ce chauffeur est parti.",
 });
 Object.assign(TEXT_TRANSLATIONS, {
+  "Plates with a driver": "Plaques avec un chauffeur",
+  "Every plate": "Toutes les plaques",
+  "+ fee owed": "+ frais dus",
+  "A late fee or charge is still owed this month": "Des frais de retard ou d’autres frais sont encore dus ce mois-ci",
+  "Driver has left": "Le chauffeur est parti",
+  "Change plate fee": "Modifier les frais de plaque",
+  "Save plate fee": "Enregistrer les frais de plaque",
+  "New plate fee a month ($)": "Nouveaux frais de plaque par mois ($)",
+  "New plate fee a week ($)": "Nouveaux frais de plaque par semaine ($)",
+  "Due weekday, optional (1 = Monday … 7 = Sunday)": "Jour de la semaine d’échéance, facultatif (1 = lundi … 7 = dimanche)",
+  "Due day of the month, optional (1–28)": "Jour d’échéance du mois, facultatif (1–28)",
+  "Applies from": "S’applique à partir du",
+  "Bills already made are not changed.": "Les factures déjà créées ne sont pas modifiées.",
+  "The plate comes back on this date and bills stop.": "La plaque revient à cette date et la facturation s’arrête.",
+  "Bills stop on this date.": "La facturation s’arrête à cette date.",
+  "The driver is marked as left. Their plate came back and their bills stopped.": "Le chauffeur est marqué comme parti. Sa plaque est revenue et sa facturation s’est arrêtée.",
+  "Nothing was changed.": "Rien n’a été modifié.",
+  "This driver still has a plate. Use Driver has left, which returns it.": "Ce chauffeur a encore une plaque. Utilisez « Le chauffeur est parti », qui la rend.",
+  "This plate was already returned.": "Cette plaque a déjà été rendue.",
+  "This plate is still with another driver on that date.": "Cette plaque est encore chez un autre chauffeur à cette date.",
+});
+Object.assign(TEXT_TRANSLATIONS, {
   "The bank took back a deposit that had paid a driver": "La banque a repris un dépôt qui avait payé un chauffeur",
   "The payment is still recorded. Look at the bank account: if the money is not there, undo the payment. If it is there, keep it.":
     "Le paiement est toujours enregistré. Regardez le compte bancaire : si l’argent n’y est pas, annulez le paiement. S’il y est, gardez-le.",

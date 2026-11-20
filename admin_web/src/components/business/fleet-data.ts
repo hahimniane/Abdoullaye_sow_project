@@ -4,25 +4,40 @@
 // collections (complete, equality on businessId only, so no composite index),
 // held by the console and shared by every Fleet page and by Today's tiles.
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 
 import { useBusinessCollection } from "@/lib/business-data";
 import { functions } from "@/lib/firebase";
-import { indexFleet, newYorkDayKey, type FleetData, type FleetIndex } from "@/lib/fleet";
+import { indexFleet, newYorkDayKey, refreshedDayKey, type FleetData, type FleetIndex } from "@/lib/fleet";
 
 export type FleetState = {
   data: FleetData;
   index: FleetIndex;
-  /** Today in New York, read once per snapshot. */
+  /** Today in New York; moves when the day changes, even on a console left open overnight. */
   todayKey: string;
   loading: boolean;
   error: string;
 };
 
 const COMPLETE = { pageSize: null, sort: "query" } as const;
+const DAY_CHECK_MS = 60_000;
+
+/**
+ * Today in New York, checked once a minute. The state only changes when the
+ * day does, so nothing re-renders the other 1,439 minutes.
+ */
+function useNewYorkDayKey(): string {
+  const [dayKey, setDayKey] = useState(() => newYorkDayKey());
+  useEffect(() => {
+    const timer = setInterval(() => setDayKey((held) => refreshedDayKey(held)), DAY_CHECK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return dayKey;
+}
 
 export function useFleetData(businessId: string, enabled: boolean): FleetState {
+  const todayKey = useNewYorkDayKey();
   const drivers = useBusinessCollection("fleetDrivers", businessId, enabled, COMPLETE);
   const cars = useBusinessCollection("fleetCars", businessId, enabled, COMPLETE);
   const assignments = useBusinessCollection("fleetAssignments", businessId, enabled, COMPLETE);
@@ -44,8 +59,8 @@ export function useFleetData(businessId: string, enabled: boolean): FleetState {
       notes: notes.rows as FleetData["notes"],
       substitutes: substitutes.rows as FleetData["substitutes"],
     };
-    return { data, index: indexFleet(data), todayKey: newYorkDayKey(), loading, error };
-  }, [drivers.rows, cars.rows, assignments.rows, bills.rows, payments.rows, notes.rows, substitutes.rows, loading, error]);
+    return { data, index: indexFleet(data), todayKey, loading, error };
+  }, [todayKey, drivers.rows, cars.rows, assignments.rows, bills.rows, payments.rows, notes.rows, substitutes.rows, loading, error]);
 }
 
 /**

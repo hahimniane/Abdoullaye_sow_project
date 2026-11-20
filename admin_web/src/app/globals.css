@@ -17920,6 +17920,7 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 .fleet-cell.owed { background: rgba(239, 68, 68, 0.12); }
 .fleet-cell.owed b { color: #b91c1c; }
 .fleet-cell.none b { color: var(--muted); font-weight: 500; }
+.fleet-cell-fee { display: block; margin-top: 2px; color: #b91c1c; font-size: 12px; font-weight: 600; white-space: nowrap; }
 
 .fleet-late { color: #b91c1c; font-weight: 700; }
 
