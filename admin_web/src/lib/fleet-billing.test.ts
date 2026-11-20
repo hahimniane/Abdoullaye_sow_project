@@ -9,7 +9,6 @@ import {
   FLEET_MESSAGES,
   allocatePayment,
   applyCredit,
-  assignPersonalCents,
   driverBalance,
   lateFeesToCreate,
   nextUnbilledPeriodStart,
@@ -41,7 +40,6 @@ const fixture = JSON.parse(readFileSync(fixtureUrl, "utf8")) as {
   creditCases: { name: string; bills: FleetBill[]; creditCents: number; expect: Row }[];
   balanceCases: { name: string; today: string; creditCents: number; bills: FleetBill[]; expect: Row }[];
   whoDroveCases: { name: string; assignments: never[]; substitutes: never[]; carId: string; dayKey: string; expect: Row }[];
-  personalCases: { name: string; drivers: { id: string; personalCents: number | null; createdAt: number }[]; expect: Row }[];
 };
 const pick = (value: unknown, keys: string[]) =>
   Object.fromEntries(keys.map((k) => [k, (value as Row | null)?.[k]]));
@@ -99,15 +97,10 @@ describe("fleet billing (console): payments and credit", () => {
   });
 });
 
-describe("fleet billing (console): balance and personal cents", () => {
+describe("fleet billing (console): balance", () => {
   for (const c of fixture.balanceCases) {
     it(c.name, () => {
       assert.deepEqual(driverBalance(c.bills, c.creditCents, c.today), c.expect);
-    });
-  }
-  for (const c of fixture.personalCases) {
-    it(c.name, () => {
-      assert.deepEqual(assignPersonalCents(c.drivers), c.expect);
     });
   }
 });

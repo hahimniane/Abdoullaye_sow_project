@@ -338,46 +338,6 @@ export function driverBalance(
   };
 }
 
-/**
- * Personal cents (1-99, unique) for active drivers. A driver holding a valid
- * value nobody earlier holds keeps it; others get the lowest free value.
- * Order is createdAt then id. Beyond 99 drivers the extra get null.
- */
-export function assignPersonalCents(
-  activeDrivers: { id: string; personalCents?: number | null; createdAt?: number | string | null }[],
-): Record<string, number | null> {
-  const ordered = [...(activeDrivers || [])].sort((x, y) => {
-    const a = Number(x.createdAt);
-    const b = Number(y.createdAt);
-    const byTime =
-      Number.isFinite(a) && Number.isFinite(b)
-        ? a - b
-        : String(x.createdAt ?? "").localeCompare(String(y.createdAt ?? ""));
-    return byTime || String(x.id).localeCompare(String(y.id));
-  });
-  const taken = new Set<number>();
-  const result: Record<string, number | null> = {};
-  for (const d of ordered) {
-    const v = d.personalCents;
-    if (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 99 && !taken.has(v)) {
-      taken.add(v);
-      result[d.id] = v;
-    }
-  }
-  let next = 1;
-  for (const d of ordered) {
-    if (d.id in result) continue;
-    while (next <= 99 && taken.has(next)) next++;
-    if (next > 99) {
-      result[d.id] = null;
-    } else {
-      taken.add(next);
-      result[d.id] = next;
-    }
-  }
-  return result;
-}
-
 export type DroveAssignment = { carId: string; driverId: string; startDayKey: string; endDayKey?: string | null };
 export type DroveSubstitute = { id: string; carId: string; fromDayKey: string; toDayKey: string; voided?: boolean };
 

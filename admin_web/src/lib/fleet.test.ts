@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { translateValue } from "./french-dom.ts";
+
 import {
   carRows,
+  carsInPaperworkScope,
   carTimeline,
   daysBetween,
   dollarsToCents,
+  driverDisplayName,
+  driverLeaveConfirm,
   driverRows,
+  estimateFeeEffectiveDay,
   driverTenure,
   driverTimeline,
   expiryState,
@@ -20,12 +26,15 @@ import {
   paperworkCounts,
   paperworkRows,
   parseCsv,
+  plateFeesPaidLine,
+  readPlateFeeInput,
+  refreshedDayKey,
+  shiftDayKey,
   paymentsGrid,
   readFleetSettings,
   readImportPreview,
   shiftMonth,
   tenureText,
-  zelleAmountText,
   type FleetData,
 } from "./fleet.ts";
 
@@ -104,7 +113,7 @@ describe("tiles, drivers and cars", () => {
   const index = indexFleet(data);
 
   it("counts collected this month, owed now and late drivers", () => {
-    assert.deepEqual(fleetTiles(data, index, TODAY), { collectedCents: 30000, owedCents: 120000 + 60000 + 90000, lateDrivers: 2, lateCents: 270000, owingDrivers: 2, dueThisMonthCents: 210000 });
+    assert.deepEqual(fleetTiles(data, index, TODAY), { collectedCents: 30000, owedCents: 120000 + 60000 + 90000, lateDrivers: 2, lateCents: 270000, owingDrivers: 2, plateFeesBilledCents: 210000, plateFeesPaidCents: 30000 });
   });
 
   it("lists drivers with their car and owed", () => {
@@ -112,7 +121,8 @@ describe("tiles, drivers and cars", () => {
     assert.equal(rows[0].name, "Amadou Diallo");
     assert.equal(rows[0].plate, "T123456C");
     assert.equal(rows[0].owedCents, 120000);
-    assert.equal(rows[0].personalCents, 7);
+    // An old record that still carries personalCents reads without error and shows nothing.
+    assert.equal("personalCents" in rows[0], false);
     assert.equal(rows[1].creditCents, 5000);
     assert.ok(matchesSearch(rows[0].search, "t1234 amadou"));
     assert.ok(!matchesSearch(rows[0].search, "bako"));
@@ -156,14 +166,6 @@ describe("money and codes", () => {
     assert.equal(dollarsToCents(""), null);
   });
 
-  it("makes the Zelle amount the code", () => {
-    assert.equal(zelleAmountText(120000, 7), "$1,200.07");
-    assert.equal(zelleAmountText(0, 42), "$0.42");
-    // Rounded up: $349.83 owed reads "$350.17", never 66 cents short.
-    assert.equal(zelleAmountText(34983, 17), "$350.17");
-    assert.equal(zelleAmountText(1000, null), null);
-    assert.equal(zelleAmountText(1000, 100), null);
-  });
 });
 
 describe("settings and refusals", () => {
@@ -377,4 +379,202 @@ describe("plates and the cars on them", () => {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
   }
 });
+});
+
+describe("S1: the plate-fee share", () => {
+  it("is the paid share of this month's rent bills, not collected money over everything billed", () => {
+    const data = sample();
+    // An old debt paid this month, a late fee and a charge due this month, a void and a waived rent bill.
+    data.payments.push({ id: "p9", driverId: "d2", amountCents: 500000, status: "recorded", paidDayKey: "2026-11-03" });
+    data.bills.push(
+      { id: "f1", driverId: "d2", kind: "late_fee", status: "open", amountCents: 2500, paidCents: 0, dueDayKey: "2026-11-08" },
+      { id: "c1", driverId: "d1", kind: "charge", status: "open", amountCents: 7000, paidCents: 0, dueDayKey: "2026-11-02" },
+      { id: "v1", driverId: "d1", kind: "rent", status: "void", amountCents: 99900, paidCents: 0, dueDayKey: "2026-11-01" },
+      { id: "w1", driverId: "d1", kind: "rent", status: "waived", amountCents: 88800, paidCents: 0, dueDayKey: "2026-11-01" },
+    );
+    const tiles = fleetTiles(data, indexFleet(data), TODAY);
+    assert.equal(tiles.collectedCents, 530000);
+    assert.equal(tiles.plateFeesBilledCents, 210000);
+    assert.equal(tiles.plateFeesPaidCents, 30000);
+  });
+
+  it("words the line with both amounts, in both languages", () => {
+    assert.equal(plateFeesPaidLine(1510000, 1190000), "79% of this month's plate fees paid ($11,900 of $15,100)");
+    assert.equal(plateFeesPaidLine(1510000, 1190000, "fr"), "79 % des frais de plaque de ce mois payés (11\u202f900 $ sur 15\u202f100 $)");
+    assert.equal(plateFeesPaidLine(210000, 30050), "14% of this month's plate fees paid ($300.50 of $2,100)");
+    assert.equal(plateFeesPaidLine(100000, 150000), "100% of this month's plate fees paid ($1,000 of $1,000)");
+  });
+});
+
+describe("S2: the payments grid cell", () => {
+  const months = monthWindow("2026-11", 3);
+  const build = (bills: Record<string, unknown>[], payments: Record<string, unknown>[]) =>
+    paymentsGrid({ drivers: [{ id: "d1", name: "A", status: "active" }], cars: [], assignments: [], bills: bills as never, payments: payments as never }, months).rows[0].cells;
+
+  it("colours a month that has a rent bill from that bill only, even when a payment landed that month", () => {
+    // A payment for an old debt landed in November; November's bill has nothing on it.
+    const cells = build(
+      [{ id: "b", driverId: "d1", kind: "rent", status: "open", amountCents: 100000, paidCents: 0, dueDayKey: "2026-11-01" }],
+      [{ id: "p", driverId: "d1", amountCents: 40000, status: "recorded", paidDayKey: "2026-11-04" }],
+    );
+    assert.equal(cells[2].state, "owed");
+    assert.equal(cells[2].paidCents, 40000, "the number shown stays what was received that month");
+  });
+
+  it("is part paid by the bill's paidCents and full when it covers the amount", () => {
+    const cells = build(
+      [
+        { id: "b1", driverId: "d1", kind: "rent", status: "open", amountCents: 100000, paidCents: 25000, dueDayKey: "2026-10-01" },
+        { id: "b2", driverId: "d1", kind: "rent", status: "paid", amountCents: 100000, paidCents: 100000, dueDayKey: "2026-11-01" },
+      ],
+      [],
+    );
+    assert.deepEqual(cells.map((c) => c.state), ["none", "part", "full"]);
+  });
+
+  it("calls a month with payments and no bill paid, and one with neither empty", () => {
+    const cells = build([], [{ id: "p", driverId: "d1", amountCents: 100000, status: "recorded", paidDayKey: "2026-09-12" }]);
+    assert.deepEqual(cells.map((c) => c.state), ["full", "none", "none"]);
+  });
+
+  it("marks a late fee or charge still owed in the month without changing the colour", () => {
+    const cells = build(
+      [
+        { id: "b", driverId: "d1", kind: "rent", status: "paid", amountCents: 100000, paidCents: 100000, dueDayKey: "2026-10-01" },
+        { id: "f", driverId: "d1", kind: "late_fee", status: "open", amountCents: 2500, paidCents: 500, dueDayKey: "2026-10-08" },
+        { id: "c", driverId: "d1", kind: "charge", status: "open", amountCents: 7000, paidCents: 0, dueDayKey: "2026-09-20" },
+        { id: "g", driverId: "d1", kind: "late_fee", status: "paid", amountCents: 2500, paidCents: 2500, dueDayKey: "2026-11-08" },
+        { id: "h", driverId: "d1", kind: "charge", status: "void", amountCents: 900, paidCents: 0, dueDayKey: "2026-11-08" },
+      ],
+      [],
+    );
+    assert.deepEqual(cells.map((c) => c.extraOwedCents), [7000, 2000, 0]);
+    assert.equal(cells[1].state, "full");
+    assert.equal(cells[0].state, "none");
+  });
+
+  it("keeps a driver who left and still owes a charge in the window", () => {
+    const grid = paymentsGrid(
+      { drivers: [{ id: "d9", name: "Gone", status: "left" }], cars: [], assignments: [], bills: [{ id: "c", driverId: "d9", kind: "charge", status: "open", amountCents: 500, paidCents: 0, dueDayKey: "2026-11-02" }] as never, payments: [] },
+      months,
+    );
+    assert.equal(grid.rows.length, 1);
+  });
+});
+
+describe("S3: paperwork scope", () => {
+  it("counts only plates with a driver by default and every plate on request", () => {
+    const data = sample();
+    data.cars.push({ id: "c4", plate: "T444444C" });
+    const cars = carRows(data, indexFleet(data), TODAY);
+    const withDriver = carsInPaperworkScope(cars, "driver");
+    assert.deepEqual(withDriver.map((c) => c.plate).sort(), ["T123456C", "T222222C"]);
+    assert.deepEqual(paperworkCounts(paperworkRows(withDriver)), { expired: 1, soon: 1, missing: 0, ok: 0 });
+    assert.deepEqual(paperworkCounts(paperworkRows(carsInPaperworkScope(cars, "all"))), { expired: 1, soon: 1, missing: 1, ok: 1 });
+  });
+});
+
+describe("S4: the New York day key", () => {
+  it("keeps the same string within a day and moves at New York midnight", () => {
+    const held = "2026-11-10";
+    assert.equal(refreshedDayKey(held, new Date("2026-11-11T04:59:59Z")), held); // 11:59:59 PM EST
+    assert.equal(refreshedDayKey(held, new Date("2026-11-11T05:00:00Z")), "2026-11-11"); // midnight EST
+    assert.equal(refreshedDayKey("2026-07-04", new Date("2026-07-05T03:59:59Z")), "2026-07-04"); // EDT
+    assert.equal(refreshedDayKey("2026-07-04", new Date("2026-07-05T04:00:00Z")), "2026-07-05");
+  });
+});
+
+describe("S5: plate fee and leaving", () => {
+  const current = { rentCents: 120000, dueDay: 5, period: "monthly" };
+
+  it("sends only what changed and refuses nothing-changed or bad numbers", () => {
+    assert.deepEqual(readPlateFeeInput("1,300", "", current), { ok: true, payload: { rentCents: 130000 } });
+    assert.deepEqual(readPlateFeeInput("1200", "10", current), { ok: true, payload: { dueDay: 10 } });
+    assert.deepEqual(readPlateFeeInput("1300", "10", current), { ok: true, payload: { rentCents: 130000, dueDay: 10 } });
+    assert.equal(readPlateFeeInput("1200", "5", current).ok, false);
+    assert.equal(readPlateFeeInput("", "5", current).ok, false);
+    assert.equal(readPlateFeeInput("abc", "", current).ok, false);
+    assert.equal(readPlateFeeInput("1300", "29", current).ok, false);
+    assert.equal(readPlateFeeInput("1300", "0", current).ok, false);
+    assert.equal(readPlateFeeInput("1300", "2.5", current).ok, false);
+    assert.equal(readPlateFeeInput("1300", "7", { ...current, period: "weekly" }).ok, true);
+    assert.equal(readPlateFeeInput("1300", "8", { ...current, period: "weekly" }).ok, false);
+  });
+
+  it("estimates the first period with no bill yet", () => {
+    const a = { id: "a1", startDayKey: "2026-01-01", endDayKey: null, period: "monthly", dueDay: 5, rentCents: 100 };
+    const bills = [
+      { id: "a1_2026-10-01" },
+      { id: "a1_2026-11-01" },
+    ] as never;
+    // Jan-Sep periods have no bill in this list, so the first gap is Jan 1: a real list has them all.
+    const all = Array.from({ length: 11 }, (_, i) => ({ id: `a1_2026-${String(i + 1).padStart(2, "0")}-01` })) as never;
+    assert.equal(estimateFeeEffectiveDay(a, all, "2026-11-11"), "2026-12-01");
+    assert.equal(estimateFeeEffectiveDay(a, bills, "2026-11-11"), "2026-01-01");
+    assert.equal(shiftDayKey("2026-12-25", 10), "2027-01-04");
+  });
+
+  it("words the refusals", () => {
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_driver_has_plate" } }), "This driver still has a plate. Use Driver has left, which returns it.");
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_already_returned" } }), "This plate was already returned.");
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_car_overlap" } }), "This plate is still with another driver on that date.");
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_admin_only" } }), "Only a Fleet admin can do this.");
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_bad_input" } }), "Some details are missing or not valid.");
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_not_found" } }), "That record was not found.");
+  });
+
+  it("addresses the driver by display name in the leave confirm", () => {
+    const c = driverLeaveConfirm("ABU HASSAN (25)", "T123456C", "Nov 11, 2026");
+    assert.equal(c.en, "Mark ABU HASSAN as having left on Nov 11, 2026? Plate T123456C comes back on that date and bills stop.");
+    assert.match(c.fr, /^Marquer ABU HASSAN comme parti le Nov 11, 2026/);
+    assert.equal(driverLeaveConfirm("Bako", "", "x").en, "Mark Bako as having left on x? Bills stop.");
+  });
+});
+
+describe("S6: driverDisplayName", () => {
+  const cases: [string, string][] = [
+    ["Fawaz #9", "Fawaz"],
+    ["ABU HASSAN (25)", "ABU HASSAN"],
+    ["Amadou Diallo #49 STORAGE 2/14/25", "Amadou Diallo"],
+    ["Dorjee Tenzin T (26) Drop it 08/25/2025 at 12:55 Pm", "Dorjee Tenzin T"],
+    ["IDY # 50", "IDY"],
+    ["KHUSRAV # (26)", "KHUSRAV"],
+    ["Bako Sy", "Bako Sy"],
+    ["  Bako   Sy  ", "Bako Sy"],
+    ["Mamadou voir folder 12", "Mamadou"],
+    ["Mamadou VOIR  FOLDER", "Mamadou"],
+    ["Ali drop", "Ali"],
+    ["Ali storage", "Ali"],
+    ["Dropo Kone", "Dropo Kone"],
+    ["Storageman", "Storageman"],
+    ["Sam (25) Jones", "Sam (25) Jones"],
+  ];
+  for (const [input, expected] of cases) {
+    it(JSON.stringify(input), () => assert.equal(driverDisplayName(input), expected));
+  }
+  it("falls back to the full name when nothing would be left", () => {
+    assert.equal(driverDisplayName("#46"), "#46");
+    assert.equal(driverDisplayName("(25)"), "(25)");
+    assert.equal(driverDisplayName("STORAGE 2/14/25"), "STORAGE 2/14/25");
+    assert.equal(driverDisplayName(""), "");
+    assert.equal(driverDisplayName(null), "");
+  });
+  it("is idempotent", () => {
+    for (const [input] of cases) assert.equal(driverDisplayName(driverDisplayName(input)), driverDisplayName(input));
+  });
+});
+
+describe("French for the new fleet screen strings", () => {
+  const strings = [
+    "Plates with a driver", "Every plate", "Which plates", "+ fee owed", "A late fee or charge is still owed this month",
+    "Driver has left", "Change plate fee", "Save plate fee", "New plate fee a month ($)", "New plate fee a week ($)",
+    "Due weekday, optional (1 = Monday … 7 = Sunday)", "Due day of the month, optional (1–28)", "Applies from",
+    "Bills already made are not changed.", "The plate comes back on this date and bills stop.", "Bills stop on this date.",
+    "The driver is marked as left. Their plate came back and their bills stopped.", "Nothing was changed.",
+    "This driver still has a plate. Use Driver has left, which returns it.", "This plate was already returned.",
+    "This plate is still with another driver on that date.",
+  ];
+  for (const english of strings) {
+    it(english, () => assert.notEqual(translateValue(english, "fr"), english));
+  }
 });

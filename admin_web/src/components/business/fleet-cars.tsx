@@ -11,7 +11,9 @@ import {
   centsToInput,
   dollarsToCents,
   matchesSearch,
+  carsInPaperworkScope,
   paperworkCounts,
+  type PaperworkScope,
   paperworkRows,
   plateCarHistory,
   type CarRow,
@@ -511,7 +513,10 @@ export function FleetPaperwork({ state, onOpenCar }: { state: FleetState; onOpen
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState("");
-  const cars = useMemo(() => carRows(state.data, state.index, state.todayKey), [state]);
+  const [scope, setScope] = useState<PaperworkScope>("driver");
+  const allCars = useMemo(() => carRows(state.data, state.index, state.todayKey), [state]);
+  const cars = useMemo(() => carsInPaperworkScope(allCars, scope), [allCars, scope]);
+  const scopeCounts = useMemo(() => ({ driver: carsInPaperworkScope(allCars, "driver").length, all: allCars.length }), [allCars]);
   const rows = useMemo(() => paperworkRows(cars), [cars]);
   const counts = useMemo(() => paperworkCounts(rows), [rows]);
   const companies = useMemo(() => carCompanies(cars), [cars]);
@@ -545,6 +550,14 @@ export function FleetPaperwork({ state, onOpenCar }: { state: FleetState; onOpen
           )}
         </div>
         <div className="fleet-toolbar">
+          <div className="pk-view" role="group" aria-label="Which plates">
+            <button className={scope === "driver" ? "on" : ""} aria-pressed={scope === "driver"} onClick={() => setScope("driver")} type="button">
+              Plates with a driver (<span data-no-translate>{scopeCounts.driver}</span>)
+            </button>
+            <button className={scope === "all" ? "on" : ""} aria-pressed={scope === "all"} onClick={() => setScope("all")} type="button">
+              Every plate (<span data-no-translate>{scopeCounts.all}</span>)
+            </button>
+          </div>
           <div className="pk-view" role="group" aria-label="Filter by state">
             {chips.map(([id, label, count]) => (
               <button className={filter === id ? "on" : ""} key={id} onClick={() => setFilter(id)} type="button">

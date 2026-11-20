@@ -186,7 +186,7 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useBusinessStaff", shapes: [bc("users", { pageSize: null })] },
   // Fleet (docs/FLEET.md): the seven collections, each whole and equality-only on businessId (no composite index).
   { file: B("fleet-profile.tsx"), kind: "query", what: "a driver's office edits (History)", shapes: [raw("lotLedgerAudit", [eq("businessId"), eq("entityId")], { field: "at", direction: "desc" })] },
-  ...["fleetDrivers", "fleetCars", "fleetAssignments", "fleetBills", "fleetPayments", "fleetNotes", "fleetSubstitutes"].map((name): Site => ({
+  ...["fleetDrivers", "fleetCars", "fleetAssignments", "fleetBills", "fleetPayments", "fleetNotes", "fleetSubstitutes", "fleetClaims"].map((name): Site => ({
     file: B("fleet-data.ts"), kind: "useBusinessCollection", what: `useFleetData ${name}`, shapes: [bc(name, { pageSize: null })],
   })),
   { file: L("business-data.ts"), kind: "usePagedQuery", what: "useBusinessCollection itself", shapes: [] },

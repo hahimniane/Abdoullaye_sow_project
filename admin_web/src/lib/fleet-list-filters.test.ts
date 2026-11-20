@@ -17,13 +17,13 @@ import {
 } from "./fleet.ts";
 import { translateValue } from "./french-dom.ts";
 
-const cell = (state: "full" | "part" | "owed" | "none") => ({ month: "2026-11", paidCents: 0, dueCents: 0, state });
+const cell = (state: "full" | "part" | "owed" | "none") => ({ month: "2026-11", paidCents: 0, dueCents: 0, state, extraOwedCents: 0 });
 const grid = (driverId: string, name: string, last: "full" | "part" | "owed" | "none", totalCents: number): GridRow => ({
   driverId, name, search: name.toLowerCase(), cells: [cell("full"), cell(last)], totalCents,
 });
 const driver = (id: string, extra: Partial<DriverRow> = {}): DriverRow => ({
   id, name: id, phone: "", status: "active", plate: "", carId: "c", owedCents: 0, lateCents: 0, creditCents: 0,
-  personalCents: 10, rentCents: 40000, search: "", ...extra,
+  rentCents: 40000, search: "", ...extra,
 });
 
 test("Payments grid: view, this month's state, late, search, sort", () => {
@@ -45,6 +45,15 @@ test("Payments grid: view, this month's state, late, search, sort", () => {
   assert.deepEqual(filterGridRows(rows, drivers, { ...f, sort: "owed" }).map((r) => r.driverId), ["a", "b", "c"]);
   assert.deepEqual(filterGridRows(rows, drivers, { ...f, sort: "total" }).map((r) => r.driverId), ["b", "a", "c"]);
   assert.deepEqual(gridFilterCounts(rows, drivers, "active"), { active: 3, left: 1, all: 4, owed: 1, part: 1, paid: 1, late: 1 });
+});
+
+test("Payments grid: a month with a fee still owed does not count as Paid in full", () => {
+  const withFee = grid("a", "A", "full", 1);
+  withFee.cells[1] = { ...withFee.cells[1], extraOwedCents: 2500 };
+  const rows = [withFee, grid("b", "B", "full", 1)];
+  const drivers = new Map([["a", driver("a")], ["b", driver("b")]]);
+  assert.deepEqual(filterGridRows(rows, drivers, { ...emptyPaymentsFilter, month: "paid" }).map((r) => r.driverId), ["b"]);
+  assert.equal(gridFilterCounts(rows, drivers, "active").paid, 1);
 });
 
 const car = (id: string, extra: Partial<CarRow>): CarRow => ({

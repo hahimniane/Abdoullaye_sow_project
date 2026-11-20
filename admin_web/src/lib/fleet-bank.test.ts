@@ -43,6 +43,11 @@ test("bank_status is read defensively", () => {
   );
 });
 
+test("a shared payer waits for the office with its own words", () => {
+  assert.equal(waitingReasonText("shared_payer"), "This person pays for more than one driver. Pick the driver.");
+  assert.notEqual(waitingReasonText("shared_payer"), waitingReasonText("unknown"));
+});
+
 test("the new words read in French", () => {
   for (const english of [
     "Pay-day bank checks",
@@ -57,6 +62,7 @@ test("the new words read in French", () => {
     waitingReasonText("own_transfer"),
     waitingReasonText("not_zelle"),
     waitingReasonText("driver_left"),
+    waitingReasonText("shared_payer"),
     "The bank took back a deposit that had paid a driver",
     "The payment is still recorded. Look at the bank account: if the money is not there, undo the payment. If it is there, keep it.",
     "The money is there: keep it",

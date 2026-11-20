@@ -8,7 +8,7 @@
  * Day keys are "YYYY-MM-DD" (America/New_York); money is integer cents.
  */
 
-import { driverBalance, type FleetAssignment, type FleetBill } from "./fleet-billing.ts";
+import { driverBalance, rentPeriods, type FleetAssignment, type FleetBill } from "./fleet-billing.ts";
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -36,6 +36,12 @@ export const FLEET_REFUSALS: Record<string, string> = {
   fleet_no_phone: "This driver has no WhatsApp number. Add one in Edit details.",
   fleet_driver_left: "This driver has left.",
   fleet_staff_only:"This staff account is not allowed to manage Fleet.",
+  fleet_claim_not_found: "That claim was not found. It may already be closed.",
+  fleet_deposit_taken: "That deposit was already used for another payment.",
+  fleet_driver_not_active: "This driver is not active.",
+  fleet_driver_has_plate: "This driver still has a plate. Use Driver has left, which returns it.",
+  fleet_already_returned: "This plate was already returned.",
+  fleet_car_overlap: "This plate is still with another driver on that date.",
 };
 
 /** The sentence to show for a failed Fleet call: the server's reason, else its message, else a fallback. */
@@ -120,15 +126,31 @@ export function centsToInput(cents: unknown): string {
 }
 
 /**
- * The Zelle amount a driver pays: the dollars owed plus their personal cents,
- * so the amount itself is the code ("Pays $1,200.07"). Null with no code.
+ * The New York day key to hold now: the same string when the day has not
+ * changed (so a timer that calls this every minute re-renders nothing), the
+ * new one once midnight in New York has passed.
  */
-export function zelleAmountText(owedCents: number, personalCents: unknown): string | null {
-  const p = Number(personalCents);
-  if (!Number.isInteger(p) || p < 1 || p > 99) return null;
-  // Rounded UP, so the driver is never a few cents short (fleet_whatsapp.js).
-  const dollars = Math.ceil(Math.max(0, Number(owedCents) || 0) / 100);
-  return `$${dollars.toLocaleString("en-US")}.${String(p).padStart(2, "0")}`;
+export function refreshedDayKey(current: string, now: Date = new Date()): string {
+  const next = newYorkDayKey(now);
+  return next === current ? current : next;
+}
+
+/**
+ * How a driver is addressed (confirm texts, greetings). Imported names carry
+ * office notes ("#46", "(25)", "STORAGE 2/14/25"): this drops a trailing
+ * "#NN" / "(NN)" and anything from DROP / STORAGE / "Voir Folder" onward
+ * (case-insensitive). The stored name is never changed; an empty result falls
+ * back to the full name. Mirrors the server's rule for WhatsApp greetings.
+ */
+export function driverDisplayName(name: unknown): string {
+  const full = String(name ?? "").replace(/\s+/g, " ").trim();
+  let out = full.replace(/(^|\s)(?:drop|storage|voir\s+folder)(?![\p{L}\p{N}_]).*$/iu, "").trim();
+  for (let i = 0; i < 10; i++) {
+    const next = out.replace(/\s*(?:#\s*\d*|\(\s*\d+\s*\))\s*$/, "").trim();
+    if (next === out) break;
+    out = next;
+  }
+  return out || full;
 }
 
 // ---------------------------------------------------------------------------
@@ -215,15 +237,27 @@ const num = (v: unknown): number => Math.round(Number(v) || 0);
 // ---------------------------------------------------------------------------
 
 export type CellState = "full" | "part" | "owed" | "none";
-export type GridCell = { month: string; paidCents: number; dueCents: number; state: CellState };
+export type GridCell = {
+  month: string;
+  /** What was received that month (recorded payments by paid day). */
+  paidCents: number;
+  /** The month's rent bills (void and waived left out). */
+  dueCents: number;
+  state: CellState;
+  /** Late fees and charges still owed that fall due in this month. */
+  extraOwedCents: number;
+};
 export type GridRow = { driverId: string; name: string; search: string; cells: GridCell[]; totalCents: number };
 export type PaymentsGrid = { months: string[]; rows: GridRow[]; totals: number[]; grandTotalCents: number };
 
 /**
  * One row per driver, one column per month. A cell is what the driver paid
  * that month (recorded payments by paid day). Its colour comes from that
- * month's rent bills (by due day): paid in full, part, owed, or - with no rent
- * bill that month (history) - paid when they paid and empty when they did not.
+ * month's rent bill alone (by due day): paid in full, part or owed by its
+ * paidCents against its amountCents. With no rent bill that month (imported
+ * history) it is paid when payments landed and empty when none did. A late fee
+ * or charge still owed that falls due in the month is shown apart
+ * (extraOwedCents) and never turns the colour.
  * Drivers who left show only when they have something in the window.
  */
 export function paymentsGrid(data: FleetData, months: string[]): PaymentsGrid {
@@ -239,16 +273,20 @@ export function paymentsGrid(data: FleetData, months: string[]): PaymentsGrid {
     row[at] += num(p.amountCents);
     paid.set(key, row);
   }
-  const due = new Map<string, { due: number[]; paid: number[] }>();
+  const due = new Map<string, { due: number[]; paid: number[]; extra: number[] }>();
   for (const b of data.bills) {
-    if (b.kind !== "rent" || b.status === "void" || b.status === "waived") continue;
+    if (b.status === "void" || b.status === "waived") continue;
     const month = monthOf(str(b.dueDayKey));
     if (!shown.has(month)) continue;
     const at = position.get(month) as number;
     const key = str(b.driverId);
-    const row = due.get(key) ?? { due: new Array(months.length).fill(0), paid: new Array(months.length).fill(0) };
-    row.due[at] += num(b.amountCents);
-    row.paid[at] += num(b.paidCents);
+    const row = due.get(key) ?? { due: new Array(months.length).fill(0), paid: new Array(months.length).fill(0), extra: new Array(months.length).fill(0) };
+    if (b.kind === "rent") {
+      row.due[at] += num(b.amountCents);
+      row.paid[at] += num(b.paidCents);
+    } else {
+      row.extra[at] += Math.max(0, num(b.amountCents) - num(b.paidCents));
+    }
     due.set(key, row);
   }
   const plateOfCar = new Map(data.cars.map((c) => [c.id, str(c.plate)]));
@@ -262,16 +300,17 @@ export function paymentsGrid(data: FleetData, months: string[]): PaymentsGrid {
     const cells: GridCell[] = months.map((month, i) => {
       const paidCents = p?.[i] ?? 0;
       const dueCents = b?.due[i] ?? 0;
+      const extraOwedCents = b?.extra[i] ?? 0;
       let state: CellState = "none";
       if (dueCents > 0) {
         const billPaid = b?.paid[i] ?? 0;
-        state = billPaid >= dueCents ? "full" : billPaid > 0 || paidCents > 0 ? "part" : "owed";
+        state = billPaid >= dueCents ? "full" : billPaid > 0 ? "part" : "owed";
       } else if (paidCents > 0) {
         state = "full";
       }
-      return { month, paidCents, dueCents, state };
+      return { month, paidCents, dueCents, state, extraOwedCents };
     });
-    const active = cells.some((c) => c.paidCents > 0 || c.dueCents > 0);
+    const active = cells.some((c) => c.paidCents > 0 || c.dueCents > 0 || c.extraOwedCents > 0);
     if (d.status === "left" && !active) continue;
     let total = 0;
     cells.forEach((c, i) => {
@@ -308,7 +347,6 @@ export type DriverRow = {
   owedCents: number;
   lateCents: number;
   creditCents: number;
-  personalCents: number | null;
   /** The current car's plate fee (rent), 0 when none is set or no car. */
   rentCents: number;
   search: string;
@@ -320,7 +358,6 @@ export function driverRows(data: FleetData, index: FleetIndex, todayKey: string)
     const car = current ? index.carById.get(String(current.carId)) : undefined;
     const plate = str(car?.plate);
     const balance = driverBalance(index.billsByDriver.get(d.id) ?? [], num(d.creditCents), todayKey);
-    const personal = Number(d.personalCents);
     return {
       id: d.id,
       name: str(d.name),
@@ -331,7 +368,6 @@ export function driverRows(data: FleetData, index: FleetIndex, todayKey: string)
       owedCents: balance.owedCents,
       lateCents: balance.lateCents,
       creditCents: balance.creditCents,
-      personalCents: Number.isInteger(personal) && personal >= 1 ? personal : null,
       rentCents: current ? Math.max(0, num(current.rentCents)) : 0,
       search: driverSearchText(d, plate),
     };
@@ -345,7 +381,7 @@ export function driverRows(data: FleetData, index: FleetIndex, todayKey: string)
 // who is late, who has credit, no car, no plate fee, and the order.
 
 export type DriverView = "active" | "left" | "all";
-export type DriverSort = "name" | "owed" | "cents";
+export type DriverSort = "name" | "owed";
 export type DriverFilter = {
   view: DriverView;
   owes: boolean;
@@ -391,7 +427,6 @@ export function filterDriverRows(rows: readonly DriverRow[], f: DriverFilter): D
   );
   const byName = (a: DriverRow, b: DriverRow) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
   if (f.sort === "owed") return out.sort((a, b) => b.owedCents - a.owedCents || byName(a, b));
-  if (f.sort === "cents") return out.sort((a, b) => (a.personalCents ?? 100) - (b.personalCents ?? 100) || byName(a, b));
   return out.sort(byName);
 }
 
@@ -487,6 +522,13 @@ export function paperworkCounts(rows: PaperworkRow[]): Record<Expiry, number> {
   const counts: Record<Expiry, number> = { expired: 0, soon: 0, missing: 0, ok: 0 };
   for (const r of rows) counts[r.worst] += 1;
   return counts;
+}
+
+export type PaperworkScope = "driver" | "all";
+
+/** The plates the Paperwork page counts: those a driver has now (the default) or every plate. */
+export function carsInPaperworkScope(cars: readonly CarRow[], scope: PaperworkScope): CarRow[] {
+  return scope === "all" ? [...cars] : cars.filter((c) => Boolean(c.driverId));
 }
 
 export type TimelineEntry = {
@@ -731,9 +773,33 @@ export type FleetTiles = {
   lateCents: number;
   /** Drivers with anything owed. */
   owingDrivers: number;
-  /** What this month's bills ask for (waived and void left out). */
-  dueThisMonthCents: number;
+  /** What this month's plate-fee (rent) bills ask for (waived and void left out). */
+  plateFeesBilledCents: number;
+  /** What has been paid on those same bills. */
+  plateFeesPaidCents: number;
 };
+
+/**
+ * The one sentence under "Collected this month": the paid share of this
+ * month's plate-fee bills, with both amounts, so it cannot be read as
+ * collected-over-billed.
+ */
+export function plateFeesPaidLine(billedCents: number, paidCents: number, language: "en" | "fr" = "en"): string {
+  const billed = Math.max(0, Math.round(billedCents) || 0);
+  const paid = Math.min(billed, Math.max(0, Math.round(paidCents) || 0));
+  const share = billed > 0 ? Math.round((paid / billed) * 100) : 0;
+  const money = (cents: number) => {
+    const whole = Math.floor(cents / 100);
+    const rest = cents % 100;
+    const digits = rest === 0 ? "" : `,${String(rest).padStart(2, "0")}`;
+    return language === "fr"
+      ? `${String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f")}${digits} $`
+      : `$${whole.toLocaleString("en-US")}${rest === 0 ? "" : `.${String(rest).padStart(2, "0")}`}`;
+  };
+  return language === "fr"
+    ? `${share} % des frais de plaque de ce mois payés (${money(paid)} sur ${money(billed)})`
+    : `${share}% of this month's plate fees paid (${money(paid)} of ${money(billed)})`;
+}
 
 /** Collected this month, owed now, and how many drivers have a late bill. */
 export function fleetTiles(data: FleetData, index: FleetIndex, todayKey: string): FleetTiles {
@@ -755,14 +821,19 @@ export function fleetTiles(data: FleetData, index: FleetIndex, todayKey: string)
       lateCents += b.lateCents;
     }
   }
-  // Billed for this month: bills due this month that stand (not waived or void).
-  let dueThisMonth = 0;
+  // The plate-fee bills due this month that stand (not waived or void): what
+  // they ask for and what has been paid on them. Late fees, charges and old
+  // debts paid this month are not part of this share.
+  let billed = 0;
+  let billedPaid = 0;
   for (const b of data.bills) {
     const status = str(b.status);
-    if (status === "waived" || status === "void") continue;
-    if (monthOf(str(b.dueDayKey)) === month) dueThisMonth += num(b.amountCents);
+    if (b.kind !== "rent" || status === "waived" || status === "void") continue;
+    if (monthOf(str(b.dueDayKey)) !== month) continue;
+    billed += num(b.amountCents);
+    billedPaid += num(b.paidCents);
   }
-  return { collectedCents: collected, owedCents: owed, lateDrivers: late, lateCents, owingDrivers, dueThisMonthCents: dueThisMonth };
+  return { collectedCents: collected, owedCents: owed, lateDrivers: late, lateCents, owingDrivers, plateFeesBilledCents: billed, plateFeesPaidCents: Math.min(billed, billedPaid) };
 }
 
 /** The assignment the end-of-rent rule applies to, in a sentence. */
@@ -943,7 +1014,8 @@ function monthMatches(row: GridRow, month: PaymentsFilter["month"]): boolean {
   if (!last) return false;
   if (month === "owed") return last.state === "owed";
   if (month === "part") return last.state === "part";
-  return last.state === "full";
+  // Paid in full means nothing is still owed for the month, fees and charges included.
+  return last.state === "full" && last.extraOwedCents === 0;
 }
 
 function gridInView(row: GridRow, drivers: ReadonlyMap<string, DriverRow>, view: DriverView): boolean {
@@ -1074,4 +1146,76 @@ export function plateCarHistory(car: Record<string, unknown> | null | undefined)
     .sort((a, b) => b.toDayKey.localeCompare(a.toDayKey));
   const now = { vehicleType: text(car.vehicleType), vin: text(car.vin), ownership: owner(car.ownership), fromDayKey: text(car.vehicleSince), toDayKey: "" };
   return now.vehicleType || now.vin ? [now, ...past] : past;
+}
+
+
+// ---------------------------------------------------------------------------
+// Change plate fee, Driver has left (docs: fleetAction assignment_update, driver_leave).
+
+export type PlateFeeInput = { ok: true; payload: { rentCents?: number; dueDay?: number } } | { ok: false; error: string };
+
+/**
+ * Reads the "Change plate fee" form. Only what differs from the current
+ * assignment is sent; nothing changed is refused. Due day is 1-28 for a
+ * monthly fee (1-7, the weekday, for a weekly one).
+ */
+export function readPlateFeeInput(
+  amountText: string,
+  dueDayText: string,
+  current: { rentCents?: unknown; dueDay?: unknown; period?: unknown },
+): PlateFeeInput {
+  const bad = "Some details are missing or not valid.";
+  const payload: { rentCents?: number; dueDay?: number } = {};
+  if (amountText.trim() !== "") {
+    const cents = dollarsToCents(amountText);
+    if (!cents) return { ok: false, error: bad };
+    if (cents !== num(current.rentCents)) payload.rentCents = cents;
+  } else {
+    return { ok: false, error: bad };
+  }
+  if (dueDayText.trim() !== "") {
+    const day = Number(dueDayText);
+    const max = current.period === "weekly" ? 7 : 28;
+    if (!Number.isInteger(day) || day < 1 || day > max) return { ok: false, error: bad };
+    if (day !== Number(current.dueDay)) payload.dueDay = day;
+  }
+  if (payload.rentCents === undefined && payload.dueDay === undefined) {
+    return { ok: false, error: "Nothing was changed." };
+  }
+  return { ok: true, payload };
+}
+
+/**
+ * The day a plate-fee change will most likely apply from: the first rent
+ * period with no bill yet (the server answers with the real day on saving).
+ */
+export function estimateFeeEffectiveDay(assignment: Row, bills: readonly FleetBill[], todayKey: string): string {
+  const have = new Set(bills.map((b) => b.id));
+  const a = assignment as unknown as FleetAssignment;
+  const horizon = shiftDayKey(todayKey, 70);
+  for (const p of rentPeriods(a, horizon)) {
+    if (!have.has(`${assignment.id}_${p.periodFrom}`)) return p.periodFrom;
+  }
+  return todayKey;
+}
+
+/** A day key moved by whole days. */
+export function shiftDayKey(dayKey: string, days: number): string {
+  return new Date((dayNumber(dayKey) + days) * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * The confirm text for "Driver has left". `dateText` is the US date already
+ * formatted by the caller; the driver is addressed by display name.
+ */
+export function driverLeaveConfirm(name: unknown, plate: string, dateText: string): { en: string; fr: string } {
+  const who = driverDisplayName(name);
+  return {
+    en: plate
+      ? `Mark ${who} as having left on ${dateText}? Plate ${plate} comes back on that date and bills stop.`
+      : `Mark ${who} as having left on ${dateText}? Bills stop.`,
+    fr: plate
+      ? `Marquer ${who} comme parti le ${dateText} ? La plaque ${plate} revient à cette date et la facturation s’arrête.`
+      : `Marquer ${who} comme parti le ${dateText} ? La facturation s’arrête.`,
+  };
 }
