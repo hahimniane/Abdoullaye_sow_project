@@ -7,10 +7,12 @@ import {
   depositsForClaim,
   isOpenClaim,
   openClaimViews,
+  PHOTO_DELETED_TEXT,
   readClaim,
   readPayerNames,
+  readPhotoAnswer,
 } from "./fleet-claims.ts";
-import { FLEET_REFUSALS, fleetErrorMessage } from "./fleet.ts";
+import { badNameMessage, FLEET_REFUSALS, fleetErrorMessage, splitBadName } from "./fleet.ts";
 import { translateValue } from "./french-dom.ts";
 
 // Synthetic data only.
@@ -62,10 +64,12 @@ test("every state and office reason has its own sentence", () => {
     sentences.add(claimSentence({ state: state as never, reason: "", toldLateAtMs: 0 }));
   }
   sentences.add(claimSentence({ state: "waiting_bank", reason: "", toldLateAtMs: 9 }));
-  for (const reason of ["wrong_recipient", "deposit_taken", "too_old", "not_a_driver", "two_claims", "", "new_reason"]) {
+  for (const reason of ["wrong_recipient", "deposit_taken", "too_old", "not_a_driver", "two_claims", "no_amount", "no_deposit", "payment_undone", "", "new_reason"]) {
     sentences.add(claimSentence({ state: "office", reason, toldLateAtMs: 0 }));
   }
-  assert.equal(sentences.size, 11); // four states, the late one, five reasons, one fallback
+  assert.equal(sentences.size, 14); // four states, the late one, eight reasons, one fallback
+  assert.equal(claimSentence({ state: "office", reason: "no_amount", toldLateAtMs: 0 }), "The driver did not give a readable amount. Look at the photo.");
+  assert.equal(claimSentence({ state: "office", reason: "something_unknown", toldLateAtMs: 0 }), "A person needs to look at this claim.");
   assert.ok([...sentences].every((t) => t.length > 10));
   for (const english of sentences) assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
 });
@@ -86,18 +90,41 @@ test("deposits offered to a claim: not pending, same amount first, then newest",
 });
 
 test("remembered names: old records read without error, cleaned like a save", () => {
-  assert.deepEqual(readPayerNames({ id: "d", personalCents: 7 }), []);
+  assert.deepEqual(readPayerNames({ id: "d" }), []);
   assert.deepEqual(readPayerNames(null), []);
   assert.deepEqual(readPayerNames({ rememberedSenders: ["TEST ONE", " test  one ", "", "TEST TWO"] }), ["TEST ONE", "TEST TWO"]);
   assert.deepEqual(cleanPayerNames(["A  B", "a b", 5, null]), ["A B", "5"]);
 });
 
-test("the claim refusals have plain sentences, with a generic fallback", () => {
-  for (const reason of ["fleet_claim_not_found", "fleet_deposit_taken", "fleet_bad_input", "fleet_driver_not_active"]) {
+test("every refusal the claim actions can return has its plain sentence, and none the server never sends", () => {
+  for (const reason of ["fleet_claim_closed", "fleet_claim_no_driver", "fleet_deposit_used", "fleet_deposit_not_waiting", "fleet_driver_left", "fleet_bad_name", "fleet_zelle_missing", "fleet_car_taken", "fleet_car_overlap", "fleet_already_returned", "fleet_driver_has_plate", "fleet_bad_input"]) {
     assert.ok(FLEET_REFUSALS[reason], reason);
     assert.equal(fleetErrorMessage({ details: { reason } }), FLEET_REFUSALS[reason]);
   }
+  for (const gone of ["fleet_claim_not_found", "fleet_deposit_taken", "fleet_driver_not_active"]) assert.equal(FLEET_REFUSALS[gone], undefined, gone);
   assert.equal(fleetErrorMessage({ details: { reason: "fleet_unheard_of" } }), "Something went wrong. Try again.");
+});
+
+test("a refused name says which name, and splits back so the name is never translated", () => {
+  const msg = fleetErrorMessage({ details: { reason: "fleet_bad_name", name: "Awa" } });
+  assert.equal(msg, '"Awa" cannot be used. Type the person\'s full name as the bank shows it.');
+  assert.deepEqual(splitBadName(msg), { name: "Awa", rest: "cannot be used. Type the person's full name as the bank shows it." });
+  assert.equal(fleetErrorMessage({ details: { reason: "fleet_bad_name" } }), FLEET_REFUSALS.fleet_bad_name);
+  assert.equal(badNameMessage("  "), FLEET_REFUSALS.fleet_bad_name);
+  assert.equal(splitBadName("Something else"), null);
+});
+
+test("the photo answer: link, deleted after 12 months, or none", () => {
+  assert.deepEqual(readPhotoAnswer({ success: true, url: "https://example.test/p.jpg", deleted: false }), { kind: "url", url: "https://example.test/p.jpg" });
+  assert.deepEqual(readPhotoAnswer({ success: true, url: null, deleted: true }), { kind: "deleted" });
+  assert.deepEqual(readPhotoAnswer({ success: true, url: null, deleted: false }), { kind: "none" });
+  assert.deepEqual(readPhotoAnswer(null), { kind: "none" });
+  assert.equal(PHOTO_DELETED_TEXT, "This photo was deleted after 12 months.");
+});
+
+test("a claim has a photo when the server says so or keeps a stored path", () => {
+  assert.equal(readClaim(claim({ mediaPath: "support_cases/x/whatsapp/a.jpg" }))!.hasPhoto, true);
+  assert.equal(readClaim(claim({ mediaPath: null }))!.hasPhoto, false);
 });
 
 test("every new word on the claims panel and the names panel reads in French", () => {
@@ -116,7 +143,9 @@ test("every new word on the claims panel and the names panel reads in French", (
     "No name yet. It is remembered the first time a deposit is matched to this driver.",
     "Remove this name", "Add a name", "Add name", "Name on the Zelle account",
     "That name is already on the list.", "Type a name first.",
-    FLEET_REFUSALS.fleet_claim_not_found, FLEET_REFUSALS.fleet_deposit_taken, FLEET_REFUSALS.fleet_driver_not_active,
+    PHOTO_DELETED_TEXT, "Type the full name as the bank shows it, at least two words.",
+    "cannot be used. Type the person's full name as the bank shows it.",
+    ...["fleet_claim_closed", "fleet_claim_no_driver", "fleet_deposit_used", "fleet_deposit_not_waiting", "fleet_driver_left", "fleet_bad_name", "fleet_zelle_missing", "fleet_car_taken", "fleet_car_overlap", "fleet_already_returned", "fleet_driver_has_plate"].map((r) => FLEET_REFUSALS[r]),
   ]) {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
   }

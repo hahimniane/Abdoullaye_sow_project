@@ -9,6 +9,7 @@ import { Landmark, X } from "lucide-react";
 
 import { Panel } from "@/components/panel";
 import { cleanPayerNames, readPayerNames } from "@/lib/fleet-claims";
+import { splitBadName } from "@/lib/fleet";
 
 import { SaveButton, useFleetRun } from "./fleet-ui";
 
@@ -20,6 +21,8 @@ export function FleetPayerNames({ businessId, driver }: { businessId: string; dr
   // The live record is the truth: follow it when it changes (a save answered, or a deposit remembered a name).
   const signature = saved.join("\u0000");
   useEffect(() => setNames(saved), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const bad = useMemo(() => splitBadName(error), [error]);
 
   async function save(next: string[], confirm?: { en: string; fr: string }) {
     const result = await run<{ names?: unknown }>("payer_names_save", { driverId: driver.id, names: next }, confirm);
@@ -42,7 +45,6 @@ export function FleetPayerNames({ businessId, driver }: { businessId: string; dr
   return (
     <Panel title="Names this driver pays from" icon={<Landmark size={18} />}>
       <p className="lst-hint">A Zelle from one of these names pays this driver by itself.</p>
-      {error && <div className="lst-form-error" role="alert">{error}</div>}
       {names.length === 0 ? (
         <p className="empty-state">No name yet. It is remembered the first time a deposit is matched to this driver.</p>
       ) : (
@@ -87,6 +89,12 @@ export function FleetPayerNames({ businessId, driver }: { businessId: string; dr
         </label>
         <SaveButton busy={busy} label="Add name" busyLabel="Saving..." onClick={() => void add()} disabled={!draft.trim()} />
       </form>
+      <p className="lst-hint">Type the full name as the bank shows it, at least two words.</p>
+      {error && (
+        <div className="lst-form-error" role="alert">
+          {bad ? (<><span data-no-translate>&ldquo;{bad.name}&rdquo;</span> <span>{bad.rest}</span></>) : error}
+        </div>
+      )}
     </Panel>
   );
 }

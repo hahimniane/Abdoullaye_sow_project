@@ -11,7 +11,7 @@ type Row = Record<string, unknown>;
 export const CLAIM_STATES = ["asking_driver", "asking_amount", "waiting_bank", "asking_name", "paid", "office", "closed"] as const;
 export type ClaimState = (typeof CLAIM_STATES)[number];
 
-export const CLAIM_OFFICE_REASONS = ["wrong_recipient", "deposit_taken", "too_old", "not_a_driver", "two_claims"] as const;
+export const CLAIM_OFFICE_REASONS = ["wrong_recipient", "deposit_taken", "too_old", "not_a_driver", "two_claims", "no_amount", "no_deposit", "payment_undone"] as const;
 
 export type FleetClaim = {
   id: string;
@@ -20,7 +20,7 @@ export type FleetClaim = {
   state: ClaimState | "unknown";
   amountCents: number | null;
   payerName: string;
-  mediaPath: string;
+  hasPhoto: boolean;
   creditId: string;
   paymentId: string;
   reason: string;
@@ -46,7 +46,7 @@ export function readClaim(raw: unknown): FleetClaim | null {
     state: (CLAIM_STATES as readonly string[]).includes(state) ? (state as ClaimState) : "unknown",
     amountCents: r.amountCents !== null && r.amountCents !== undefined && Number.isFinite(amount) && amount > 0 ? amount : null,
     payerName: str(r.payerName),
-    mediaPath: str(r.mediaPath),
+    hasPhoto: r.hasPhoto === true || Boolean(str(r.mediaPath)),
     creditId: str(r.creditId),
     paymentId: str(r.paymentId),
     reason: str(r.reason),
@@ -55,6 +55,19 @@ export function readClaim(raw: unknown): FleetClaim | null {
     closeAtMs: ms(r.closeAtMs),
   };
 }
+
+/** What the photo button shows once the server answered `claim_photo`: the picture, the 12-month notice, or none. */
+export type PhotoAnswer = { kind: "url"; url: string } | { kind: "deleted" } | { kind: "none" };
+
+export function readPhotoAnswer(result: unknown): PhotoAnswer {
+  const r = (result && typeof result === "object" ? result : {}) as Row;
+  const url = str(r.url);
+  if (url) return { kind: "url", url };
+  return r.deleted === true ? { kind: "deleted" } : { kind: "none" };
+}
+
+export const PHOTO_DELETED_TEXT = "This photo was deleted after 12 months.";
+export const PHOTO_NONE_TEXT = "No photo";
 
 /** Claims the office still looks at: the driver's side is open, or a person is needed. Paid, closed and unreadable are not listed. */
 export function isOpenClaim(claim: FleetClaim): boolean {
@@ -80,6 +93,9 @@ export function claimSentence(claim: Pick<FleetClaim, "state" | "reason" | "told
       if (claim.reason === "too_old") return "The screenshot is more than 10 days old.";
       if (claim.reason === "not_a_driver") return "This phone is not one of your drivers. Find out who the payment is for.";
       if (claim.reason === "two_claims") return "Two claims point to the same deposit. Pick who it belongs to.";
+      if (claim.reason === "no_amount") return "The driver did not give a readable amount. Look at the photo.";
+      if (claim.reason === "no_deposit") return "No deposit has shown in the bank after 2 days.";
+      if (claim.reason === "payment_undone") return "The payment made from this report was undone. Pick the right deposit or close it.";
       return "A person needs to look at this claim.";
     default:
       return "";
@@ -94,7 +110,7 @@ export type ClaimView = {
   amountCents: number | null;
   atMs: number;
   sentence: string;
-  mediaPath: string;
+  hasPhoto: boolean;
   state: FleetClaim["state"];
 };
 
@@ -115,7 +131,7 @@ export function openClaimViews(rows: readonly unknown[], driverNames: ReadonlyMa
       amountCents: claim.amountCents,
       atMs: claim.createdAtMs,
       sentence: claimSentence(claim),
-      mediaPath: claim.mediaPath,
+      hasPhoto: claim.hasPhoto,
       state: claim.state,
     });
   }
