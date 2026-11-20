@@ -151,6 +151,14 @@ Meta; code never points at a template before it is approved.
 Where the spec was silent the safe side was taken ("wrong is worse than
 slow"; a deposit waits for the office):
 
+- **The bank's line (2026-11-20)**: the sync asks Plaid for the original
+  description (`options.include_original_description` on
+  `/transactions/sync`; before, it was always null). Each deposit stores
+  `bankLine` (the original description, else Plaid's cleaned name; one line,
+  at most 160 characters) and the office sees it under each waiting deposit
+  ("Bank's line:"), so a deposit shown as "not a Zelle" can be checked
+  against the bank's own words. Matching rules are unchanged.
+
 - **Matching dates**: for rules 3 and 5 a deposit dated more than a day
   before the screenshot's day cannot be that payment. Rule 5a (the driver's
   answer) does not need equal amounts (Q3); 5b does. Two claims, or two

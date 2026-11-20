@@ -1475,7 +1475,8 @@ function createFleetHandlers(deps) {
         .map((c) => ({id: c.id, amountCents: Number(c.amountCents) || 0,
           senderName: String(c.senderName || ""), atMs: Number(c.atMs) || 0,
           dateKey: String(c.dateKey || ""), pending: c.pending === true,
-          reason: String(c.fleetWaitingReason || "unknown")}));
+          reason: String(c.fleetWaitingReason || "unknown"),
+          bankLine: String(c.bankLine || "")}));
     // Payments whose deposit the bank took back since: the office decides.
     const removedSnap = await db().collection("fleetPayments")
         .where("businessId", "==", businessId)

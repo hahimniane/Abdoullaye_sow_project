@@ -73,8 +73,9 @@ describe("bank sync: a Plaid row as a credit", () => {
   it("stores the sender's name and nothing else from the line", () => {
     const credit = creditFromTransaction(tx(), SCOPE);
     assert.equal(credit.senderName, "FATOU BAH");
-    assert.equal(Object.values(credit).some((v) =>
-      String(v).includes("8XK2LQ")), false, "no reference numbers stored");
+    assert.equal(Object.entries(credit).some(([k, v]) => k !== "bankLine" &&
+      String(v).includes("8XK2LQ")), false, "no reference numbers stored " +
+      "outside the bank's line");
     assert.equal(credit.name, undefined);
     assert.equal(credit.description, undefined);
     assert.equal(senderNameOf(tx({counterparties: [{name: "Fatou Bah",
@@ -93,6 +94,32 @@ describe("bank sync: a Plaid row as a credit", () => {
         "Awa Sow");
     assert.equal(senderNameOf(tx({name: "360 Checking XXXXXXX2820"})),
         "360 Checking XXXXXXX2820");
+  });
+
+  it("keeps the bank's own line on the credit, one line, at most 160", () => {
+    assert.equal(creditFromTransaction(tx(), SCOPE).bankLine,
+        "Zelle payment from FATOU BAH Conf# 8XK2LQ");
+    assert.equal(creditFromTransaction(tx({name: "Zelle",
+      original_description: "ZELLE  PAYMENT\nFROM AWA SOW  "}), SCOPE).bankLine,
+    "ZELLE PAYMENT FROM AWA SOW", "original description wins, one line");
+    assert.equal(creditFromTransaction(tx({name: "",
+      original_description: null}), SCOPE).bankLine, "");
+    assert.equal(creditFromTransaction(tx({original_description: "x".repeat(
+        300)}), SCOPE).bankLine.length, 160);
+  });
+
+  it("a Zelle only the original description mentions is recognised, with " +
+      "the sender from it", () => {
+    const only = tx({name: "Online Transfer", merchant_name: null,
+      original_description: "ZELLE PAYMENT FROM AWA SOW REF 99"});
+    const credit = creditFromTransaction(only, SCOPE);
+    assert.equal(credit.zelle, true);
+    assert.equal(credit.senderName, "AWA SOW");
+    // The cleaned name with its own "from" is still preferred.
+    assert.equal(senderNameOf(tx({name: "Zelle from FATOU BAH",
+      original_description: "ZELLE PAYMENT FROM SOMEONE ELSE"})), "FATOU BAH");
+    assert.equal(creditFromTransaction(tx({name: "Deposit",
+      original_description: "Mobile deposit"}), SCOPE).zelle, false);
   });
 
   it("the app or bank the money came through is never the sender", () => {

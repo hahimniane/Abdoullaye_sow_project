@@ -348,6 +348,11 @@ export function FleetBankDeposits({ businessId, state, bank }: { businessId: str
                       {w.pending && <> · <span>pending at the bank</span></>}
                     </small>
                     <small>{waitingReasonText(w.reason)}</small>
+                    {w.bankLine && (
+                      <small>
+                        <span>Bank&apos;s line:</span> <span data-no-translate>{w.bankLine}</span>
+                      </small>
+                    )}
                   </div>
                   <div className="fleet-bank-assign">
                     <label className="lst-field">

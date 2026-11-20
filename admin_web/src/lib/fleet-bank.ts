@@ -27,6 +27,8 @@ export type WaitingDeposit = {
   dateKey: string;
   pending: boolean;
   reason: string;
+  /** The bank's own words for the deposit ("" for old rows). */
+  bankLine: string;
 };
 
 /** A payment still recorded although the bank took its deposit back: the office decides. */
@@ -90,6 +92,11 @@ export function hourLabel(hour: number, lang: "en" | "fr" = "en"): string {
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
+/** The bank's line for a deposit: one line, trimmed, at most 160 characters ("" when none). */
+export function bankLineText(value: unknown): string {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 160) : "";
+}
+
 /** The bank_status answer, read defensively. */
 export function readFleetBankStatus(answer: unknown): FleetBankStatus {
   const a = (answer && typeof answer === "object" ? answer : {}) as Row;
@@ -110,6 +117,7 @@ export function readFleetBankStatus(answer: unknown): FleetBankStatus {
       dateKey: String(w.dateKey ?? ""),
       pending: w.pending === true,
       reason: String(w.reason ?? "unknown"),
+      bankLine: bankLineText(w.bankLine),
     })).filter((w) => w.id && w.amountCents > 0),
     removed: removed.map((r) => ({
       paymentId: String(r.paymentId ?? ""),
@@ -128,7 +136,7 @@ export function waitingReasonText(reason: string): string {
   if (reason === "possible_duplicate")
     return "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.";
   if (reason === "not_zelle")
-    return "This deposit is not a Zelle (cash, a check, a card payout or a transfer). Pick the driver only if it is a driver's payment.";
+    return "The bank's line does not say Zelle, so it will not pay anyone by itself. Pick the driver if it is a driver's payment.";
   if (reason === "shared_payer")
     return "This person pays for more than one driver. Pick the driver.";
   if (reason === "driver_left")

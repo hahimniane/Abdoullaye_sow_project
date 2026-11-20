@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { bankScheduleQuote, cleanBankSchedule, hourLabel, readFleetBankStatus, waitingReasonText } from "./fleet-bank.ts";
+import { bankLineText, bankScheduleQuote, cleanBankSchedule, hourLabel, readFleetBankStatus, waitingReasonText } from "./fleet-bank.ts";
 import { translateValue } from "./french-dom.ts";
 
 const cases = JSON.parse(
@@ -79,4 +79,19 @@ test("the new words read in French", () => {
   ]) {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
   }
+});
+
+test("the bank's line is read as one short line, empty for old rows", () => {
+  assert.equal(bankLineText("  ZELLE PAYMENT\n FROM  AWA SOW "), "ZELLE PAYMENT FROM AWA SOW");
+  assert.equal(bankLineText(undefined), "");
+  assert.equal(bankLineText(42), "");
+  assert.equal(bankLineText("x".repeat(300)).length, 160);
+  const status = readFleetBankStatus({ waiting: [{ id: "c1", amountCents: 100, bankLine: "ZELLE FROM A B" }, { id: "c2", amountCents: 100 }] });
+  assert.deepEqual(status.waiting.map((w) => w.bankLine), ["ZELLE FROM A B", ""]);
+});
+
+test("the not-Zelle sentence does not claim what the deposit is", () => {
+  const text = waitingReasonText("not_zelle");
+  assert.equal(text, "The bank's line does not say Zelle, so it will not pay anyone by itself. Pick the driver if it is a driver's payment.");
+  assert.doesNotMatch(text, /cash|check|card payout/i);
 });

@@ -146,6 +146,13 @@ describe("deposits pay drivers by themselves", () => {
         assert.deepEqual(status.waiting.map((w) => w.id)
             .filter((id) => ours.includes(id)).sort(), ours.sort());
         assert.equal(status.bank.connected, true);
+        assert.equal(status.waiting.find((w) => w.id === unknown).bankLine,
+            "", "an old row has no bank line");
+        await db.collection("businessBankCredits").doc(unknown)
+            .set({bankLine: "ZELLE PAYMENT FROM TEST PERSON"}, {merge: true});
+        const again = await act(STAFF, "bank_status");
+        assert.equal(again.waiting.find((w) => w.id === unknown).bankLine,
+            "ZELLE PAYMENT FROM TEST PERSON");
       });
 
   it("the office picks the driver once; the next one pays by itself",

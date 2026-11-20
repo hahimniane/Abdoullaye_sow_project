@@ -34,6 +34,8 @@ const MAX_BATCH_WRITES = 400;
 /** getAll reads per round. */
 const MAX_GET_ALL = 100;
 const MAX_SENDER_NAME = 80;
+/** Longest bank line kept on a credit. */
+const MAX_BANK_LINE = 160;
 
 /**
  * "Sign in again soon" while the feed still works: a sync that succeeds must
@@ -152,9 +154,12 @@ function rawSenderNameOf(tx) {
     return name;
   }
   const line = String(tx?.name || "");
-  const from = line.match(
-      /\bfrom\s+(.+?)(?:\s+(?:on|conf|ref|id|memo)\b.*)?$/i);
-  if (from) {
+  // The cleaned name first; the bank's original description only when the
+  // cleaned one has no "from <name>" (Plaid often shortens it to "Zelle").
+  for (const candidate of [line, String(tx?.original_description || "")]) {
+    const from = candidate.match(
+        /\bfrom\s+(.+?)(?:\s+(?:on|conf|ref|id|memo)\b.*)?$/i);
+    if (!from) continue;
     const name = tidy(from[1].replace(SENDER_NOISE, " ")
         .replace(/[;:#]+/g, " "));
     if (name) return name;
@@ -162,6 +167,20 @@ function rawSenderNameOf(tx) {
   const merchant = tidy(tx?.merchant_name);
   if (merchant && !APP_NAMES.test(merchant)) return merchant;
   return tidy(line.replace(SENDER_NOISE, " ").replace(/[;:#*]+/g, " "));
+}
+
+/**
+ * The bank's own words for a deposit, so the office can see why it was (or
+ * was not) taken for a Zelle: the original description when Plaid has it,
+ * else the cleaned name. One line, at most MAX_BANK_LINE characters.
+ *
+ * @param {object} tx A Plaid transaction.
+ * @return {string} The line, "" when the bank gives none.
+ */
+function bankLineOf(tx) {
+  const oneLine = (v) => String(v || "").replace(/\s+/g, " ").trim();
+  return (oneLine(tx?.original_description) || oneLine(tx?.name))
+      .slice(0, MAX_BANK_LINE);
 }
 
 /**
@@ -201,6 +220,7 @@ function creditFromTransaction(tx, scope) {
     dateKey: dateKeyOf(tx.authorized_date) || dateKeyOf(tx.date),
     senderName: senderNameOf(tx),
     zelle: isZelle(tx),
+    bankLine: bankLineOf(tx),
     pendingTransactionId: tx.pending_transaction_id ?
       String(tx.pending_transaction_id) : "",
   };
