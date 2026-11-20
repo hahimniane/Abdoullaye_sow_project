@@ -78,13 +78,13 @@ before(async () => {
     db.collection("users").doc(PLATFORM).set({role: "admin",
       adminRole: "superAdmin", fullName: "Platform"}),
     db.collection("fleetDrivers").doc("drv-a").set({businessId: BIZ,
-      name: "Driver A", status: "active", personalCents: 17,
+      name: "Driver A", status: "active",
       rememberedSenders: ["ALPHA SENDER"], creditCents: 0}),
     db.collection("fleetDrivers").doc("drv-b").set({businessId: BIZ,
-      name: "Driver B", status: "active", personalCents: 42,
+      name: "Driver B", status: "active",
       rememberedSenders: [], creditCents: 0}),
     db.collection("fleetDrivers").doc("drv-gone").set({businessId: BIZ,
-      name: "Gone", status: "left", personalCents: 55,
+      name: "Gone", status: "left",
       rememberedSenders: ["GONE SENDER"], creditCents: 0}),
     db.collection("businessBankLinks").doc(BIZ).set({businessId: BIZ,
       status: "active", institutionName: "Test Bank", accountMask: "0001"}),
@@ -110,14 +110,16 @@ describe("deposits pay drivers by themselves", () => {
         {paid: 0, waiting: 0});
   });
 
-  it("else the cents are the code, and the sender is remembered", async () => {
+  it("the cents of an amount mean nothing: a stranger with a driver's " +
+      "old cents waits", async () => {
     await openRent("drv-b", 35000);
     const id = await deposit(35042, "BRAVO NEW");
     assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
-        {paid: 1, waiting: 0});
-    const driver = await doc("fleetDrivers", "drv-b");
-    assert.ok(driver.rememberedSenders.includes("BRAVO NEW"));
-    assert.equal(driver.creditCents, 42, "the extra 42 cents is credit");
+        {paid: 0, waiting: 1});
+    assert.equal((await doc("businessBankCredits", id)).fleetWaitingReason,
+        "unknown");
+    assert.deepEqual((await doc("fleetDrivers", "drv-b")).rememberedSenders,
+        []);
   });
 
   it("unknown sender or driver who left waits; old deposit is skipped",
@@ -200,7 +202,7 @@ describe("deposits pay drivers by themselves", () => {
   it("two bank notices in the same second: one payment, and the deposit " +
       "is not left on the waiting list", async () => {
     // Cents .17 = drv-a. Both runs see the deposit unused and try it.
-    const id = await deposit(46017, "RACE SENDER");
+    const id = await deposit(46017, "ALPHA SENDER");
     const before = (await db.collection("fleetPayments")
         .where("businessId", "==", BIZ).get()).size;
     const runs = await Promise.all([
@@ -257,16 +259,10 @@ describe("deposits pay drivers by themselves", () => {
         {paid: 0, waiting: 1});
   });
 
-  it("a driver who left pays with their old cents: the driver who has " +
-      "those cents now is not paid", async () => {
-    await Promise.all([
-      db.collection("fleetDrivers").doc("drv-left2").set({businessId: BIZ,
-        name: "Left Two", status: "left", personalCents: 77,
-        rememberedSenders: ["LEFT PAYER"], creditCents: 0}),
-      db.collection("fleetDrivers").doc("drv-c").set({businessId: BIZ,
-        name: "Driver C", status: "active", personalCents: 77,
-        rememberedSenders: [], creditCents: 0}),
-    ]);
+  it("a driver who left: their old payer waits for the office", async () => {
+    await db.collection("fleetDrivers").doc("drv-left2").set({businessId: BIZ,
+      name: "Left Two", status: "left", rememberedSenders: ["LEFT PAYER"],
+      creditCents: 0});
     const id = await deposit(20077, "Left Payer");
     assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
         {paid: 0, waiting: 1});
@@ -275,22 +271,28 @@ describe("deposits pay drivers by themselves", () => {
     assert.equal(credit.fleetWaitingReason, "driver_left");
   });
 
-  it("a known sender with another driver's cents waits for the office",
-      async () => {
-        // ALPHA SENDER is drv-a's; .42 is drv-b's code.
-        const id = await deposit(30042, "ALPHA SENDER");
-        assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
-            {paid: 0, waiting: 1});
-        assert.equal((await doc("businessBankCredits", id))
-            .fleetWaitingReason, "two_drivers");
-      });
+  it("a sender remembered for two active drivers waits (a husband paying " +
+      "for two)", async () => {
+    await Promise.all([
+      db.collection("fleetDrivers").doc("drv-w1").set({businessId: BIZ,
+        name: "Wife One", status: "active", creditCents: 0,
+        rememberedSenders: ["HUSBAND PAYER"]}),
+      db.collection("fleetDrivers").doc("drv-w2").set({businessId: BIZ,
+        name: "Wife Two", status: "active", creditCents: 0,
+        rememberedSenders: ["HUSBAND PAYER"]}),
+    ]);
+    const id = await deposit(30042, "Husband Payer");
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
+        {paid: 0, waiting: 1});
+    assert.equal((await doc("businessBankCredits", id)).fleetWaitingReason,
+        "shared_payer");
+  });
 
   it("undo forgets the sender, so the same wrong match does not repeat",
       async () => {
-        // A stranger whose amount happens to end in drv-b's cents.
         const id = await deposit(21042, "WRONG PERSON");
-        assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
-            {paid: 1, waiting: 0});
+        await handlers.matchBankDeposits(BIZ, [id]);
+        await act(STAFF, "bank_assign", {creditId: id, driverId: "drv-b"});
         assert.ok((await doc("fleetDrivers", "drv-b")).rememberedSenders
             .includes("WRONG PERSON"));
         const paymentId = (await doc("businessBankCredits", id)).consumedBy.id;
@@ -336,7 +338,7 @@ describe("deposits pay drivers by themselves", () => {
   it("undo after the extra already paid a later bill takes it back from " +
       "that bill; the credit never goes below zero", async () => {
     await db.collection("fleetDrivers").doc("drv-over").set({businessId: BIZ,
-      name: "Over Payer", status: "active", personalCents: 88,
+      name: "Over Payer", status: "active",
       rememberedSenders: [], creditCents: 0});
     const first = await openRent("drv-over", 30000);
     // $350 on a $300 bill: $50 becomes credit.

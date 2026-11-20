@@ -16,6 +16,7 @@
  * Plaid client as arguments so the emulator suite can fake Plaid at fetch.
  */
 
+const {cleanSenderName} = require("./fleet_bank");
 const {
   MUTATION_DURING_PAGINATION,
   PlaidError,
@@ -131,6 +132,18 @@ function tidy(value) {
  * @return {string} The sender's name, "" when the bank gives none.
  */
 function senderNameOf(tx) {
+  return tidy(cleanSenderName(rawSenderNameOf(tx)));
+}
+
+/**
+ * The sender as the bank's line gives it, before the reference numbers and
+ * the words MONEY, SENT, PMT and XFER are taken out (fleet_bank.js
+ * cleanSenderName).
+ *
+ * @param {object} tx A Plaid transaction.
+ * @return {string} The sender's name, "" when the bank gives none.
+ */
+function rawSenderNameOf(tx) {
   const parties = Array.isArray(tx?.counterparties) ? tx.counterparties : [];
   for (const party of parties) {
     const name = tidy(party?.name);
@@ -423,6 +436,10 @@ async function applySyncPlan(ctx, plan) {
       const old = oldDoc.exists ? oldDoc.data() || {} : null;
       const current = newDoc.exists ? newDoc.data() || {} : null;
       const carry = old && old.consumedBy && !(current && current.consumedBy);
+      // A deposit the office undid stays undone under its posted copy: it
+      // never pays a driver by itself again (docs/FLEET_PAYMENT_PROOF.md).
+      const carryUndone = old && old.fleetUndone === true &&
+        !(current && current.consumedBy);
       tx.set(newRef, {
         ...feedFields(credit),
         replacesTransactionId: credit.pendingTransactionId,
@@ -431,6 +448,8 @@ async function applySyncPlan(ctx, plan) {
         ...(carry ? {consumedBy: old.consumedBy,
           consumedAt: old.consumedAt || now,
           consumedByUid: old.consumedByUid || ""} : {}),
+        ...(carryUndone ? {fleetUndone: true, fleetWaiting: true,
+          fleetWaitingReason: "undone"} : {}),
       }, {merge: true});
       if (old) {
         tx.set(oldRef, {removed: true, removedAt: now,

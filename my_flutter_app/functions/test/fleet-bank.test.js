@@ -72,109 +72,176 @@ describe("the shared cost cases (console mirror: lib/fleet-bank.ts)", () => {
   }
 });
 
-describe("a deposit pays the right driver", () => {
+describe("a deposit pays the right driver (no personal cents)", () => {
   const drivers = [
-    {id: "d1", status: "active", personalCents: 17,
+    {id: "d1", name: "Moussa Keita", status: "active",
       rememberedSenders: ["MOUSSA KEITA"]},
-    {id: "d2", status: "active", personalCents: 42, rememberedSenders: []},
-    {id: "d3", status: "left", personalCents: 55,
+    {id: "d2", name: "Fatoumata Bah", status: "active",
+      rememberedSenders: []},
+    {id: "d3", name: "Old Driver", status: "left",
       rememberedSenders: ["OLD DRIVER"]},
   ];
+  const claim = (over) => ({id: "c1", driverId: "d2", amountCents: 40000,
+    payerName: "", dayKey: "2026-12-02", createdAtMs: 1, ...over});
+  const dep = (over) => ({id: "x", amountCents: 40000,
+    senderName: "Fatoumata B. Bah #12", zelle: true, dateKey: "2026-12-02",
+    ...over});
 
-  it("a remembered sender first, in any spelling the bank uses", () => {
+  it("0. accounts, non-Zelle and nameless deposits wait", () => {
+    assert.deepEqual(matchDeposit(dep({senderName: "360 Checking XXXXXXX2820"}),
+        drivers), {reason: "own_transfer"});
+    assert.deepEqual(matchDeposit(dep({zelle: false}), drivers),
+        {reason: "not_zelle"});
+    assert.deepEqual(matchDeposit(dep({senderName: ""}), drivers),
+        {reason: "unknown"});
+    assert.deepEqual(matchDeposit(dep({senderName: "Zelle"}), drivers),
+        {reason: "unknown"});
+  });
+
+  it("the cents of an amount mean nothing any more", () => {
+    assert.deepEqual(matchDeposit(dep({amountCents: 35042,
+      senderName: "NEW PERSON"}), drivers), {reason: "unknown"});
+  });
+
+  it("1. an undone deposit never pays by itself again", () => {
+    for (const over of [{fleetUndone: true},
+      {fleetWaitingReason: "undone"}]) {
+      assert.deepEqual(matchDeposit(dep({senderName: "moussa keita",
+        ...over}), drivers, {claims: []}), {reason: "undone"});
+      assert.deepEqual(matchDeposit(dep({...over}), drivers,
+          {claims: [claim()]}), {reason: "undone"}, "not even by a claim");
+    }
+  });
+
+  it("2. a sender remembered for one active driver pays that driver, " +
+      "whatever the amount", () => {
     assert.equal(senderKey("Moussa  Keïta."), "MOUSSA KEITA");
-    assert.deepEqual(matchDeposit({amountCents: 35000,
-      senderName: "moussa keita"}, drivers), {driverId: "d1", how: "sender"});
-  });
-
-  it("else the amount's cents are the driver's code", () => {
-    assert.deepEqual(matchDeposit({amountCents: 35042,
-      senderName: "NEW PERSON"}, drivers), {driverId: "d2", how: "cents"});
-    assert.deepEqual(matchDeposit({amountCents: 35000,
-      senderName: "NEW PERSON"}, drivers), {reason: "unknown"});
-    assert.deepEqual(matchDeposit({amountCents: 35055,
-      senderName: "OLD DRIVER"}, drivers), {reason: "driver_left"},
-    "a driver who left is never paid");
-  });
-
-  it("a driver who left still pays with their old cents: the driver who " +
-      "has those cents now is not paid", () => {
-    const now = [...drivers, {id: "d5", status: "active", personalCents: 55,
-      rememberedSenders: []}];
-    assert.deepEqual(matchDeposit({amountCents: 20055,
-      senderName: "Old Driver"}, now), {reason: "driver_left"});
-    // A stranger with those cents is still the new driver's first payment.
-    assert.deepEqual(matchDeposit({amountCents: 20055,
-      senderName: "SOMEONE NEW"}, now), {driverId: "d5", how: "cents"});
-  });
-
-  it("a known sender with another driver's cents waits: two people can " +
-      "share a name, a friend can pay for a friend", () => {
-    // MOUSSA KEITA is d1's sender (cents 17); .42 is d2's code.
-    assert.deepEqual(matchDeposit({amountCents: 35042,
-      senderName: "MOUSSA KEITA"}, drivers), {reason: "two_drivers"});
-    // His own cents, no cents, or cents nobody has: still his.
-    for (const amountCents of [35017, 35000, 35099]) {
-      assert.deepEqual(matchDeposit({amountCents, senderName: "MOUSSA KEITA"},
+    for (const amountCents of [35000, 35042, 1]) {
+      assert.deepEqual(matchDeposit({amountCents, senderName: "moussa keita"},
           drivers), {driverId: "d1", how: "sender"});
     }
   });
 
-  it("only a person's Zelle pays by itself or is remembered", () => {
+  it("3. a sender remembered for two active drivers waits, unless exactly " +
+      "one of them has an open claim for that amount", () => {
+    const shared = [...drivers, {id: "d4", name: "Wife Keita",
+      status: "active", rememberedSenders: ["MOUSSA KEITA"]}];
+    const d = {amountCents: 40000, senderName: "MOUSSA KEITA"};
+    assert.deepEqual(matchDeposit(d, shared), {reason: "shared_payer"});
+    assert.deepEqual(matchDeposit(d, shared, {claims: [
+      claim({driverId: "d4"})]}), {driverId: "d4", how: "claim",
+      claimId: "c1"});
+    assert.deepEqual(matchDeposit(d, shared, {claims: [
+      claim({driverId: "d4"}), claim({id: "c2", driverId: "d1"})]}),
+    {reason: "shared_payer"}, "two drivers have one");
+    assert.deepEqual(matchDeposit(d, shared, {claims: [
+      claim({driverId: "d4", amountCents: 39000})]}),
+    {reason: "shared_payer"}, "another amount");
+    assert.deepEqual(matchDeposit(d, shared, {claims: [
+      claim({driverId: "d2"})]}), {reason: "shared_payer"},
+    "a claim of a driver who is not an owner of the name");
+  });
+
+  it("4. a sender remembered only for a driver who left waits", () => {
+    assert.deepEqual(matchDeposit({amountCents: 35055,
+      senderName: "Old Driver"}, drivers, {claims: [claim()]}),
+    {reason: "driver_left"});
+  });
+
+  it("5a. an unknown sender is the claim's payerName", () => {
+    assert.deepEqual(matchDeposit(dep({amountCents: 12345,
+      senderName: "Aminata Diallo"}), drivers, {claims: [
+      claim({payerName: "AMINATA DIALLO"})]}),
+    {driverId: "d2", how: "claim", claimId: "c1"}, "any amount (Q3)");
+    assert.deepEqual(matchDeposit(dep({senderName: "Aminata Diallo"}),
+        drivers, {claims: [claim({payerName: "AMINATA DIALLO"}),
+          claim({id: "c2", payerName: "Aminata Diallo"})]}).reason, "unknown",
+    "two claims name the same payer: nobody is guessed");
+  });
+
+  it("5b. no payerName: equal amount, the driver's own name, nothing " +
+      "else fits", () => {
+    const ctx = {claims: [claim()], others: []};
+    assert.deepEqual(matchDeposit(dep(), drivers, ctx),
+        {driverId: "d2", how: "claim", claimId: "c1"});
+    assert.equal(matchDeposit(dep({amountCents: 40001}), drivers, ctx).reason,
+        "unknown", "amounts differ");
+    assert.equal(matchDeposit(dep({senderName: "Bah"}), drivers, ctx).reason,
+        "unknown", "one word is nobody");
+    assert.equal(matchDeposit(dep({senderName: "Someone Else"}), drivers,
+        ctx).reason, "unknown", "not the driver's own name");
+    // Another unused deposit fits the same way.
+    const rival = matchDeposit(dep(), drivers, {claims: [claim()],
+      others: [{id: "y", amountCents: 40000, senderName: "Fatoumata Bah",
+        dateKey: "2026-12-02"}]});
+    assert.equal(rival.reason, "unknown");
+    assert.deepEqual(rival.claimIds, ["c1"]);
+    // Another open claim fits the same way (a second driver of that name).
+    const twin = [...drivers, {id: "d5", name: "Fatoumata Bah",
+      status: "active", rememberedSenders: []}];
+    assert.equal(matchDeposit(dep(), twin, {claims: [claim(),
+      claim({id: "c2", driverId: "d5"})]}).reason, "unknown");
+    // An unrelated unused deposit does not block it.
+    assert.equal(matchDeposit(dep(), drivers, {claims: [claim()],
+      others: [{id: "y", amountCents: 40000, senderName: "Joe Doe"}]})
+        .driverId, "d2");
+    // A deposit dated before the photo's day cannot be that payment.
+    assert.equal(matchDeposit(dep({dateKey: "2026-11-20"}), drivers, ctx)
+        .reason, "unknown");
+  });
+
+  it("6. otherwise it waits as unknown", () => {
+    assert.deepEqual(matchDeposit(dep(), drivers), {reason: "unknown"});
+  });
+
+  it("'is the same name': every word of the shorter, at least two", () => {
+    assert.equal(fb.nameIs("FATOUMATA BAH", "Fatoumata B. Bah #12"), true);
+    assert.equal(fb.nameIs("Fatoumata Bah", "Fatoumata Mariam Bah"), true);
+    assert.equal(fb.nameIs("BAH", "Fatoumata Bah"), false);
+    assert.equal(fb.nameIs("Fatoumata B", "Fatoumata Bah"), false);
+    assert.equal(fb.nameIs("Mamadou Bah", "Fatoumata Bah"), false);
+    assert.equal(fb.nameIs("", ""), false);
+  });
+
+  it("only a person's Zelle with a real name is remembered", () => {
     const {senderRememberable} = require("../fleet_bank");
-    // A card payout, a cash deposit, interest: cents .42 are d2's code.
-    for (const senderName of ["STRIPE", "ATM", "INTEREST PAID", "Uber"]) {
-      assert.deepEqual(matchDeposit({amountCents: 123442, senderName,
-        zelle: false}, drivers), {reason: "not_zelle"}, senderName);
+    for (const senderName of ["STRIPE", "ATM", "Uber"]) {
       assert.equal(senderRememberable({senderName, zelle: false}), false);
     }
-    // Even a remembered sender: a check or cash from them waits.
-    assert.deepEqual(matchDeposit({amountCents: 35017,
-      senderName: "MOUSSA KEITA", zelle: false}, drivers),
-    {reason: "not_zelle"});
-    // The app's own name is nobody, and so is no name.
-    for (const senderName of ["Zelle", "ZELLE", "Venmo", "Cash App", ""]) {
-      assert.deepEqual(matchDeposit({amountCents: 35042, senderName,
-        zelle: true}, drivers), {reason: "unknown"}, senderName);
-      assert.equal(senderRememberable({senderName, zelle: true}), false);
+    for (const senderName of ["Zelle", "Venmo", "Cash App", "", "BAH",
+      "MONEY SENT", "PMT XFER", "Moussa #1234"]) {
+      assert.equal(senderRememberable({senderName, zelle: true}), false,
+          senderName);
     }
     assert.equal(senderRememberable({senderName: "360 Checking XXXXXXX2820",
       zelle: true}), false);
     assert.equal(senderRememberable({senderName: "Awa Sow", zelle: true}),
         true);
-    // Deposits stored before the flag existed keep working.
     assert.equal(senderRememberable({senderName: "Awa Sow"}), true);
-    assert.deepEqual(matchDeposit({amountCents: 35042, senderName: "NEW"},
-        drivers), {driverId: "d2", how: "cents"});
+    assert.equal(fb.nameRememberable("Awa"), false);
   });
 
-  it("a transfer from an account is nobody's, whatever its cents or " +
-      "whoever was remembered", () => {
+  it("sender names lose reference numbers and bank words", () => {
+    assert.equal(fb.cleanSenderName("ZELLE MONEY SENT Awa Sow JPM99abc1234"),
+        "Awa Sow");
+    assert.equal(fb.cleanSenderName("Awa Sow PMT 8839 XFER"), "Awa Sow");
+    assert.equal(fb.cleanSenderName("Awa Sow #12"), "Awa Sow");
+    // An account keeps its digits: they are what marks it an account.
+    assert.equal(fb.cleanSenderName("360 Checking XXXXXXX2820"),
+        "360 Checking XXXXXXX2820");
+    assert.equal(fb.matchKey("Awa Sow MONEY"), "AWA SOW");
+  });
+
+  it("a transfer from an account is nobody's", () => {
     const {senderIsAccount} = require("../fleet_bank");
     for (const name of ["360 Checking XXXXXXX2820", "Savings ****1234",
       "CHECKING 0042", "Money Market xx9911"]) {
       assert.equal(senderIsAccount(name), true, name);
     }
-    for (const name of ["HASSIMIOU NIANE", "Moussa Keïta", "ALPHA 2 SENDER",
-      "Maxine Checkley", ""]) {
+    for (const name of ["HASSIMIOU NIANE", "Moussa Keïta", "Maxine Checkley",
+      ""]) {
       assert.equal(senderIsAccount(name), false, name);
     }
-    // Cents .42 are d2's code, yet an account transfer waits for the office.
-    assert.deepEqual(matchDeposit({amountCents: 142,
-      senderName: "360 Checking XXXXXXX2820"}, drivers),
-    {reason: "own_transfer"});
-    const remembered = [{id: "d9", status: "active", personalCents: 1,
-      rememberedSenders: ["360 CHECKING XXXXXXX2820"]}];
-    assert.deepEqual(matchDeposit({amountCents: 45001,
-      senderName: "360 Checking XXXXXXX2820"}, remembered),
-    {reason: "own_transfer"});
-  });
-
-  it("two drivers who could be the sender: nobody is guessed", () => {
-    const twins = [...drivers, {id: "d4", status: "active", personalCents: 17,
-      rememberedSenders: ["MOUSSA KEITA"]}];
-    assert.deepEqual(matchDeposit({amountCents: 35017,
-      senderName: "MOUSSA KEITA"}, twins), {reason: "two_drivers"});
   });
 
   it("only new, unused money is looked at", () => {
@@ -183,9 +250,6 @@ describe("a deposit pays the right driver", () => {
       atMs: after}, BANK_MATCH_START_MS), true);
     assert.equal(depositMatchable({amountCents: 100, senderName: "A",
       atMs: BANK_MATCH_START_MS - 1}, BANK_MATCH_START_MS), false);
-    assert.equal(depositMatchable({amountCents: 100, senderName: "",
-      atMs: after}, BANK_MATCH_START_MS), true,
-    "no sender: it waits for the office (cash paid in at the bank)");
     assert.equal(depositMatchable({amountCents: 100, senderName: "A",
       atMs: after, consumedBy: {kind: "sale", id: "s"}},
     BANK_MATCH_START_MS), false, "already used for a sale");
@@ -194,6 +258,14 @@ describe("a deposit pays the right driver", () => {
     assert.equal(depositMatchable({amountCents: 100, senderName: "A",
       atMs: null, dateKey: "2026-11-12"}, BANK_MATCH_START_MS), true);
   });
+
+  it("connecting a different bank login starts matching from that moment",
+      () => {
+        const business = {fleet: {enabledAtMs: BANK_MATCH_START_MS + 5}};
+        assert.equal(fb.matchStartMs(business, {}), BANK_MATCH_START_MS + 5);
+        assert.equal(fb.matchStartMs(business, {matchFromMs: 9e12}), 9e12);
+        assert.equal(fb.matchStartMs({}, null), BANK_MATCH_START_MS);
+      });
 });
 
 describe("a deposit the bank may have sent twice", () => {
@@ -224,4 +296,13 @@ describe("a deposit the bank may have sent twice", () => {
             [{...used, dateKey: "2026-11-20"}]), null);
         assert.equal(fb.possibleDuplicateOf(fresh, [fresh]), null);
       });
+  it("a deposit the office undid, and the bank's copy of it, never pays " +
+      "by itself", () => {
+    const undone = {id: "u", accountId: "acct", amountCents: 35017,
+      senderName: "MOUSSA DIALLO", dateKey: "2026-12-01", pending: false,
+      fleetUndone: true};
+    assert.equal(fb.possibleDuplicateOf(fresh, [undone]).id, "u");
+    assert.equal(fb.possibleDuplicateOf(fresh,
+        [{...undone, fleetUndone: false}]), null);
+  });
 });

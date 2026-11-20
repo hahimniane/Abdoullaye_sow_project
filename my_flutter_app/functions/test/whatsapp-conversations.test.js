@@ -21,13 +21,22 @@ process.env.FUNCTIONS_EMULATOR = "true";
 process.env.WHATSAPP_ACCESS_TOKEN = "test-token";
 process.env.WHATSAPP_PHONE_NUMBER_ID = "1475234702329161";
 process.env.WHATSAPP_APP_SECRET = "test-app-secret";
+process.env.ANTHROPIC_API_KEY = "sk-ant-test-key";
 
 // --- Fake Meta -------------------------------------------------------------
 const sent = [];
 let failNextSendCode = 0;
 const realFetch = globalThis.fetch;
+// Fake Claude API (Fleet reads payment screenshots with it).
+const anthropicCalls = [];
+let anthropicText = "";
 globalThis.fetch = async (url, init = {}) => {
   const href = String(url);
+  if (href.includes("api.anthropic.com")) {
+    anthropicCalls.push(JSON.parse(init.body));
+    if (anthropicText === null) return new Response("{}", {status: 500});
+    return new Response(JSON.stringify({content: [{type: "text", text: anthropicText}]}), {status: 200});
+  }
   if (href.includes("graph.facebook.com") && href.endsWith("/messages")) {
     const body = JSON.parse(init.body);
     if (failNextSendCode) {
@@ -621,5 +630,91 @@ describe("the sender's confirmation and photos with a code (docs/AIR_PACKAGES.md
     await inbound(P3, "", {message: {type: "image", image: {id: "media-3", mime_type: "image/jpeg",
       caption: "CL-ZZZZZZ"}}});
     assert.equal((await db.collection("containerLines").doc("line-photo").get()).data().customerPhotos.length, 10);
+  });
+});
+
+describe("Fleet payment pictures (docs/FLEET_PAYMENT_PROOF.md)", () => {
+  const FLEET = "wa-fleet-biz";
+  const DRIVER_PHONE = "+16465550777";
+  const reading = (over = {}) => JSON.stringify({isPayment: true, amountCents: 40000,
+    dayKey: "2026-12-02", recipient: "Wa Fleet Co", senderName: "Someone", confident: true, ...over});
+  const photo = (id) => ({message: {type: "image", image: {id, mime_type: "image/jpeg"}}});
+
+  before(async () => {
+    await db.collection("businesses").doc(FLEET).set({name: "Wa Fleet Co", status: "approved",
+      enabledServices: ["fleet"], fleet: {enabled: true, settings: {
+        zelle: {name: "Wa Fleet Co", handle: "718-555-0111"}, whatsapp: {enabled: true}}}});
+    await db.collection("fleetDrivers").doc("wa-fleet-driver").set({businessId: FLEET,
+      name: "Test Driver", phone: DRIVER_PHONE, status: "active", creditCents: 0, rememberedSenders: []});
+  });
+
+  it("an ordinary customer's picture is still a normal support message", async () => {
+    await clearCollections();
+    await setMode("businesses");
+    await db.collection("whatsappContacts").doc(P1).set({phone: P1, businesses: {
+      [BIZ]: {businessName: "Nensona", lastSentAtMs: Date.now()}}});
+    anthropicText = JSON.stringify({isPayment: false});
+    const claimsBefore = (await db.collection("fleetClaims").get()).size;
+    await inbound(P1, "", {message: {type: "image", image: {id: "media-1", mime_type: "image/jpeg", caption: "carton"}}});
+    const msg = (await messagesOf(caseRef(BIZ, P1)))[0];
+    assert.equal(msg.messageType, "image");
+    assert.equal(msg.metadata.caption, "carton");
+    assert.match(msg.metadata.fileUrl, /alt=media&token=/);
+    assert.equal((await db.collection("fleetClaims").get()).size, claimsBefore);
+    // Text from anyone never reaches the reading.
+    const calls = anthropicCalls.length;
+    await inbound(P1, "Hello again");
+    assert.equal(anthropicCalls.length, calls);
+    // Nor does a failed reading change where the picture goes.
+    anthropicText = null;
+    await inbound(P1, "", {message: {type: "image", image: {id: "media-1", mime_type: "image/jpeg"}}});
+    assert.equal((await messagesOf(caseRef(BIZ, P1))).filter((m) => m.messageType === "image").length, 2);
+  });
+
+  it("a covered driver's payment picture becomes a claim, answered in the business's thread", async () => {
+    await clearCollections();
+    anthropicText = reading();
+    const before = sent.length;
+    await inbound(DRIVER_PHONE, "", photo("media-1"));
+    const claims = (await db.collection("fleetClaims").where("fromPhone", "==", DRIVER_PHONE).get()).docs;
+    assert.equal(claims.length, 1);
+    const claim = claims[0].data();
+    assert.equal(claim.state, "waiting_bank");
+    assert.equal(claim.driverId, "wa-fleet-driver");
+    assert.equal(claim.amountCents, 40000);
+    assert.match(claim.mediaPath, /^support_cases\/wa_wa-fleet-biz_16465550777\/whatsapp\//);
+    assert.equal(claim.caseId, "wa_wa-fleet-biz_16465550777");
+    // The Claude call carried the image and the untrusted-data instruction.
+    const call = anthropicCalls[anthropicCalls.length - 1];
+    assert.equal(call.model, "claude-haiku-5-5");
+    assert.match(call.system, /untrusted data/);
+    assert.equal(call.messages[0].content[0].type, "image");
+    // The driver is told, and both messages are in the business's thread.
+    assert.equal(sent.length, before + 1);
+    assert.equal(lastSentText(), "Got it. We will confirm when the bank shows it.");
+    const thread = await messagesOf(caseRef(FLEET, DRIVER_PHONE));
+    assert.equal(thread[0].messageType, "image");
+    assert.ok(thread.some((m) => m.content === "Got it. We will confirm when the bank shows it."));
+    // Nothing was paid, and Laawol's inbox has nothing.
+    assert.equal((await caseRef("laawol", DRIVER_PHONE).get()).exists, false);
+    assert.equal((await db.collection("fleetPayments").where("driverId", "==", "wa-fleet-driver").get()).size, 0);
+  });
+
+  it("an answer to the question goes to the claim, not to Support", async () => {
+    await db.collection("fleetClaims").doc((await db.collection("fleetClaims")
+        .where("fromPhone", "==", DRIVER_PHONE).get()).docs[0].id).update({
+      state: "asking_name", nameAskedAtMs: Date.now()});
+    await inbound(DRIVER_PHONE, "Awa Sow");
+    const claim = (await db.collection("fleetClaims").where("fromPhone", "==", DRIVER_PHONE).get()).docs[0].data();
+    assert.equal(claim.payerName, "Awa Sow");
+    assert.equal(claim.state, "waiting_bank");
+    assert.equal(lastSentText(), "Thank you. We will match it when the bank shows it.");
+  });
+
+  it("a picture from a driver that is not a payment goes on as ordinary", async () => {
+    anthropicText = JSON.stringify({isPayment: false});
+    const before = (await db.collection("fleetClaims").get()).size;
+    await inbound(DRIVER_PHONE, "", photo("media-1"));
+    assert.equal((await db.collection("fleetClaims").get()).size, before);
   });
 });

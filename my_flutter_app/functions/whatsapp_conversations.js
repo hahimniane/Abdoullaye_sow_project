@@ -36,6 +36,9 @@ const {
 
 const TRACK_URL = "https://customer.laawoldigital.com/t/";
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
+// A picture sent to be read as a payment screenshot (Fleet): the API takes
+// images up to about 5 MB.
+const FLEET_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 // WhatsApp plays these as voice notes / audio; anything else goes as a file.
 const WA_AUDIO_TYPES = ["audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac",
   "audio/amr"];
@@ -596,6 +599,14 @@ function createWhatsAppConversations(deps) {
       if (opened) return "package_flow_opened";
     }
 
+    // Fleet: a driver's payment report (docs/FLEET_PAYMENT_PROOF.md). Only
+    // phones Fleet takes part for are handled; every other message goes on
+    // exactly as before.
+    if (deps.fleetClaims && !request) {
+      const step = await fleetClaimStep(event, lang);
+      if (step) return step;
+    }
+
     // A tap on the package confirmation: OK is thanked and opens nothing;
     // Something's wrong goes on as a message to the package's business.
     const answer = await confirmationAnswer(event);
@@ -731,6 +742,70 @@ function createWhatsAppConversations(deps) {
     }
     await notifyNew(added.caseRef, added.preview);
     return outcome;
+  }
+
+  /**
+   * Offers the message to the Fleet claim step. The step may keep it in the
+   * business's thread (keep), answer in that thread (say) and read the
+   * picture (fetchImage).
+   *
+   * @param {object} event The received message.
+   * @param {string} lang The customer's language.
+   * @return {Promise<?string>} The outcome when Fleet handled it, else null.
+   */
+  async function fleetClaimStep(event, lang) {
+    let kept = null;
+    const ctx = {
+      event, lang,
+      kept: () => kept !== null,
+      fetchImage: async () => {
+        if (!event.media?.id || !deps.graphMedia) return null;
+        const {buffer, mimeType} = await deps.graphMedia(event.media.id);
+        if (!buffer || buffer.length > FLEET_IMAGE_MAX_BYTES) return null;
+        return {base64: buffer.toString("base64"),
+          mimeType: String(mimeType || event.media.mimeType || "")};
+      },
+      keep: async (businessId, {needsReply = false} = {}) => {
+        if (!kept) {
+          kept = await appendInbound({inboxId: businessId,
+            inboxName: await businessName(businessId), event, lang,
+            state: needsReply ? wa.CONVERSATION_STATE.NEEDS_REPLY :
+              wa.CONVERSATION_STATE.WAITING_CUSTOMER});
+        }
+        return {caseId: kept.caseRef.id,
+          mediaPath: kept.media?.filePath || ""};
+      },
+      say: async (text) => {
+        if (kept) return sendAuto(kept.caseRef, kept.conv, text);
+        const body = wa.freeFormBody({phone: event.from, text});
+        return body ? deps.send(body) : null;
+      },
+    };
+    const step = await deps.fleetClaims.handleInbound(ctx);
+    if (!step || step.handled !== true) return null;
+    if (kept && step.notify) await notifyNew(kept.caseRef, kept.preview);
+    return `fleet_${step.outcome || "handled"}`;
+  }
+
+  /**
+   * A free-form message to a customer inside a business's thread (Fleet's
+   * timers: the 2-day notice, asking a name). Recorded in the thread when
+   * there is one.
+   *
+   * @param {object} args {businessId, phone, text}.
+   * @return {Promise<object>} {ok}.
+   */
+  async function sayInThread({businessId, phone, text}) {
+    const caseRef = conversations().doc(wa.conversationId(businessId, phone));
+    const snap = await caseRef.get();
+    if (snap.exists) {
+      const out = await sendAuto(caseRef, {...snap.data(),
+        whatsappPhone: phone}, text);
+      return {ok: out?.sent?.ok === true};
+    }
+    const body = wa.freeFormBody({phone, text});
+    const sent = body ? await deps.send(body) : {ok: false};
+    return {ok: sent?.ok === true};
   }
 
   async function deliverAutos(caseRef, inboxId, phone, lang,
@@ -1232,6 +1307,7 @@ function createWhatsAppConversations(deps) {
     countTemplate,
     routingCandidates,
     handleInbound,
+    sayInThread,
     handleStatus,
     handleWebhookEvents,
     relayStaffMessage,

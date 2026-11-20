@@ -35,31 +35,25 @@ describe("Fleet WhatsApp: when a reminder goes out", () => {
 });
 
 describe("Fleet WhatsApp: what it says", () => {
-  it("the exact Zelle amount is the whole dollars owed and the driver's " +
-      "cents", () => {
-    assert.equal(fw.zelleAmountCents(35000, 17), 35017);
-    // Owed $349.83 after last month's 17 cents of credit: send $350.17,
-    // never $349.17 (66 cents short, and a reminder over pennies).
-    assert.equal(fw.zelleAmountCents(34983, 17), 35017);
-    assert.equal(fw.zelleAmountCents(35050, 17), 35117);
-    assert.equal(fw.zelleAmountCents(0, 17), 17);
-    assert.equal(fw.zelleAmountCents(35000, null), null);
-    assert.equal(fw.zelleAmountCents(35000, 100), null);
-  });
+  it("the personal cents are gone: no helper builds an amount from them",
+      () => {
+        assert.equal(fw.zelleAmountCents, undefined);
+      });
 
-  it("the reminder: status, amount, Zelle and exact amount, both languages",
+  it("the reminder: status, the plain amount owed, Zelle, both languages",
       () => {
         const values = fw.reminderValues({driverName: "Moussa",
           businessName: "Landa Shipping", businessPhone: "+1 718 807 6869",
           settings: {zelle: {name: "Landa Shipping", handle: "718-807-6869"}},
           kind: "late", dueDayKey: "2026-11-01", owedCents: 70000,
+          // An old caller may still pass them: they are ignored.
           personalCents: 9});
         assert.deepEqual(values, [
           "Moussa",
           "Landa Shipping", "was due on Nov 1, 2026 and is late", "$700.00",
-          "Landa Shipping (718-807-6869)", "$700.09",
+          "Landa Shipping (718-807-6869)", "$700.00",
           "Landa Shipping", "était due le 1 nov. 2026 et est en retard",
-          "700,00 $", "Landa Shipping (718-807-6869)", "700,09 $",
+          "700,00 $", "Landa Shipping (718-807-6869)", "700,00 $",
           "+1 718 807 6869",
         ]);
         assert.equal(fw.reminderValues({kind: "soon", dueDayKey: "2026-12-01",

@@ -137,7 +137,7 @@ describe("drivers on WhatsApp", () => {
     const params = byDriver["wa-d1"].body.template.components[0].parameters
         .map((p) => p.text);
     assert.equal(params[2], "is due today");
-    assert.equal(params[5], "$350.17", "send exactly, with the cents");
+    assert.equal(params[5], "$350.00", "the plain amount owed, no cents code");
     assert.equal(params[4], "WA Fleet Co (718-555-0100)");
     assert.equal(byDriver["wa-d1"].id,
         "reminder_wa-d1_wa-b1_2026-12-01");
@@ -216,32 +216,25 @@ describe("drivers on WhatsApp", () => {
       });
 });
 
-describe("personal cents stay unique", () => {
-  it("a driver added before an import and a sheet driver with the same " +
-      "cents: the later one gets the lowest free value", async () => {
-    const BIZ2 = "fleetcents-biz";
-    const at = (iso) => admin.firestore.Timestamp.fromDate(new Date(iso));
-    await Promise.all([
-      db.collection("fleetDrivers").doc("c-test").set({businessId: BIZ2,
-        name: "Test Driver", status: "active", personalCents: 1,
-        createdAt: at("2026-11-12T15:00:00Z")}),
-      db.collection("fleetDrivers").doc("c-sheet").set({businessId: BIZ2,
-        name: "Sheet Driver", status: "active", personalCents: 1,
-        importedAt: at("2026-11-12T20:00:00Z")}),
-      db.collection("fleetDrivers").doc("c-two").set({businessId: BIZ2,
-        name: "Two", status: "active", personalCents: 2,
-        importedAt: at("2026-11-12T20:00:00Z")}),
-      db.collection("fleetDrivers").doc("c-left").set({businessId: BIZ2,
-        name: "Left", status: "left", personalCents: 3}),
-    ]);
-    assert.equal(await handlers.ensurePersonalCents(BIZ2), 1);
-    const read = async (id) => (await db.collection("fleetDrivers").doc(id)
-        .get()).get("personalCents");
-    assert.equal(await read("c-test"), 1, "joined first, keeps .01");
-    assert.equal(await read("c-two"), 2);
-    assert.equal(await read("c-sheet"), 3,
-        "lowest value no active driver holds");
-    assert.equal(await read("c-left"), 3, "a driver who left is untouched");
-    assert.equal(await handlers.ensurePersonalCents(BIZ2), 0, "settled");
+describe("a late reminder waits while the driver's report is open", () => {
+  it("only the late reminder is paused (Q8)", async () => {
+    const business = (await db.collection("businesses").doc(BIZ).get())
+        .data();
+    await act(OWNER, "whatsapp_save", {enabled: true, onlyDriverIds: []});
+    await db.collection("fleetClaims").doc("wa-claim").set({businessId: BIZ,
+      driverId: "wa-d2", state: "waiting_bank", open: true,
+      amountCents: 35000, fromPhone: "+16465550002"});
+    sent.length = 0;
+    await handlers.remindBusiness(BIZ, business, "2026-12-01");
+    assert.deepEqual(sent.map((s) => s.row.driverId).sort(),
+        ["wa-d1", "wa-d4"], "wa-d2 is late and has an open report");
+    // An office-state report does not pause it.
+    await db.collection("fleetClaims").doc("wa-claim").update(
+        {state: "office"});
+    sent.length = 0;
+    await handlers.remindBusiness(BIZ, business, "2026-12-08");
+    assert.deepEqual(sent.map((s) => [s.row.driverId, s.row.reminder]),
+        [["wa-d2", "late"]], "a report in the office does not pause it");
+    await db.collection("fleetClaims").doc("wa-claim").delete();
   });
 });

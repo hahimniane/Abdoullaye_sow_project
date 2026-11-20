@@ -704,6 +704,12 @@ service cloud.firestore {
       allow read: if fleetRead(resource.data.businessId);
       allow write: if false;
     }
+    // What a driver reported on WhatsApp (docs/FLEET_PAYMENT_PROOF.md): a
+    // claim only, the bank deposit is the proof. Server-written.
+    match /fleetClaims/{id} {
+      allow read: if fleetRead(resource.data.businessId);
+      allow write: if false;
+    }
     match /parkingLots/{lotId} {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;

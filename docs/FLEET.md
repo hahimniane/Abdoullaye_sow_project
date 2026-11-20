@@ -236,3 +236,18 @@ unknown-deposit question waits (the office's "Zelle from the bank" list).
   on 2026-11-12. Meta first rejected the reminder as INCORRECT_CATEGORY;
   reworded as "Payment reminder from {{2}}: your rent bill {{3}}..." and
   resubmitted. Turn WhatsApp to drivers on only once both are APPROVED.
+
+## 10. Payment proof on WhatsApp (2026-11-19)
+
+Replaces the personal cents of sections 1, 2, 8 and 9: a driver sends the
+Zelle screenshot to Laawol's WhatsApp number as a claim, and the deposit in
+the business's bank is the proof. `fleetDrivers.personalCents` is no longer
+assigned, shown or used (old values stay stored); reminders say the plain
+amount owed. Spec, matching rules, conversation, timers and the office API:
+docs/FLEET_PAYMENT_PROOF.md. Code: `fleet_claims.js` (pure, tested in
+`test/fleet-claims.test.js`), `fleet_bank.matchDeposit`, the claim and bank
+parts of `fleet_handlers.js` (`test/fleet-claims-callables.test.js`), the
+inbound hook in `whatsapp_conversations.handleInbound`, the picture reading
+in `index.js` (`ANTHROPIC_API_KEY` on `whatsappWebhook`). Q2: a payment whose
+bank date is on or before the late-fee day and that covers the rent bill
+voids that bill's unpaid late fee (`voidReason: "paid_on_time"`).
