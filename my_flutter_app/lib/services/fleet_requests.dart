@@ -72,6 +72,14 @@ const fleetRefusalReasons = <String>[
   'fleet_no_phone',
   'fleet_driver_left',
   'fleet_staff_only',
+  'fleet_claim_closed',
+  'fleet_claim_no_driver',
+  'fleet_deposit_not_waiting',
+  'fleet_bad_name',
+  'fleet_zelle_missing',
+  'fleet_car_overlap',
+  'fleet_already_returned',
+  'fleet_driver_has_plate',
 ];
 
 /// A Fleet call the server refused, or that never reached it.
@@ -294,6 +302,48 @@ abstract final class FleetRequests {
     required String creditId,
     required String driverId,
   }) => _req('bank_assign', b, {'creditId': creditId, 'driverId': driverId});
+
+  /// The deposit [creditId] (it must be on the waiting list) pays the claim's
+  /// driver; the bank's amount and date are recorded.
+  static Map<String, Object?> claimAssign(
+    String b, {
+    required String claimId,
+    required String creditId,
+  }) => _req('claim_assign', b, {'claimId': claimId, 'creditId': creditId});
+
+  static Map<String, Object?> claimClose(String b, String claimId) =>
+      _req('claim_close', b, {'claimId': claimId});
+
+  /// `{url: String|null, deleted: bool}`: the screenshot's download link.
+  static Map<String, Object?> claimPhoto(String b, String claimId) =>
+      _req('claim_photo', b, {'claimId': claimId});
+
+  /// Replaces the driver's remembered payer names; answers `{names}`.
+  static Map<String, Object?> payerNamesSave(
+    String b, {
+    required String driverId,
+    required List<String> names,
+  }) => _req('payer_names_save', b, {'driverId': driverId, 'names': names});
+
+  /// Fleet admin: a new plate fee and/or due day; answers `{effectiveDayKey}`.
+  static Map<String, Object?> assignmentUpdate(
+    String b, {
+    required String assignmentId,
+    int? rentCents,
+    int? dueDay,
+  }) => _req('assignment_update', b, {
+    'assignmentId': assignmentId,
+    'rentCents': ?rentCents,
+    'dueDay': ?dueDay,
+  });
+
+  /// Fleet admin: the driver left on [endDayKey]; their plate comes back and
+  /// bills stop. Answers `{ended}`.
+  static Map<String, Object?> driverLeave(
+    String b, {
+    required String driverId,
+    required String endDayKey,
+  }) => _req('driver_leave', b, {'driverId': driverId, 'endDayKey': endDayKey});
 
   static Map<String, Object?> bankCheckNow(String b) =>
       _req('bank_check_now', b);
@@ -635,9 +685,9 @@ FleetBankStatus readFleetBankStatus(Object? answer) {
 }
 
 /// The reasons a bank deposit waits, as the server names them; anything else
-/// reads as an unknown sender.
+/// (`two_drivers` is no longer produced) reads as an unknown sender.
 const fleetWaitingReasons = <String>[
-  'two_drivers',
+  'shared_payer',
   'undone',
   'possible_duplicate',
   'not_zelle',

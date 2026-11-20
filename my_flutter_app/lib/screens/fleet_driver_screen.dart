@@ -8,6 +8,7 @@ import '../theme/app_spacing.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/fleet_widgets.dart';
 import 'fleet_driver_sheets.dart';
+import 'fleet_payer_names_card.dart';
 
 /// A driver's page (docs/FLEET.md section 6): who they are, what they owe,
 /// the plate they have, their track record, office notes, friends who drove,
@@ -139,8 +140,11 @@ class _FleetDriverScreenState extends State<FleetDriverScreen> {
     final index = s.index;
     final current = index.currentByDriver[driver.id];
     final car = current == null ? null : index.carById[current.carId];
-    final bills = [...?index.billsByDriver[driver.id]]
-      ..sort((a, b) => b.dueDayKey.compareTo(a.dueDayKey));
+    // A bill made by a fault of ours is on no list and in no count.
+    final bills = [
+      for (final b in index.billsByDriver[driver.id] ?? const <FleetBill>[])
+        if (!b.billedByMistake) b,
+    ]..sort((a, b) => b.dueDayKey.compareTo(a.dueDayKey));
     final payments = [...?index.paymentsByDriver[driver.id]]
       ..sort((a, b) {
         final d = b.paidDayKey.compareTo(a.paidDayKey);
@@ -151,7 +155,6 @@ class _FleetDriverScreenState extends State<FleetDriverScreen> {
       index.assignmentsByDriver[driver.id] ?? const [],
       s.todayKey,
     );
-    final code = fleetZelleAmountText(balance.owedCents, driver.personalCents);
     final timeline = fleetDriverTimeline(driver, index);
     final notes = [...?index.notesByDriver[driver.id]]
       ..sort((a, b) => b.atMs - a.atMs);
@@ -253,14 +256,6 @@ class _FleetDriverScreenState extends State<FleetDriverScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                code == null
-                    ? l10n.fltNoZelleCents
-                    : l10n.fltZelleAmountFor(code),
-                key: const Key('fleet-driver-zelle'),
-                style: const TextStyle(color: AppColors.muted, fontSize: 13),
-              ),
               const SizedBox(height: AppSpacing.lg),
               Wrap(
                 spacing: AppSpacing.sm,
@@ -296,6 +291,24 @@ class _FleetDriverScreenState extends State<FleetDriverScreen> {
                             )
                           : const Icon(Icons.chat_outlined, size: 18),
                       label: Text(l10n.fltSendReminder),
+                    ),
+                  if (fleetCanMarkLeft(admin: admin, driver: driver))
+                    OutlinedButton(
+                      key: const Key('fleet-driver-left'),
+                      style: ButtonStyle(
+                        minimumSize: WidgetStateProperty.all(
+                          const Size(48, 48),
+                        ),
+                      ),
+                      onPressed: () => showFleetSheet(
+                        context,
+                        (_) => FleetDriverLeftSheet(
+                          controller: c,
+                          driver: driver,
+                          plate: car?.plate ?? '',
+                        ),
+                      ),
+                      child: Text(l10n.fltDriverLeft),
                     ),
                 ],
               ),
@@ -344,6 +357,20 @@ class _FleetDriverScreenState extends State<FleetDriverScreen> {
                     if (admin) ...[
                       const SizedBox(height: AppSpacing.md),
                       OutlinedButton(
+                        key: const Key('fleet-driver-fee'),
+                        onPressed: () => showFleetSheet(
+                          context,
+                          (_) => FleetPlateFeeSheet(
+                            controller: c,
+                            driver: driver,
+                            assignment: current,
+                            plate: car.plate,
+                          ),
+                        ),
+                        child: Text(l10n.fltPlateFeeChange),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      OutlinedButton(
                         key: const Key('fleet-driver-return'),
                         onPressed: () => showFleetSheet(
                           context,
@@ -377,6 +404,8 @@ class _FleetDriverScreenState extends State<FleetDriverScreen> {
                   ],
                 ),
         ),
+        const SizedBox(height: AppSpacing.md),
+        FleetPayerNamesCard(controller: c, driver: driver),
         const SizedBox(height: AppSpacing.md),
         FleetCard(
           title: l10n.fltTrackRecord,

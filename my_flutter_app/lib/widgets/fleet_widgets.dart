@@ -59,6 +59,22 @@ String fleetRefusalText(AppLocalizations l10n, FleetFailure failure) {
       return l10n.fltRefusalDriverLeft;
     case 'fleet_staff_only':
       return l10n.fltRefusalStaffOnly;
+    case 'fleet_claim_closed':
+      return l10n.fltRefusalClaimClosed;
+    case 'fleet_claim_no_driver':
+      return l10n.fltRefusalClaimNoDriver;
+    case 'fleet_deposit_not_waiting':
+      return l10n.fltRefusalDepositNotWaiting;
+    case 'fleet_bad_name':
+      return l10n.fltRefusalBadName;
+    case 'fleet_zelle_missing':
+      return l10n.fltRefusalZelleMissing;
+    case 'fleet_car_overlap':
+      return l10n.fltRefusalCarOverlap;
+    case 'fleet_already_returned':
+      return l10n.fltRefusalAlreadyReturned;
+    case 'fleet_driver_has_plate':
+      return l10n.fltRefusalDriverHasPlate;
   }
   if (failure.offline) return l10n.fltErrOffline;
   if (failure.notAllowed) return l10n.fltRefusalStaffOnly;
@@ -68,8 +84,8 @@ String fleetRefusalText(AppLocalizations l10n, FleetFailure failure) {
 /// Why a bank deposit waits, in the office's words.
 String fleetWaitingReasonText(AppLocalizations l10n, String reason) {
   switch (reason) {
-    case 'two_drivers':
-      return l10n.fltWaitingTwoDrivers;
+    case 'shared_payer':
+      return l10n.fltWaitingSharedPayer;
     case 'undone':
       return l10n.fltWaitingUndone;
     case 'possible_duplicate':
@@ -83,6 +99,23 @@ String fleetWaitingReasonText(AppLocalizations l10n, String reason) {
   }
   return l10n.fltWaitingUnknown;
 }
+
+/// What an open payment claim waits for, in the office's words.
+String fleetClaimSentenceText(AppLocalizations l10n, FleetClaimSentence s) =>
+    switch (s) {
+      FleetClaimSentence.askingDriver => l10n.fltClaimAskingDriver,
+      FleetClaimSentence.askingAmount => l10n.fltClaimAskingAmount,
+      FleetClaimSentence.askingName => l10n.fltClaimAskingName,
+      FleetClaimSentence.waitingBank => l10n.fltClaimWaitingBank,
+      FleetClaimSentence.noDepositAfterTwoDays => l10n.fltClaimNoDeposit2Days,
+      FleetClaimSentence.wrongRecipient => l10n.fltClaimWrongRecipient,
+      FleetClaimSentence.depositTaken => l10n.fltClaimDepositTaken,
+      FleetClaimSentence.tooOld => l10n.fltClaimTooOld,
+      FleetClaimSentence.notADriver => l10n.fltClaimNotADriver,
+      FleetClaimSentence.twoClaims => l10n.fltClaimTwoClaims,
+      FleetClaimSentence.needsPerson => l10n.fltClaimNeedsPerson,
+      FleetClaimSentence.none => '',
+    };
 
 /// The words for a payment method.
 String fleetMethodText(AppLocalizations l10n, String method) {

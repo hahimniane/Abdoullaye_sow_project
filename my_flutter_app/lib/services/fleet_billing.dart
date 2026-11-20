@@ -419,46 +419,6 @@ FleetBalance fleetDriverBalance(
   );
 }
 
-/// Personal cents (1-99, unique) for active drivers. A driver holding a valid
-/// value nobody earlier holds keeps it; the others get the lowest free value
-/// (oldest first). Beyond 99 drivers the extra get null.
-Map<String, int?> fleetAssignPersonalCents(
-  List<({String id, num? personalCents, num createdAt})> activeDrivers,
-) {
-  final ordered = [...activeDrivers]
-    ..sort((x, y) {
-      final t = x.createdAt.compareTo(y.createdAt);
-      return t != 0 ? t : x.id.compareTo(y.id);
-    });
-  final taken = <int>{};
-  final result = <String, int?>{};
-  for (final d in ordered) {
-    final v = d.personalCents;
-    if (v != null &&
-        v == v.truncate() &&
-        v >= 1 &&
-        v <= 99 &&
-        !taken.contains(v.toInt())) {
-      taken.add(v.toInt());
-      result[d.id] = v.toInt();
-    }
-  }
-  var next = 1;
-  for (final d in ordered) {
-    if (result.containsKey(d.id)) continue;
-    while (next <= 99 && taken.contains(next)) {
-      next++;
-    }
-    if (next > 99) {
-      result[d.id] = null;
-    } else {
-      taken.add(next);
-      result[d.id] = next;
-    }
-  }
-  return result;
-}
-
 /// Who had the car on a day: the assigned driver and the friend who drove it.
 ({String? driverId, String? substituteId}) fleetWhoDroveAt(
   Iterable<FleetAssignment> assignments,

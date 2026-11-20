@@ -15428,9 +15428,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fltSortPaid => 'Most paid first';
 
   @override
-  String get fltSortZelleCents => 'Zelle cents';
-
-  @override
   String get fltNoDriverMatches =>
       'No driver matches. Change the search or the filters.';
 
@@ -15457,11 +15454,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fltTileCollected => 'Collected this month';
-
-  @override
-  String fltTileOfBilled(String amount) {
-    return 'of $amount billed';
-  }
 
   @override
   String get fltTileNothingBilled => 'Nothing billed yet';
@@ -15588,15 +15580,6 @@ class AppLocalizationsEn extends AppLocalizations {
       one: '1 day',
     );
     return '$_temp0';
-  }
-
-  @override
-  String get fltNoZelleCents =>
-      'This driver has no Zelle cents yet (only active drivers get them).';
-
-  @override
-  String fltZelleAmountFor(String amount) {
-    return 'Zelle amount for this driver: $amount. The last two digits are the driver’s own, so the amount tells us who paid.';
   }
 
   @override
@@ -16188,10 +16171,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get fltWaitingTwoDrivers =>
-      'It could be from two drivers: pick the right one.';
-
-  @override
   String get fltWaitingUndone =>
       'Its payment was undone: pick the right driver.';
 
@@ -16425,6 +16404,292 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get fltScheduleSaveOff =>
       'Turn the pay-day bank checks off? Deposits still pay drivers when the bank updates on its own, at no cost.';
+
+  @override
+  String get fltRefusalClaimClosed =>
+      'This report is closed or was already paid.';
+
+  @override
+  String get fltRefusalClaimNoDriver => 'This report has no driver yet.';
+
+  @override
+  String get fltRefusalDepositNotWaiting =>
+      'That deposit is not waiting for the office.';
+
+  @override
+  String get fltRefusalBadName =>
+      'That is not a person’s name (at least two words, not an account or an app).';
+
+  @override
+  String get fltRefusalZelleMissing =>
+      'Add the business’s Zelle name in the Fleet settings first.';
+
+  @override
+  String get fltRefusalCarOverlap =>
+      'This plate is still with another driver on that date.';
+
+  @override
+  String get fltRefusalAlreadyReturned => 'This plate was already returned.';
+
+  @override
+  String get fltRefusalDriverHasPlate =>
+      'This driver still has a plate. Use Driver has left, which returns it.';
+
+  @override
+  String get fltWaitingSharedPayer =>
+      'This person pays for more than one driver. Pick the driver.';
+
+  @override
+  String get fltClaimsTitle => 'Reported by drivers, waiting for the bank';
+
+  @override
+  String get fltClaimsHint =>
+      'A driver sent a payment screenshot on WhatsApp. Nobody is marked paid from a picture: the deposit in the bank is the proof.';
+
+  @override
+  String get fltClaimsEmpty => 'No payment reported by a driver is waiting.';
+
+  @override
+  String get fltClaimsLoadFailed =>
+      'The reported payments could not be loaded. Try again in a moment.';
+
+  @override
+  String get fltClaimViewPhoto => 'View photo';
+
+  @override
+  String get fltClaimNoPhoto => 'No photo';
+
+  @override
+  String get fltClaimPhotoGone => 'Photo not available';
+
+  @override
+  String get fltClaimPhotoTitle => 'Payment screenshot';
+
+  @override
+  String get fltClaimTheirs => 'This deposit is theirs';
+
+  @override
+  String get fltClaimPickDeposit => 'Pick the deposit that is theirs.';
+
+  @override
+  String get fltClaimNoDeposits => 'No deposit is waiting';
+
+  @override
+  String get fltClaimDifferentAmount =>
+      'This deposit is for a different amount. The bank’s amount is what is recorded.';
+
+  @override
+  String get fltClaimSameAmount => 'Same amount';
+
+  @override
+  String get fltClaimGiveDeposit => 'Give this deposit';
+
+  @override
+  String get fltClaimGiveTitle => 'Give this deposit?';
+
+  @override
+  String fltClaimGiveMessage(String amount, String sender, String who) {
+    return 'Give this $amount deposit from $sender to $who? It pays their bills, and their next deposits from the same sender are paid by themselves.';
+  }
+
+  @override
+  String get fltClaimUnknownSender => 'an unknown sender';
+
+  @override
+  String get fltClaimCloseTitle => 'Close this report?';
+
+  @override
+  String fltClaimCloseMessage(String who) {
+    return 'Close this report from $who? The bill stays unpaid and nothing is recorded.';
+  }
+
+  @override
+  String get fltClaimClosed => 'Report closed.';
+
+  @override
+  String get fltClaimAskingDriver =>
+      'Waiting for the sender to say which driver this payment is for.';
+
+  @override
+  String get fltClaimAskingAmount =>
+      'Waiting for the driver to type the amount.';
+
+  @override
+  String get fltClaimAskingName =>
+      'Waiting for the driver to say the name on the account they paid from.';
+
+  @override
+  String get fltClaimNoDeposit2Days =>
+      'The deposit has not shown in the bank after 2 days. The driver was told.';
+
+  @override
+  String get fltClaimWaitingBank =>
+      'Waiting for the deposit to show in the bank.';
+
+  @override
+  String get fltClaimWrongRecipient =>
+      'The payment went to someone other than this business. Look at the photo.';
+
+  @override
+  String get fltClaimDepositTaken =>
+      'The deposit it matches was already used for another payment.';
+
+  @override
+  String get fltClaimTooOld => 'The screenshot is more than 10 days old.';
+
+  @override
+  String get fltClaimNotADriver =>
+      'This phone is not one of your drivers. Find out who the payment is for.';
+
+  @override
+  String get fltClaimTwoClaims =>
+      'Two claims point to the same deposit. Pick who it belongs to.';
+
+  @override
+  String get fltClaimNeedsPerson => 'A person needs to look at this claim.';
+
+  @override
+  String get fltPayerNamesTitle => 'Names this driver pays from';
+
+  @override
+  String get fltPayerNamesHint =>
+      'A Zelle from one of these names pays this driver by itself.';
+
+  @override
+  String get fltPayerNamesTwoWords =>
+      'Write a person’s name: at least two words, not an account or an app.';
+
+  @override
+  String get fltPayerNamesEmpty =>
+      'No name yet. It is remembered the first time a deposit is matched to this driver.';
+
+  @override
+  String get fltPayerNameRemove => 'Remove this name';
+
+  @override
+  String get fltPayerNameField => 'Name on the Zelle account';
+
+  @override
+  String get fltPayerNameAdd => 'Add name';
+
+  @override
+  String get fltPayerNameDuplicate => 'That name is already on the list.';
+
+  @override
+  String get fltPayerNameTypeFirst => 'Type a name first.';
+
+  @override
+  String get fltPayerNameRemoveTitle => 'Remove this name?';
+
+  @override
+  String fltPayerNameRemoveMessage(String driver, String name) {
+    return 'Stop paying $driver automatically from $name? Deposits from this name will wait for the office again.';
+  }
+
+  @override
+  String get fltPlateFeeChange => 'Change plate fee';
+
+  @override
+  String get fltPlateFeeSave => 'Save plate fee';
+
+  @override
+  String get fltPlateFeeAmountMonth => 'New plate fee a month (\$)';
+
+  @override
+  String get fltPlateFeeAmountWeek => 'New plate fee a week (\$)';
+
+  @override
+  String get fltPlateFeeDueMonth => 'Due day of the month, optional (1–28)';
+
+  @override
+  String get fltPlateFeeDueWeek =>
+      'Due weekday, optional (1 = Monday … 7 = Sunday)';
+
+  @override
+  String fltPlateFeeApplies(String day) {
+    return 'Applies from $day. Bills already made are not changed.';
+  }
+
+  @override
+  String get fltPlateFeeNothingChanged => 'Nothing was changed.';
+
+  @override
+  String get fltPlateFeeConfirmTitle => 'Change the plate fee?';
+
+  @override
+  String fltPlateFeeConfirmBoth(
+    String name,
+    String plate,
+    String amount,
+    String dueDay,
+    String day,
+  ) {
+    return 'Change $name’s plate fee for $plate to $amount, due day $dueDay? It applies from $day. Bills already made are not changed.';
+  }
+
+  @override
+  String fltPlateFeeConfirmFee(
+    String name,
+    String plate,
+    String amount,
+    String day,
+  ) {
+    return 'Change $name’s plate fee for $plate to $amount? It applies from $day. Bills already made are not changed.';
+  }
+
+  @override
+  String fltPlateFeeConfirmDue(
+    String name,
+    String plate,
+    String dueDay,
+    String day,
+  ) {
+    return 'Change the due day of $name’s plate fee for $plate to $dueDay? It applies from $day. Bills already made are not changed.';
+  }
+
+  @override
+  String get fltDriverLeft => 'Driver has left';
+
+  @override
+  String get fltDriverLeftOn => 'Left on';
+
+  @override
+  String get fltDriverLeftHintPlate =>
+      'The plate comes back on this date and bills stop.';
+
+  @override
+  String get fltDriverLeftHintNoPlate => 'Bills stop on this date.';
+
+  @override
+  String get fltDriverLeftDone =>
+      'The driver is marked as left. Their plate came back and their bills stopped.';
+
+  @override
+  String fltDriverLeftConfirmPlate(String name, String day, String plate) {
+    return 'Mark $name as having left on $day? Plate $plate comes back on that date and bills stop.';
+  }
+
+  @override
+  String fltDriverLeftConfirmNoPlate(String name, String day) {
+    return 'Mark $name as having left on $day? Bills stop.';
+  }
+
+  @override
+  String get fltFeeOwedMarker => '+ fee owed';
+
+  @override
+  String get fltFeeOwedHint => 'A late fee or charge is still owed this month';
+
+  @override
+  String fltTilePlateFeesPaid(int percent, String paid, String billed) {
+    return '$percent% of this month’s plate fees paid ($paid of $billed)';
+  }
+
+  @override
+  String get fltPaperworkScopeDriver => 'Plates with a driver';
+
+  @override
+  String get fltPaperworkScopeAll => 'Every plate';
 
   @override
   String get pcsErrPiecesTooMany => 'A package can have at most 60 pieces.';

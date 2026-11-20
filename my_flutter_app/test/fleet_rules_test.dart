@@ -167,20 +167,6 @@ void main() {
       });
     }
 
-    for (final c in cases('personalCases')) {
-      test('personal cents: ${c['name']}', () {
-        final got = fleetAssignPersonalCents([
-          for (final d in c['drivers'] as List)
-            (
-              id: (d as J)['id'] as String,
-              personalCents: d['personalCents'] as num?,
-              createdAt: d['createdAt'] as num,
-            ),
-        ]);
-        expect(got, c['expect']);
-      });
-    }
-
     for (final c in cases('whoDroveCases')) {
       test('who drove: ${c['name']}', () {
         final got = fleetWhoDroveAt(
@@ -235,14 +221,6 @@ void main() {
       expect(fleetCentsToInput(120050), '1200.50');
       expect(fleetCentsToInput(120000), '1200');
       expect(fleetCentsToInput(0), '');
-    });
-
-    test('the Zelle amount rounds the dollars up and adds the cents', () {
-      expect(fleetZelleAmountText(120000, 7), r'$1,200.07');
-      expect(fleetZelleAmountText(120001, 7), r'$1,201.07');
-      expect(fleetZelleAmountText(0, 17), r'$0.17');
-      expect(fleetZelleAmountText(5000, null), isNull);
-      expect(fleetZelleAmountText(5000, 100), isNull);
     });
 
     test('money reads in the language asked', () {
@@ -368,7 +346,9 @@ void main() {
         for (final r in fleetFilterPeriodRows(rows, f)) r.driverId,
       ];
       expect(ids(const FleetPaymentsFilter()), ['d1', 'd2', 'd3']);
+      // d1's plate fee is paid but a late fee is still owed: that is Owes.
       expect(ids(const FleetPaymentsFilter(state: FleetCellState.owed)), [
+        'd1',
         'd3',
       ]);
       expect(ids(const FleetPaymentsFilter(late: true)), ['d1', 'd2', 'd3']);
@@ -380,7 +360,7 @@ void main() {
       final counts = fleetPeriodCounts(rows, FleetDriverView.active);
       expect(
         [counts.owed, counts.part, counts.paid, counts.late],
-        [1, 1, 1, 3],
+        [2, 1, 0, 3],
       );
     });
 
@@ -389,15 +369,17 @@ void main() {
       expect(t.collectedCents, 120000);
       expect(t.lateDrivers, 3);
       expect(t.owingDrivers, 3);
-      expect(t.dueThisMonthCents, 90000 + 90000 + 90000 + 5000);
+      // Only the plate-fee bills of the month: the late fee is not part.
+      expect(t.plateFeesBilledCents, 90000 * 3);
+      expect(t.plateFeesPaidCents, 90000 + 30000);
     });
   });
 
   group('drivers and their filters', () {
     final data = FleetData(
       drivers: const [
-        FleetDriver(id: 'd1', name: 'Zed', personalCents: 5),
-        FleetDriver(id: 'd2', name: 'Amy', personalCents: 2, creditCents: 100),
+        FleetDriver(id: 'd1', name: 'Zed'),
+        FleetDriver(id: 'd2', name: 'Amy', creditCents: 100),
         FleetDriver(id: 'd3', name: 'Bob', status: 'left'),
         FleetDriver(id: 'd4', name: 'Cat'),
       ],
@@ -447,9 +429,9 @@ void main() {
         names(const FleetDriverFilter(view: FleetDriverView.all)).length,
         4,
       );
-      expect(names(const FleetDriverFilter(sort: FleetDriverSort.cents)), [
-        'Amy',
+      expect(names(const FleetDriverFilter(sort: FleetDriverSort.owed)), [
         'Zed',
+        'Amy',
         'Cat',
       ]);
       expect(names(const FleetDriverFilter(query: 'b2')), ['Amy']);
@@ -973,7 +955,7 @@ void main() {
             'id': 'c1',
             'amountCents': 35017,
             'senderName': 'AMY',
-            'reason': 'two_drivers',
+            'reason': 'shared_payer',
           },
           {'id': '', 'amountCents': 5},
           {'id': 'c2', 'amountCents': 0},
@@ -985,7 +967,7 @@ void main() {
       expect(s.connected, isTrue);
       expect(s.quote.centsEach, 10);
       expect(s.waiting.length, 1);
-      expect(s.waiting.first.reason, 'two_drivers');
+      expect(s.waiting.first.reason, 'shared_payer');
       expect(s.removed.single.paymentId, 'p1');
       expect(readFleetBankStatus(null).connected, isFalse);
     });

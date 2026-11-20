@@ -10,16 +10,30 @@ class FakeFleetSource implements FleetSource {
   FakeFleetSource({
     FleetData data = FleetData.empty,
     Map<String, dynamic>? business,
+    List<FleetClaim> claims = const [],
   }) : _data = data,
-       _business = business ?? const {};
+       _business = business ?? const {},
+       _claims = claims;
 
   FleetData _data;
   Map<String, dynamic> _business;
   final _dataListeners = <StreamController<FleetData>>[];
   final _businessListeners = <StreamController<Map<String, dynamic>>>[];
+  List<FleetClaim> _claims;
+  final _claimListeners = <StreamController<List<FleetClaim>>>[];
 
   /// Make the data read fail with this error instead of answering.
   Object? failWith;
+
+  /// Make the claims read fail (the rest of Fleet keeps working).
+  Object? claimsFailWith;
+
+  void setClaims(List<FleetClaim> claims) {
+    _claims = claims;
+    for (final c in _claimListeners) {
+      c.add(claims);
+    }
+  }
 
   void set(FleetData data) {
     _data = data;
@@ -43,6 +57,18 @@ class FakeFleetSource implements FleetSource {
       scheduleMicrotask(() => c.addError(failWith!));
     } else {
       scheduleMicrotask(() => c.add(_data));
+    }
+    return c.stream;
+  }
+
+  @override
+  Stream<List<FleetClaim>> watchClaims(String businessId) {
+    final c = StreamController<List<FleetClaim>>();
+    _claimListeners.add(c);
+    if (claimsFailWith != null) {
+      scheduleMicrotask(() => c.addError(claimsFailWith!));
+    } else {
+      scheduleMicrotask(() => c.add(_claims));
     }
     return c.stream;
   }
@@ -80,6 +106,12 @@ class FakeFleetBackend {
   /// What `bank_status` answers.
   Object? bankAnswer;
 
+  /// What `claim_photo` answers as `url` (null: no photo).
+  String? photoUrl = 'https://example.test/shot.png';
+
+  /// What `assignment_update` answers as `effectiveDayKey`.
+  String effectiveDayKey = '2026-12-01';
+
   /// When set, every call waits for it.
   Completer<void>? gate;
 
@@ -110,6 +142,22 @@ class FakeFleetBackend {
         return _assignmentStart(payload);
       case 'bank_status':
         return bankAnswer ?? {'success': true};
+      case 'claim_photo':
+        return {'success': true, 'url': photoUrl, 'deleted': photoUrl == null};
+      case 'claim_assign':
+      case 'claim_close':
+        // The server closes the claim: it leaves the open list.
+        source.setClaims([
+          for (final c in source._claims)
+            if (c.id != payload['claimId']) c,
+        ]);
+        return {'success': true};
+      case 'payer_names_save':
+        return _payerNames(payload);
+      case 'assignment_update':
+        return {'success': true, 'effectiveDayKey': effectiveDayKey};
+      case 'driver_leave':
+        return _driverLeave(payload);
       default:
         return {'success': true};
     }
@@ -228,7 +276,6 @@ class FakeFleetBackend {
         id: id,
         name: d['name'] as String,
         phone: d['phone'] as String,
-        personalCents: 9,
       ),
     ];
     _put(
@@ -243,6 +290,74 @@ class FakeFleetBackend {
       ),
     );
     return {'success': true, 'driverId': id};
+  }
+
+  Map<String, Object?> _payerNames(Map<String, Object?> p) {
+    final names = fleetCleanPayerNames(p['names'] as List);
+    _put(
+      FleetData(
+        drivers: [
+          for (final d in data.drivers)
+            if (d.id == p['driverId'])
+              FleetDriver(
+                id: d.id,
+                name: d.name,
+                phone: d.phone,
+                payerNames: names,
+              )
+            else
+              d,
+        ],
+        cars: data.cars,
+        assignments: data.assignments,
+        bills: data.bills,
+        payments: data.payments,
+        notes: data.notes,
+        friends: data.friends,
+      ),
+    );
+    return {'success': true, 'names': names};
+  }
+
+  Map<String, Object?> _driverLeave(Map<String, Object?> p) {
+    final id = p['driverId'] as String;
+    _put(
+      FleetData(
+        drivers: [
+          for (final d in data.drivers)
+            if (d.id == id)
+              FleetDriver(
+                id: d.id,
+                name: d.name,
+                phone: d.phone,
+                status: 'left',
+              )
+            else
+              d,
+        ],
+        cars: data.cars,
+        assignments: [
+          for (final a in data.assignments)
+            if (a.driverId == id && a.isOpen)
+              FleetAssignment(
+                id: a.id,
+                carId: a.carId,
+                driverId: a.driverId,
+                startDayKey: a.startDayKey,
+                endDayKey: p['endDayKey'] as String,
+                rentCents: a.rentCents,
+                dueDay: a.dueDay,
+              )
+            else
+              a,
+        ],
+        bills: data.bills,
+        payments: data.payments,
+        notes: data.notes,
+        friends: data.friends,
+      ),
+    );
+    return {'success': true, 'ended': 1};
   }
 
   Map<String, Object?> _assignmentStart(Map<String, Object?> p) {

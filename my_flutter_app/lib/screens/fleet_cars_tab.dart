@@ -26,25 +26,41 @@ class FleetCarsTab extends StatefulWidget {
 
 class _FleetCarsTabState extends State<FleetCarsTab> {
   bool _paperwork = false;
+
+  /// Paperwork lists the plates with a driver; "Every plate" is the other
+  /// choice.
+  FleetPaperworkScope _scope = FleetPaperworkScope.driver;
   FleetCarFilter _filter = const FleetCarFilter();
 
   FleetState? _state;
   FleetCarFilter? _appliedFilter;
   bool? _appliedPaperwork;
+  FleetPaperworkScope? _appliedScope;
   List<FleetCarRow> _rows = const [];
   Map<FleetExpiry, int> _counts = const {};
 
   void _recompute(FleetState s) {
     if (identical(_state, s) &&
         _appliedFilter == _filter &&
-        _appliedPaperwork == _paperwork) {
+        _appliedPaperwork == _paperwork &&
+        _appliedScope == _scope) {
       return;
     }
-    _rows = fleetFilterCarRows(s.carRows, _filter, byExpiry: _paperwork);
-    _counts = fleetPaperworkCounts(s.carRows);
+    // Paperwork counts and lists the plates in its scope; the Plates view
+    // chips do not apply there.
+    final base = _paperwork
+        ? fleetCarsInPaperworkScope(s.carRows, _scope)
+        : s.carRows;
+    _rows = fleetFilterCarRows(
+      base,
+      _paperwork ? _filter.copyWith(view: FleetCarView.all) : _filter,
+      byExpiry: _paperwork,
+    );
+    _counts = fleetPaperworkCounts(base);
     _state = s;
     _appliedFilter = _filter;
     _appliedPaperwork = _paperwork;
+    _appliedScope = _scope;
   }
 
   void _set(FleetCarFilter f) => setState(() => _filter = f);
@@ -108,33 +124,60 @@ class _FleetCarsTabState extends State<FleetCarsTab> {
                             onChanged: (q) => _set(_filter.copyWith(query: q)),
                           ),
                           const SizedBox(height: AppSpacing.sm),
-                          Wrap(
-                            spacing: 6,
-                            children: [
-                              for (final (v, label) in [
-                                (FleetCarView.all, l10n.fltCarsAll),
-                                (FleetCarView.driver, l10n.fltCarsWithDriver),
-                                (FleetCarView.free, l10n.fltCarsFree),
-                              ])
-                                FleetFilterChip(
-                                  label: label,
-                                  count: switch (v) {
-                                    FleetCarView.all => s.carRows.length,
-                                    FleetCarView.driver =>
-                                      s.carRows
-                                          .where((r) => r.hasDriver)
-                                          .length,
-                                    FleetCarView.free =>
-                                      s.carRows
-                                          .where((r) => !r.hasDriver)
-                                          .length,
-                                  },
-                                  selected: _filter.view == v,
-                                  onSelected: () =>
-                                      _set(_filter.copyWith(view: v)),
-                                ),
-                            ],
-                          ),
+                          if (_paperwork)
+                            Wrap(
+                              spacing: 6,
+                              children: [
+                                for (final (v, label) in [
+                                  (
+                                    FleetPaperworkScope.driver,
+                                    l10n.fltPaperworkScopeDriver,
+                                  ),
+                                  (
+                                    FleetPaperworkScope.all,
+                                    l10n.fltPaperworkScopeAll,
+                                  ),
+                                ])
+                                  FleetFilterChip(
+                                    label: label,
+                                    count: fleetCarsInPaperworkScope(
+                                      s.carRows,
+                                      v,
+                                    ).length,
+                                    selected: _scope == v,
+                                    onSelected: () =>
+                                        setState(() => _scope = v),
+                                  ),
+                              ],
+                            )
+                          else
+                            Wrap(
+                              spacing: 6,
+                              children: [
+                                for (final (v, label) in [
+                                  (FleetCarView.all, l10n.fltCarsAll),
+                                  (FleetCarView.driver, l10n.fltCarsWithDriver),
+                                  (FleetCarView.free, l10n.fltCarsFree),
+                                ])
+                                  FleetFilterChip(
+                                    label: label,
+                                    count: switch (v) {
+                                      FleetCarView.all => s.carRows.length,
+                                      FleetCarView.driver =>
+                                        s.carRows
+                                            .where((r) => r.hasDriver)
+                                            .length,
+                                      FleetCarView.free =>
+                                        s.carRows
+                                            .where((r) => !r.hasDriver)
+                                            .length,
+                                    },
+                                    selected: _filter.view == v,
+                                    onSelected: () =>
+                                        _set(_filter.copyWith(view: v)),
+                                  ),
+                              ],
+                            ),
                           Wrap(
                             spacing: 6,
                             children: [

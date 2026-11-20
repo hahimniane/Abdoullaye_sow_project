@@ -21,12 +21,7 @@ final _now = DateTime.utc(2026, 11, 10, 17); // 12 PM in New York
 
 FleetData _data() => FleetData(
   drivers: const [
-    FleetDriver(
-      id: 'd1',
-      name: 'Amy Bah',
-      phone: '+13475550101',
-      personalCents: 7,
-    ),
+    FleetDriver(id: 'd1', name: 'Amy Bah', phone: '+13475550101'),
     FleetDriver(id: 'd2', name: 'Bob Diallo', phone: '+13475550102'),
   ],
   cars: const [
@@ -74,9 +69,11 @@ class _Rig {
 _Rig _rig({
   FleetAccess access = _admin,
   FleetData? data,
+  List<FleetClaim> claims = const [],
   Duration loadTimeout = const Duration(seconds: 25),
 }) {
   final source = FakeFleetSource(
+    claims: claims,
     data: data ?? _data(),
     business: {
       'fleet': {
@@ -108,7 +105,8 @@ Future<void> _pump(
   double width = 390,
 }) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = Size(width, 1600);
+  // Tall, so the driver page (a lazy list) builds every card.
+  tester.view.physicalSize = Size(width, 3600);
   addTearDown(tester.view.reset);
   setMoneyDisplayLanguage(language);
   addTearDown(() => setMoneyDisplayLanguage('en'));
@@ -137,6 +135,18 @@ Future<void> _tapKey(WidgetTester tester, String key) async {
   await tester.pumpAndSettle();
   await tester.tap(f);
   await tester.pumpAndSettle();
+}
+
+/// Opens a claim's photo. The picture itself is a network image that never
+/// loads in a test, so this pumps a few frames instead of settling.
+Future<void> _openPhoto(WidgetTester tester, String claimId) async {
+  final f = find.byKey(Key('fleet-claim-photo-$claimId'));
+  await tester.ensureVisible(f);
+  await tester.pumpAndSettle();
+  await tester.tap(f);
+  for (var i = 0; i < 5; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 Future<void> _openTab(WidgetTester tester, String label) async {
@@ -214,7 +224,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('fleet-driver-zelle')), findsOneWidget);
+    // No Zelle cents anywhere: the page has the names this driver pays from.
+    expect(find.byKey(const Key('fleet-payer-names')), findsOneWidget);
 
     await _tapKey(tester, 'fleet-driver-pay');
     await tester.enterText(_field(r'Amount ($)'), '900');
@@ -576,6 +587,12 @@ void main() {
       expect(find.byKey(const Key('fleet-car-row-c2')), findsOneWidget);
       await tester.tap(find.text('Paperwork'));
       await tester.pumpAndSettle();
+      // Paperwork lists the plates with a driver; "Every plate" adds the rest.
+      expect(find.byKey(const Key('fleet-car-row-c1')), findsOneWidget);
+      expect(find.byKey(const Key('fleet-car-row-c2')), findsNothing);
+      expect(find.text('Plates with a driver (1)'), findsOneWidget);
+      await tester.tap(find.text('Every plate (2)'));
+      await tester.pumpAndSettle();
       // The plate with a date comes before the one with none.
       final first = tester
           .getTopLeft(find.byKey(const Key('fleet-car-row-c1')))
@@ -669,7 +686,7 @@ void main() {
           'id': 'cr1',
           'amountCents': 90007,
           'senderName': 'AMY BAH',
-          'reason': 'two_drivers',
+          'reason': 'shared_payer',
         },
       ],
       'removed': [
@@ -723,6 +740,712 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // -------------------------------------------------------------------------
+  // Payment claims, payer names, plate fee, "Driver has left", month by bill.
+  // -------------------------------------------------------------------------
+
+  final claimAt = DateTime.utc(2026, 11, 10, 17).millisecondsSinceEpoch;
+  List<FleetClaim> claims() => [
+    readFleetClaim('c1', {
+      'driverId': 'd1',
+      'fromPhone': '+13475550101',
+      'state': 'waiting_bank',
+      'amountCents': 40000,
+      'mediaPath': 'support_cases/x/whatsapp/a.jpg',
+      'createdAtMs': claimAt,
+    })!,
+    readFleetClaim('c2', {
+      'fromPhone': '+13475550199',
+      'state': 'office',
+      'reason': 'not_a_driver',
+      'createdAtMs': claimAt + 60000,
+    })!,
+  ];
+  const bankAnswer = {
+    'success': true,
+    'bank': {
+      'connected': true,
+      'institutionName': 'Chase',
+      'accountMask': '4321',
+    },
+    'waiting': [
+      {
+        'id': 'cr1',
+        'amountCents': 40000,
+        'senderName': 'AMY BAH',
+        'atMs': 1762790000000,
+        'reason': 'unknown',
+      },
+      {
+        'id': 'cr2',
+        'amountCents': 30000,
+        'senderName': '',
+        'atMs': 1762700000000,
+        'reason': 'unknown',
+      },
+    ],
+  };
+
+  testWidgets('claims: the card lists each open claim with its words', (
+    tester,
+  ) async {
+    final rig = _rig(claims: claims());
+    rig.backend.bankAnswer = bankAnswer;
+    await _pump(tester, rig);
+    await _openTab(tester, 'Bank');
+    expect(find.text('Reported by drivers, waiting for the bank'), findsOne);
+    expect(find.byKey(const Key('fleet-claim-c1')), findsOneWidget);
+    expect(find.byKey(const Key('fleet-claim-c2')), findsOneWidget);
+    expect(find.text(r'$400.00'), findsWidgets);
+    expect(
+      find.text('Waiting for the deposit to show in the bank.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'This phone is not one of your drivers. Find out who the payment is for.',
+      ),
+      findsOneWidget,
+    );
+    // The phone stands in for a driver we do not know; the amount is a dash.
+    expect(find.text('+13475550199'), findsOneWidget);
+    expect(find.text('—'), findsOneWidget);
+    // Oldest first.
+    expect(
+      tester.getTopLeft(find.byKey(const Key('fleet-claim-c1'))).dy,
+      lessThan(tester.getTopLeft(find.byKey(const Key('fleet-claim-c2'))).dy),
+    );
+    // No photo on c2.
+    expect(find.byKey(const Key('fleet-claim-photo-c1')), findsOneWidget);
+    expect(find.byKey(const Key('fleet-claim-photo-c2')), findsNothing);
+    expect(find.text('No photo'), findsOneWidget);
+    // Every action is at least 48 high.
+    for (final key in [
+      'fleet-claim-photo-c1',
+      'fleet-claim-theirs-c1',
+      'fleet-claim-close-c1',
+      'fleet-claim-theirs-c2',
+    ]) {
+      expect(
+        tester.getSize(find.byKey(Key(key))).height,
+        greaterThanOrEqualTo(48),
+        reason: key,
+      );
+    }
+  });
+
+  testWidgets('claims: View photo asks the server and opens the picture', (
+    tester,
+  ) async {
+    final rig = _rig(claims: claims());
+    rig.backend.bankAnswer = bankAnswer;
+    await _pump(tester, rig);
+    await _openTab(tester, 'Bank');
+    await _openPhoto(tester, 'c1');
+    expect(rig.backend.of('claim_photo').single['claimId'], 'c1');
+    expect(find.byKey(const Key('fleet-claim-photo-image')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('fleet-claim-photo-close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('fleet-claim-photo-image')), findsNothing);
+
+    // A photo that was deleted says so.
+    rig.backend.photoUrl = null;
+    await _openPhoto(tester, 'c1');
+    expect(find.text('Photo not available'), findsOneWidget);
+    expect(find.byKey(const Key('fleet-claim-photo-image')), findsNothing);
+  });
+
+  testWidgets('claims: This deposit is theirs gives a waiting deposit', (
+    tester,
+  ) async {
+    final rig = _rig(claims: claims());
+    rig.backend.bankAnswer = bankAnswer;
+    await _pump(tester, rig);
+    await _openTab(tester, 'Bank');
+    await _tapKey(tester, 'fleet-claim-theirs-c1');
+    // The same amount comes first; a different one is marked in words.
+    final first = tester.getTopLeft(
+      find.byKey(const Key('fleet-claim-offer-cr1')),
+    );
+    final second = tester.getTopLeft(
+      find.byKey(const Key('fleet-claim-offer-cr2')),
+    );
+    expect(first.dy, lessThan(second.dy));
+    expect(find.textContaining('Same amount'), findsOneWidget);
+    // Nothing picked yet: told in words, nothing sent.
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(find.text('Pick the deposit that is theirs.'), findsOneWidget);
+    expect(rig.backend.of('claim_assign'), isEmpty);
+
+    await tester.tap(find.byKey(const Key('fleet-claim-offer-cr2')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'This deposit is for a different amount. The bank’s amount is what is recorded.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('fleet-claim-offer-cr1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('fleet-claim-different')), findsNothing);
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(find.textContaining('from AMY BAH to Amy Bah'), findsOneWidget);
+    await _tapKey(tester, 'fleet-confirm-yes');
+    final sent = rig.backend.of('claim_assign').single;
+    expect(sent['claimId'], 'c1');
+    expect(sent['creditId'], 'cr1');
+    // The claim left the open list; the bank is read again.
+    expect(find.byKey(const Key('fleet-claim-c1')), findsNothing);
+    expect(find.text('Payment recorded'), findsOneWidget);
+    expect(rig.backend.of('bank_status').length, 2);
+  });
+
+  testWidgets('claims: a refused deposit says why, in words', (tester) async {
+    final rig = _rig(claims: claims());
+    rig.backend.bankAnswer = bankAnswer;
+    await _pump(tester, rig);
+    await _openTab(tester, 'Bank');
+    await _tapKey(tester, 'fleet-claim-theirs-c1');
+    await tester.tap(find.byKey(const Key('fleet-claim-offer-cr1')));
+    await tester.pumpAndSettle();
+    rig.backend.errors['claim_assign'] = fleetRefusal(
+      'fleet_deposit_not_waiting',
+    );
+    await _tapKey(tester, 'fleet-sheet-submit');
+    await _tapKey(tester, 'fleet-confirm-yes');
+    expect(
+      find.text('That deposit is not waiting for the office.'),
+      findsOneWidget,
+    );
+    // The sheet is still open and not stuck busy.
+    expect(find.byKey(const Key('fleet-claim-offer-cr1')), findsOneWidget);
+  });
+
+  testWidgets('claims: Close asks first, then closes the report', (
+    tester,
+  ) async {
+    final rig = _rig(claims: claims());
+    rig.backend.bankAnswer = bankAnswer;
+    await _pump(tester, rig);
+    await _openTab(tester, 'Bank');
+    await _tapKey(tester, 'fleet-claim-close-c1');
+    expect(
+      find.text(
+        'Close this report from Amy Bah? The bill stays unpaid and nothing is recorded.',
+      ),
+      findsOneWidget,
+    );
+    await _tapKey(tester, 'fleet-confirm-yes');
+    expect(rig.backend.of('claim_close').single['claimId'], 'c1');
+    expect(find.text('Report closed.'), findsOneWidget);
+    expect(find.byKey(const Key('fleet-claim-c1')), findsNothing);
+  });
+
+  testWidgets('claims: a failed claims read never blanks the rest of Fleet', (
+    tester,
+  ) async {
+    final rig = _rig(claims: claims());
+    rig.source.claimsFailWith = StateError('denied');
+    rig.backend.bankAnswer = bankAnswer;
+    await _pump(tester, rig);
+    // Payments is untouched.
+    expect(find.byKey(const Key('fleet-payment-row-d1')), findsOneWidget);
+    expect(find.byKey(const Key('fleet-retry')), findsNothing);
+    await _openTab(tester, 'Bank');
+    expect(
+      find.text(
+        'The reported payments could not be loaded. Try again in a moment.',
+      ),
+      findsOneWidget,
+    );
+    // The bank's own deposits still show.
+    expect(find.byKey(const Key('fleet-deposit-cr1')), findsOneWidget);
+    // Try again reads them.
+    rig.source.claimsFailWith = null;
+    await _tapKey(tester, 'fleet-claims-retry');
+    expect(find.byKey(const Key('fleet-claim-c1')), findsOneWidget);
+  });
+
+  testWidgets('claims: a read that never answers still resolves', (
+    tester,
+  ) async {
+    final controller = FleetController(
+      businessId: 'biz1',
+      source: _SilentSource(),
+      loadTimeout: const Duration(seconds: 3),
+      clock: () => _now,
+    )..start();
+    expect(controller.claimsLoading, isTrue);
+    await tester.pump(const Duration(seconds: 4));
+    expect(controller.claimsLoading, isFalse);
+    expect(controller.claimsError, isTrue);
+    controller.dispose();
+  });
+
+  testWidgets('payer names: list, add, remove, and a refused name', (
+    tester,
+  ) async {
+    final data = _data();
+    final rig = _rig(
+      data: FleetData(
+        drivers: [
+          const FleetDriver(
+            id: 'd1',
+            name: 'Amy Bah #12',
+            phone: '+13475550101',
+            payerNames: ['AWA BAH'],
+          ),
+          data.drivers[1],
+        ],
+        cars: data.cars,
+        assignments: data.assignments,
+        bills: data.bills,
+      ),
+    );
+    await _pump(tester, rig);
+    await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Names this driver pays from'), findsOneWidget);
+    expect(
+      find.text('A Zelle from one of these names pays this driver by itself.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('fleet-payer-name-AWA BAH')), findsOneWidget);
+    expect(find.byKey(const Key('fleet-payer-hint')), findsOneWidget);
+
+    // Nothing typed, then a duplicate: told in words, nothing sent.
+    await _tapKey(tester, 'fleet-payer-add');
+    expect(find.text('Type a name first.'), findsOneWidget);
+    await tester.enterText(_field('Name on the Zelle account'), 'awa  bah');
+    await _tapKey(tester, 'fleet-payer-add');
+    expect(find.text('That name is already on the list.'), findsOneWidget);
+    expect(rig.backend.of('payer_names_save'), isEmpty);
+
+    await tester.enterText(_field('Name on the Zelle account'), 'Moussa  Bah');
+    await _tapKey(tester, 'fleet-payer-add');
+    expect(rig.backend.of('payer_names_save').single['names'], [
+      'AWA BAH',
+      'Moussa Bah',
+    ]);
+    expect(
+      find.byKey(const Key('fleet-payer-name-Moussa Bah')),
+      findsOneWidget,
+    );
+
+    // The server refuses what is not a person's name.
+    rig.backend.errors['payer_names_save'] = fleetRefusal(
+      'fleet_bad_name',
+      code: 'invalid-argument',
+    );
+    await tester.enterText(_field('Name on the Zelle account'), 'Zelle');
+    await _tapKey(tester, 'fleet-payer-add');
+    expect(
+      find.text(
+        'That is not a person’s name (at least two words, not an account or an app).',
+      ),
+      findsOneWidget,
+    );
+
+    // Removing asks first, and addresses the driver by display name.
+    await _tapKey(tester, 'fleet-payer-remove-AWA BAH');
+    expect(
+      find.text(
+        'Stop paying Amy Bah automatically from AWA BAH? Deposits from this name will wait for the office again.',
+      ),
+      findsOneWidget,
+    );
+    await _tapKey(tester, 'fleet-confirm-yes');
+    expect(rig.backend.of('payer_names_save').last['names'], ['Moussa Bah']);
+    expect(find.byKey(const Key('fleet-payer-name-AWA BAH')), findsNothing);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('fleet-payer-remove-Moussa Bah')))
+          .height,
+      greaterThanOrEqualTo(48),
+    );
+  });
+
+  testWidgets('plate fee: change it, then see when it applies', (tester) async {
+    final rig = _rig();
+    await _pump(tester, rig);
+    await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+    await tester.pumpAndSettle();
+    await _tapKey(tester, 'fleet-driver-fee');
+    expect(find.text('Change plate fee'), findsWidgets);
+    // Nothing changed is refused before the server.
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(find.text('Nothing was changed.'), findsOneWidget);
+    expect(rig.backend.of('assignment_update'), isEmpty);
+    // A bad due day too.
+    await tester.enterText(
+      _field('Due day of the month, optional (1–28)'),
+      '29',
+    );
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(find.text('Some details are missing or not valid.'), findsOneWidget);
+
+    await tester.enterText(_field(r'New plate fee a month ($)'), '1,000');
+    await tester.enterText(
+      _field('Due day of the month, optional (1–28)'),
+      '10',
+    );
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(
+      find.textContaining(
+        'Change Amy Bah’s plate fee for T123456C to \$1,000.00, due day 10?',
+      ),
+      findsOneWidget,
+    );
+    await _tapKey(tester, 'fleet-confirm-yes');
+    final sent = rig.backend.of('assignment_update').single;
+    expect(sent['assignmentId'], 'a1');
+    expect(sent['rentCents'], 100000);
+    expect(sent['dueDay'], 10);
+    expect(
+      find.text(
+        'Applies from Dec 1, 2026. Bills already made are not changed.',
+      ),
+      findsOneWidget,
+    );
+    await _tapKey(tester, 'fleet-fee-done');
+    expect(find.byKey(const Key('fleet-fee-applies')), findsNothing);
+  });
+
+  testWidgets(
+    'plate fee: a Fleet staff member who is not admin has no button',
+    (tester) async {
+      final rig = _rig(access: _staff);
+      await _pump(tester, rig, access: _staff);
+      await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('fleet-driver-fee')), findsNothing);
+      expect(find.byKey(const Key('fleet-driver-left')), findsNothing);
+      expect(find.byKey(const Key('fleet-payer-names')), findsOneWidget);
+    },
+  );
+
+  testWidgets('Driver has left: confirms, sends the day, and is then hidden', (
+    tester,
+  ) async {
+    final rig = _rig();
+    await _pump(tester, rig);
+    await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+    await tester.pumpAndSettle();
+    await _tapKey(tester, 'fleet-driver-left');
+    expect(
+      find.text('The plate comes back on this date and bills stop.'),
+      findsOneWidget,
+    );
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(
+      find.text(
+        'Mark Amy Bah as having left on Nov 10, 2026? Plate T123456C comes back on that date and bills stop.',
+      ),
+      findsOneWidget,
+    );
+    await _tapKey(tester, 'fleet-confirm-yes');
+    final sent = rig.backend.of('driver_leave').single;
+    expect(sent['driverId'], 'd1');
+    expect(sent['endDayKey'], '2026-11-10');
+    expect(find.byKey(const Key('fleet-left-result')), findsOneWidget);
+    await _tapKey(tester, 'fleet-left-done');
+    // Left: the button is gone and the plate card says there is no plate.
+    expect(find.byKey(const Key('fleet-driver-left')), findsNothing);
+    expect(find.text('No plate right now.'), findsOneWidget);
+  });
+
+  testWidgets('Driver has left: a refusal says the driver still has a plate', (
+    tester,
+  ) async {
+    final rig = _rig();
+    await _pump(tester, rig);
+    await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+    await tester.pumpAndSettle();
+    // Marking left in the edit sheet: the server refuses while a plate is held.
+    await _tapKey(tester, 'fleet-driver-edit');
+    rig.backend.errors['driver_save'] = fleetRefusal('fleet_driver_has_plate');
+    await tester.tap(find.text('Left').last);
+    await tester.pumpAndSettle();
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(
+      find.text(
+        'This driver still has a plate. Use Driver has left, which returns it.',
+      ),
+      findsOneWidget,
+    );
+    // The same refusal when Driver has left itself is refused.
+    await tester.tap(find.text('Cancel').last);
+    await tester.pumpAndSettle();
+    await _tapKey(tester, 'fleet-driver-left');
+    rig.backend.errors['driver_leave'] = fleetRefusal('fleet_admin_only');
+    await _tapKey(tester, 'fleet-sheet-submit');
+    await _tapKey(tester, 'fleet-confirm-yes');
+    expect(find.text('Only a Fleet admin can do this.'), findsOneWidget);
+  });
+
+  testWidgets('Payments: the plate fees line, and + fee owed counts as Owes', (
+    tester,
+  ) async {
+    final data = _data();
+    final rig = _rig(
+      data: FleetData(
+        drivers: data.drivers,
+        cars: data.cars,
+        assignments: data.assignments,
+        bills: const [
+          FleetBill(
+            id: 'b1',
+            driverId: 'd1',
+            kind: 'rent',
+            dueDayKey: '2026-11-01',
+            amountCents: 90000,
+            paidCents: 90000,
+            status: 'paid',
+          ),
+          FleetBill(
+            id: 'f1',
+            driverId: 'd1',
+            kind: 'late_fee',
+            dueDayKey: '2026-11-05',
+            amountCents: 5000,
+          ),
+          FleetBill(
+            id: 'b2',
+            driverId: 'd2',
+            kind: 'rent',
+            dueDayKey: '2026-11-01',
+            amountCents: 90000,
+            paidCents: 30000,
+          ),
+        ],
+        payments: const [
+          FleetPayment(
+            id: 'p1',
+            driverId: 'd1',
+            amountCents: 500000,
+            paidDayKey: '2026-11-02',
+          ),
+        ],
+      ),
+    );
+    await _pump(tester, rig);
+    // $1,200 paid on $1,800 of plate fees: 67%, not collected over billed.
+    expect(
+      find.text(
+        '67% of this month’s plate fees paid (\$1,200.00 of \$1,800.00)',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('fleet-fee-owed-d1')), findsOneWidget);
+    expect(find.byKey(const Key('fleet-fee-owed-d2')), findsNothing);
+    // d1's month reads from its rent bill (paid), the fee is only marked.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('fleet-payment-row-d1')),
+        matching: find.text('Paid in full'),
+      ),
+      findsOneWidget,
+    );
+    // d1 (fee owed) counts as Owes, d2 is Part paid; nobody is Paid in full.
+    expect(find.text('Owes (1)'), findsOneWidget);
+    expect(find.text('Part paid (1)'), findsOneWidget);
+    expect(find.textContaining('Paid in full ('), findsNothing);
+    await tester.tap(find.text('Owes (1)'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('fleet-payment-row-d1')), findsOneWidget);
+    expect(find.byKey(const Key('fleet-payment-row-d2')), findsNothing);
+  });
+
+  testWidgets(
+    'Driver page: a bill made by mistake is on no list and in no count',
+    (tester) async {
+      final data = _data();
+      final rig = _rig(
+        data: FleetData(
+          drivers: data.drivers,
+          cars: data.cars,
+          assignments: data.assignments,
+          bills: const [
+            FleetBill(
+              id: 'b1',
+              driverId: 'd1',
+              kind: 'rent',
+              label: 'Plate fee Nov 2026',
+              dueDayKey: '2026-11-01',
+              amountCents: 90000,
+            ),
+            FleetBill(
+              id: 'bm',
+              driverId: 'd1',
+              kind: 'rent',
+              label: 'Billed by mistake',
+              dueDayKey: '2026-10-01',
+              amountCents: 90000,
+              status: 'void',
+              voidReason: 'billed_by_mistake',
+            ),
+            FleetBill(
+              id: 'bw',
+              driverId: 'd1',
+              kind: 'rent',
+              label: 'Rent gone',
+              dueDayKey: '2026-09-01',
+              amountCents: 90000,
+              status: 'void',
+              voidReason: 'rent_bill_gone',
+            ),
+          ],
+        ),
+      );
+      await _pump(tester, rig);
+      await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+      await tester.pumpAndSettle();
+      expect(find.text('All (2)'), findsOneWidget);
+      expect(find.text('Waived (1)'), findsOneWidget);
+      expect(find.text('Open (1)'), findsOneWidget);
+      await tester.tap(find.text('All (2)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Billed by mistake'), findsNothing);
+      expect(find.text('Rent gone'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Drivers: no sort by Zelle cents', (tester) async {
+    final rig = _rig();
+    await _pump(tester, rig);
+    await _openTab(tester, 'Drivers');
+    await tester.tap(find.byKey(const Key('fleet-drivers-sort')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('cents'), findsNothing);
+    expect(find.text('Most owed first'), findsWidgets);
+  });
+
+  testWidgets('French on a 320 px phone: the new sections fit', (tester) async {
+    final rig = _rig(claims: claims());
+    rig.backend.bankAnswer = bankAnswer;
+    await _pump(tester, rig, language: 'fr', width: 320);
+    // Payments: the plate fees line and the fee marker.
+    expect(tester.takeException(), isNull);
+    // Bank: the claims card, then its deposit sheet and the photo.
+    await _openTab(tester, 'Banque');
+    expect(
+      find.text('Signalés par les chauffeurs, en attente de la banque'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await _openPhoto(tester, 'c1');
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const Key('fleet-claim-photo-close')));
+    await tester.pumpAndSettle();
+    await _tapKey(tester, 'fleet-claim-theirs-c1');
+    await tester.tap(find.byKey(const Key('fleet-claim-offer-cr2')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(find.textContaining('Donner ce dépôt de'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // Cancel the question, then the sheet.
+    await tester.tap(find.text('Annuler').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Annuler').last);
+    await tester.pumpAndSettle();
+    await _tapKey(tester, 'fleet-claim-close-c1');
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Annuler').last);
+    await tester.pumpAndSettle();
+
+    // The driver page: names, plate fee, Driver has left.
+    await _openTab(tester, 'Paiements');
+    await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Noms depuis lesquels ce chauffeur paie'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    rig.backend.errors['payer_names_save'] = fleetRefusal(
+      'fleet_bad_name',
+      code: 'invalid-argument',
+    );
+    await tester.enterText(_field('Nom sur le compte Zelle'), 'Zelle');
+    await _tapKey(tester, 'fleet-payer-add');
+    expect(
+      find.textContaining('Ce n’est pas le nom d’une personne'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await _tapKey(tester, 'fleet-driver-fee');
+    expect(tester.takeException(), isNull);
+    await tester.enterText(
+      _field(r'Nouveaux frais de plaque par mois ($)'),
+      '1000',
+    );
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(tester.takeException(), isNull);
+    await _tapKey(tester, 'fleet-confirm-yes');
+    expect(find.textContaining('S’applique à partir du'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await _tapKey(tester, 'fleet-fee-done');
+    await _tapKey(tester, 'fleet-driver-left');
+    expect(tester.takeException(), isNull);
+    await _tapKey(tester, 'fleet-sheet-submit');
+    expect(
+      find.textContaining('Marquer Amy Bah comme parti le'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await _tapKey(tester, 'fleet-confirm-yes');
+    expect(
+      find.text(
+        'Le chauffeur est marqué comme parti. Sa plaque est revenue et sa facturation s’est arrêtée.',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('French on a 320 px phone: a month with a fee owed fits', (
+    tester,
+  ) async {
+    final data = _data();
+    final rig = _rig(
+      data: FleetData(
+        drivers: data.drivers,
+        cars: data.cars,
+        assignments: data.assignments,
+        bills: const [
+          FleetBill(
+            id: 'b1',
+            driverId: 'd1',
+            kind: 'rent',
+            dueDayKey: '2026-11-01',
+            amountCents: 90000,
+            paidCents: 90000,
+            status: 'paid',
+          ),
+          FleetBill(
+            id: 'f1',
+            driverId: 'd1',
+            kind: 'late_fee',
+            dueDayKey: '2026-11-05',
+            amountCents: 5000,
+          ),
+        ],
+      ),
+    );
+    await _pump(tester, rig, language: 'fr', width: 320);
+    expect(find.text('+ frais dus'), findsOneWidget);
+    expect(
+      find.textContaining('des frais de plaque de ce mois payés'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    // Paperwork in French: the two scope chips.
+    await _openTab(tester, 'Plaques');
+    await tester.tap(find.text('Papiers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Plaques avec un chauffeur (1)'), findsOneWidget);
+    expect(find.text('Toutes les plaques (2)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test(
     'the home carries one Fleet row, gated by the service and the permission',
     () {
@@ -741,5 +1464,9 @@ class _SilentSource implements FleetSource {
 
   @override
   Stream<Map<String, dynamic>> watchBusiness(String businessId) =>
+      const Stream.empty();
+
+  @override
+  Stream<List<FleetClaim>> watchClaims(String businessId) =>
       const Stream.empty();
 }

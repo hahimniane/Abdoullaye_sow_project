@@ -190,10 +190,6 @@ class _FleetDriversTabState extends State<FleetDriversTab> {
                                       value: FleetDriverSort.owed,
                                       child: Text(l10n.fltSortOwed),
                                     ),
-                                    DropdownMenuItem(
-                                      value: FleetDriverSort.cents,
-                                      child: Text(l10n.fltSortZelleCents),
-                                    ),
                                   ],
                                   onChanged: (v) =>
                                       _set(_filter.copyWith(sort: v)),
