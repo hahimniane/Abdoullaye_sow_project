@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import {
+  confirmationIsFinal,
   confirmationMessage,
   resolveActionConfirmation,
   subscribeToActionConfirmations,
@@ -86,6 +87,7 @@ export function ActionConfirmationHost() {
   const language = currentWebLanguage();
   const copy = DIALOG_COPY[language];
   const message = confirmationMessage(pending.english, pending.french, language);
+  const final = confirmationIsFinal(pending.french, language);
 
   return (
     <div
@@ -107,7 +109,7 @@ export function ActionConfirmationHost() {
         </div>
         <div className="action-confirm-copy">
           <h2 id="action-confirm-title">{copy.title}</h2>
-          <p id="action-confirm-message">{message}</p>
+          <p data-no-translate={final ? "" : undefined} id="action-confirm-message">{message}</p>
         </div>
         <div className="action-confirm-actions">
           <button

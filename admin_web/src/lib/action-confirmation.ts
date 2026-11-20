@@ -22,6 +22,20 @@ export function confirmationMessage(
   return language === "fr" ? (french || english) : english;
 }
 
+/**
+ * Whether the message shown is already in the reader's language, so the page
+ * translator must leave it alone. A caller that hands over its own French has
+ * usually put a person's name in it; translated a second time, word by word,
+ * "Made Up Eight" became "Made Monter Eight" (2026-11-20). Only an English
+ * message shown to a French reader still needs the translator.
+ */
+export function confirmationIsFinal(
+  french: string | undefined,
+  language: SupportedLanguage = currentWebLanguage(),
+) {
+  return language !== "fr" || Boolean(french);
+}
+
 /** A confirmation waiting on the user, as the dialog host sees it. */
 export type PendingActionConfirmation = {
   id: number;
