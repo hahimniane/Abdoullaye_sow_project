@@ -1034,8 +1034,12 @@ export function carCompanies(rows: readonly CarRow[]): string[] {
 export type BillView = "open" | "paid" | "waived" | "all";
 export type PaymentView = "all" | "zelle" | "cash" | "import" | "other";
 
+/** Why a bill made by a fault of ours was taken back: never the driver's, so it is on no list. */
+export const BILLED_BY_MISTAKE = "billed_by_mistake";
+
 export function billInView(bill: Record<string, unknown>, view: BillView): boolean {
   const status = String(bill.status ?? "open");
+  if (status === "void" && bill.voidReason === BILLED_BY_MISTAKE) return false;
   if (view === "all") return true;
   if (view === "waived") return status === "waived" || status === "void";
   return status === view;

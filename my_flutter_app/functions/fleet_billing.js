@@ -70,14 +70,25 @@ function usDate(key) {
  * The rent periods of an assignment, from its start to the period holding
  * throughDayKey (or endDayKey when that comes first).
  *
- * @param {object} assignment {startDayKey, endDayKey, period, dueDay}.
+ * `billFromDayKey` (later than the start) is the first day rent is owed
+ * from: a driver brought in from the spreadsheet started years ago, but
+ * owes nothing before go-live (2026-11-19: the daily job billed every
+ * month since 2021). Monthly periods then run from that day, month by
+ * month; weekly ones keep the start's weekday and leave out the weeks
+ * that begin before it.
+ *
+ * @param {object} assignment {startDayKey, endDayKey, period, dueDay,
+ *   billFromDayKey?}.
  * @param {string} throughDayKey Last day to bill through.
  * @return {Array<{periodFrom: string, periodTo: string, dueDayKey: string}>}
  *   The periods.
  */
 function rentPeriods(assignment, throughDayKey) {
   const a = assignment || {};
-  const start = parts(a.startDayKey);
+  const billFrom = a.billFromDayKey && a.billFromDayKey > a.startDayKey ?
+    a.billFromDayKey : "";
+  const start = parts(billFrom && a.period !== "weekly" ?
+    billFrom : a.startDayKey);
   const stop = a.endDayKey && a.endDayKey < throughDayKey ?
     a.endDayKey : throughDayKey;
   const out = [];
@@ -99,6 +110,7 @@ function rentPeriods(assignment, throughDayKey) {
       due = monthDay(f.y, f.m, Number(a.dueDay));
     }
     if (from > stop) break;
+    if (billFrom && from < billFrom) continue;
     out.push({periodFrom: from, periodTo: to, dueDayKey: due});
   }
   return out;
@@ -152,6 +164,33 @@ function rentBillsToCreate(assignment, existingBillIds, throughDayKey,
     });
   }
   return out;
+}
+
+/**
+ * What a rent bill is worth once the plate came back on endDayKey, for a
+ * bill the assignment's own periods do not name (a go-live month's bill made
+ * by the spreadsheet import covers a calendar month under its own id): a
+ * period used to its last day stays as it is, the period the return falls
+ * in follows settings.returnRule, a period that begins after the return is
+ * worth nothing. Without this, returning an imported driver's plate voided
+ * their imported bills and turned what they had paid into credit.
+ *
+ * @param {object} bill {periodFrom, periodTo, amountCents}.
+ * @param {string} endDayKey The day the plate came back.
+ * @param {object} settings Fleet settings ({returnRule}).
+ * @return {number} The bill's amount in cents after the return.
+ */
+function billAfterReturn(bill, endDayKey, settings) {
+  const amount = Math.round(Number(bill?.amountCents) || 0);
+  const from = String(bill?.periodFrom || "");
+  const to = String(bill?.periodTo || "");
+  if (!from || !to) return 0;
+  if (endDayKey >= to) return amount;
+  if (endDayKey < from) return 0;
+  if (!settings || settings.returnRule !== "days") return amount;
+  const used = dayNum(endDayKey) - dayNum(from) + 1;
+  const total = dayNum(to) - dayNum(from) + 1;
+  return Math.round(amount * used / total);
 }
 
 const remaining = (b) =>
@@ -367,6 +406,7 @@ module.exports = {
   FLEET_MESSAGES,
   rentPeriods,
   rentBillsToCreate,
+  billAfterReturn,
   lateFeesToCreate,
   allocatePayment,
   applyCredit,

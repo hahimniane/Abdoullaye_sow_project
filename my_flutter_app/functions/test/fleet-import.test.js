@@ -354,6 +354,19 @@ describe("fleet import: go-live bills", () => {
       "bill:asg:10:2026-09",
     ]);
   });
+
+  // 2026-11-19, Landa: without this the daily job billed every month since
+  // each driver's start, and the go-live months a second time.
+  it("says the first day the daily job may bill from: the month after " +
+      "the last go-live month", () => {
+    assert.ok(out.assignments.length > 0);
+    assert.ok(out.assignments.every((a) =>
+      a.billFromDayKey === "2026-12-01"));
+    const year = parseFleetSheet(sheet(),
+        {goLiveMonths: ["2026-12", "2026-11"]});
+    assert.ok(year.assignments.every((a) =>
+      a.billFromDayKey === "2027-01-01"));
+  });
 });
 
 describe("fleet import: edge cases", () => {

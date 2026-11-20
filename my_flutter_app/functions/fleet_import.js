@@ -120,6 +120,15 @@ function previousMonth(month) {
   return m === 1 ? monthKey(y - 1, 12) : monthKey(y, m - 1);
 }
 
+/**
+ * @param {string} month "YYYY-MM".
+ * @return {string} The month after.
+ */
+function nextMonth(month) {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12 ? monthKey(y + 1, 1) : monthKey(y, m + 1);
+}
+
 const monthLabel = (month) => {
   const [y, m] = month.split("-").map(Number);
   return `${MONTH_NAMES[m - 1]} ${y}`;
@@ -175,6 +184,12 @@ function parseDueDay(value) {
  */
 function parseFleetSheet(rows, options = {}) {
   const goLive = options.goLiveMonths || DEFAULT_GO_LIVE;
+  // The go-live months' bills are made here. The daily job takes over the
+  // month after the last of them and must never bill an earlier one: these
+  // drivers started years ago and owe nothing for the history
+  // (fleet_billing.rentPeriods, billFromDayKey).
+  const billFromDayKey = goLive.length ?
+    `${nextMonth([...goLive].sort().pop())}-01` : null;
   const warnings = [];
   const warn = (row, field, message) => warnings.push({row, field, message});
   const drivers = new Map();
@@ -310,7 +325,7 @@ function parseFleetSheet(rows, options = {}) {
         importKey: assignmentKey, driverKey, carKey, startDayKey, endDayKey,
         contractEndDayKey,
         rentCents: rentDollars === null ? 0 : Math.round(rentDollars * 100),
-        period: "monthly", dueDay: 1,
+        period: "monthly", dueDay: 1, billFromDayKey,
       });
       if (!endDayKey) {
         driver.status = "active";
@@ -384,6 +399,8 @@ function parseFleetSheet(rows, options = {}) {
 
 module.exports = {
   FLEET_SHEET_MONTHS,
+  nextMonth,
+  previousMonth,
   parseFleetSheet,
   parseLooseDate,
   parseMoney,

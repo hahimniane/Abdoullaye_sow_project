@@ -78,6 +78,9 @@ test("a driver's bills and payments by kind", () => {
   assert.equal(billInView({ status: "void" }, "waived"), true);
   assert.equal(billInView({ status: "paid" }, "open"), false);
   assert.equal(billInView({ status: "paid" }, "all"), true);
+  // 2026-11-19: bills the daily job made by mistake are taken back and shown nowhere.
+  const mistake = { status: "void", voidReason: "billed_by_mistake" };
+  for (const view of ["open", "paid", "waived", "all"] as const) assert.equal(billInView(mistake, view), false);
   assert.equal(paymentInView({ method: "zelle" }, "zelle"), true);
   assert.equal(paymentInView({ method: "import", imported: true }, "import"), true);
   assert.equal(paymentInView({ method: "zelle", imported: true }, "zelle"), false, "imported history is its own kind");

@@ -63,6 +63,20 @@ decided 2026-11-01 → 2026-11-11 (memory: project_fleet_module).
   start's due day; weekly: weeks ending before the due weekday).
 - `rentBillsToCreate(assignment, existingBillIds, throughDayKey, settings)` —
   idempotent; a period cut by `endDayKey` follows `returnRule`.
+- **`billFromDayKey`** (on an assignment, later than its start): the first
+  day rent is owed from. Monthly periods then run from that day; weekly ones
+  keep the start's weekday and leave out the weeks that begin before it. The
+  import sets it to the first day of the month after the last go-live month
+  (the go-live months' bills are the import's own, under their own ids). The
+  spreadsheet's history is payments only: nothing is ever owed for it.
+  2026-11-19: without it the daily job billed every imported driver for
+  every month since 2021 and a second time for Oct/Nov (Landa showed
+  $628,910.96 owed). Repair: `tools-owner/fix-fleet-history-bills.mjs`
+  (mistaken bills become `void` with `voidReason: "billed_by_mistake"`, on no
+  list in the console).
+- `billAfterReturn(bill, endDayKey, settings)` — what a bill the
+  assignment's periods do not name (an imported month) is worth once the
+  plate is back: used in full = unchanged, cut = `returnRule`, later = 0.
 - `lateFeesToCreate(bills, settings, todayKey)` — one per open rent bill whose
   due day has passed the office's fee day, from `firstMonth` on, not waived.
 - `allocatePayment(openBills, amountCents)` — late fees first, then oldest due
@@ -93,7 +107,9 @@ phase 2). Budget: four rarely used admin tools drop to `maxInstances: 1`.
 `functions/fleet_import.js` (pure): sheet rows → drivers, cars, assignments,
 payments, owed bills. Payments: a month cell ≥ $50 is a payment that month;
 values under $50 and 1/0 markers are not payments. 0 in Oct/Nov 2026 → an
-owed rent bill. Cars by unique plate. Sanity totals the import must reproduce:
+owed rent bill. The go-live months are the month of the first import and the
+one before, kept on the business (`fleet.goLiveMonths`) so a later import
+bills the same months. Cars by unique plate. Sanity totals the import must reproduce:
 $863,265 total, 2,760 payments, 94 drivers; 2026 $221,729; Oct 2026 77 cars
 (54 paying, 19 not working, 4 at $0).
 

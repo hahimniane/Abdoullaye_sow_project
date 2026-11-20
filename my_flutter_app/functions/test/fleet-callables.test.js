@@ -373,4 +373,63 @@ describe("the spreadsheet import", () => {
             .where("status", "==", "open").get();
         assert.ok(open.docs.some((d) => d.id.includes("2026-11")));
       });
+
+  // 2026-11-19, Landa: the daily job billed every imported driver for every
+  // month since their start (one owed $26,050 on a $400 plate fee), and a
+  // second bill for the go-live months the import had already made.
+  const goLiveMonths = ["2026-10", "2026-11"];
+  const history = [header,
+    row("Sheet Driver Three", "2125550202", "T000012C",
+        {"2026-01": "400", "2026-10": "400", "2026-11": "0"})];
+  const sheetDriver = async (name) => (await db.collection("fleetDrivers")
+      .where("businessId", "==", BIZ).where("name", "==", name).get())
+      .docs[0];
+
+  it("the daily job never bills the months before go-live, nor a go-live " +
+      "month twice", async () => {
+    await act(OWNER, "import_sheet", {rows: history, goLiveMonths});
+    await functions.fleetDaily.run({});
+    await functions.fleetDaily.run({});
+    const driver = await sheetDriver("Sheet Driver Three");
+    const rent = (await bills(driver.id)).filter((b) => b.kind === "rent");
+    assert.deepEqual(rent.filter((b) => b.periodFrom < "2026-10-01"), [],
+        "nothing is owed for the spreadsheet's history");
+    assert.equal(new Set(rent.map((b) => b.label)).size, rent.length,
+        "one bill a month");
+    const by = (month) => rent.filter((b) => b.periodFrom.startsWith(month));
+    assert.deepEqual(by("2026-10").map((b) => [b.amountCents, b.status]),
+        [[40000, "paid"]]);
+    assert.deepEqual(by("2026-11").map((b) => [b.amountCents, b.status]),
+        [[40000, "open"]]);
+    const assignments = await db.collection("fleetAssignments")
+        .where("driverId", "==", driver.id).get();
+    assert.equal(assignments.docs[0].get("billFromDayKey"), "2026-12-01");
+  });
+
+  it("the months the first import billed are kept for the next import",
+      async () => {
+        const kept = (await doc("businesses", BIZ)).fleet.goLiveMonths;
+        assert.equal(kept.length, 2);
+        assert.ok(kept.every((m) => /^\d{4}-\d{2}$/.test(m)));
+      });
+
+  it("a returned plate leaves the imported months' bills as they were",
+      async () => {
+        const driver = await sheetDriver("Sheet Driver Three");
+        const assignment = (await db.collection("fleetAssignments")
+            .where("driverId", "==", driver.id).get()).docs[0];
+        await act(OWNER, "assignment_end", {assignmentId: assignment.id,
+          endDayKey: "2026-11-30"});
+        const rent = (await bills(driver.id)).filter((b) => b.kind === "rent");
+        const month = (m) => rent.find((b) => b.periodFrom === `${m}-01`);
+        assert.deepEqual([month("2026-10").amountCents,
+          month("2026-10").paidCents, month("2026-10").status],
+        [40000, 40000, "paid"]);
+        assert.deepEqual([month("2026-11").amountCents,
+          month("2026-11").status], [40000, "open"]);
+        assert.ok(rent.filter((b) => b.periodFrom > "2026-11-30")
+            .every((b) => b.status === "void"), "later months are void");
+        assert.equal(Number((await doc("fleetDrivers", driver.id))
+            .creditCents) || 0, 0, "nothing paid became credit");
+      });
 });

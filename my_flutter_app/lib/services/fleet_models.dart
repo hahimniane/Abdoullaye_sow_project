@@ -293,6 +293,7 @@ class FleetAssignment {
     this.rentCents = 0,
     this.period = 'monthly',
     this.dueDay = 1,
+    this.billFromDayKey = '',
   });
 
   factory FleetAssignment.fromMap(String id, Map<String, dynamic> m) =>
@@ -306,10 +307,15 @@ class FleetAssignment {
         rentCents: _i(m['rentCents']),
         period: _s(m['period']) == 'weekly' ? 'weekly' : 'monthly',
         dueDay: _i(m['dueDay']) == 0 ? 1 : _i(m['dueDay']),
+        billFromDayKey: _s(m['billFromDayKey']),
       );
 
   final String id, businessId, carId, driverId, startDayKey, endDayKey, period;
   final int rentCents, dueDay;
+
+  /// The first day rent is owed from, when later than the start (a driver
+  /// brought in from the spreadsheet owes nothing before go-live).
+  final String billFromDayKey;
 
   /// No end day: the car is still with the driver.
   bool get isOpen => endDayKey.isEmpty;

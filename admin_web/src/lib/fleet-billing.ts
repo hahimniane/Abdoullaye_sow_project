@@ -28,6 +28,8 @@ export type FleetAssignment = {
   period: "weekly" | "monthly";
   dueDay: number;
   rentCents?: number;
+  /** The first day rent is owed from, when later than the start (an imported driver owes nothing before go-live). */
+  billFromDayKey?: string | null;
 };
 export type FleetBill = {
   id: string;
@@ -72,10 +74,15 @@ function usDate(key: string): string {
   return `${MONTHS[m - 1]} ${d}, ${y}`;
 }
 
-/** The rent periods from the start to the period holding throughDayKey (or endDayKey first). */
+/**
+ * The rent periods from the start to the period holding throughDayKey (or
+ * endDayKey first). With billFromDayKey later than the start, monthly periods
+ * run from that day and weekly ones leave out the weeks that begin before it.
+ */
 export function rentPeriods(assignment: FleetAssignment, throughDayKey: string): RentPeriod[] {
   const a = assignment || ({} as FleetAssignment);
-  const start = parts(a.startDayKey);
+  const billFrom = a.billFromDayKey && a.billFromDayKey > a.startDayKey ? a.billFromDayKey : "";
+  const start = parts(billFrom && a.period !== "weekly" ? billFrom : a.startDayKey);
   const stop = a.endDayKey && a.endDayKey < throughDayKey ? a.endDayKey : throughDayKey;
   const out: RentPeriod[] = [];
   for (let k = 0; k < 10000; k++) {
@@ -96,6 +103,7 @@ export function rentPeriods(assignment: FleetAssignment, throughDayKey: string):
       due = monthDay(f.y, f.m, Number(a.dueDay));
     }
     if (from > stop) break;
+    if (billFrom && from < billFrom) continue;
     out.push({ periodFrom: from, periodTo: to, dueDayKey: due });
   }
   return out;

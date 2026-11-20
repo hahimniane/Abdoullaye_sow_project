@@ -46,7 +46,32 @@
      "through": "2027-03-02",
      "expect": [
        {"periodFrom": "2027-02-22", "periodTo": "2027-02-28", "dueDayKey": "2027-02-28"},
-       {"periodFrom": "2027-03-01", "periodTo": "2027-03-07", "dueDayKey": "2027-03-07"}]}
+       {"periodFrom": "2027-03-01", "periodTo": "2027-03-07", "dueDayKey": "2027-03-07"}]},
+    {"name": "monthly: an imported driver is billed from billFromDayKey, never from the 2021 start",
+     "assignment": {"startDayKey": "2021-08-14", "endDayKey": null, "period": "monthly", "dueDay": 1, "billFromDayKey": "2026-12-01"},
+     "through": "2027-01-15",
+     "expect": [
+       {"periodFrom": "2026-12-01", "periodTo": "2026-12-31", "dueDayKey": "2026-12-01"},
+       {"periodFrom": "2027-01-01", "periodTo": "2027-01-31", "dueDayKey": "2027-01-01"}]},
+    {"name": "monthly: nothing before billFromDayKey",
+     "assignment": {"startDayKey": "2021-08-14", "endDayKey": null, "period": "monthly", "dueDay": 1, "billFromDayKey": "2026-12-01"},
+     "through": "2026-11-30",
+     "expect": []},
+    {"name": "monthly: billFromDayKey before the start changes nothing",
+     "assignment": {"startDayKey": "2026-11-01", "endDayKey": null, "period": "monthly", "dueDay": 1, "billFromDayKey": "2026-10-01"},
+     "through": "2026-11-15",
+     "expect": [
+       {"periodFrom": "2026-11-01", "periodTo": "2026-11-30", "dueDayKey": "2026-11-01"}]},
+    {"name": "monthly: returned before billFromDayKey, nothing is billed",
+     "assignment": {"startDayKey": "2021-08-14", "endDayKey": "2026-11-20", "period": "monthly", "dueDay": 1, "billFromDayKey": "2026-12-01"},
+     "through": "2027-01-15",
+     "expect": []},
+    {"name": "weekly: weeks that begin before billFromDayKey are left out, the weekday stays",
+     "assignment": {"startDayKey": "2026-11-09", "endDayKey": null, "period": "weekly", "dueDay": 1, "billFromDayKey": "2026-11-20"},
+     "through": "2026-11-30",
+     "expect": [
+       {"periodFrom": "2026-11-23", "periodTo": "2026-11-29", "dueDayKey": "2026-11-23"},
+       {"periodFrom": "2026-11-30", "periodTo": "2026-12-06", "dueDayKey": "2026-11-30"}]}
   ],
   "billCases": [
     {"name": "monthly rent bill shape and label",
@@ -86,7 +111,11 @@
     {"name": "return in February, rule days: 14 of 28 days",
      "assignment": {"id": "as5", "startDayKey": "2027-02-01", "endDayKey": "2027-02-14", "period": "monthly", "dueDay": 1, "rentCents": 100000},
      "existing": [], "through": "2027-03-31", "settings": {"returnRule": "days"},
-     "expectAmounts": [50000]}
+     "expectAmounts": [50000]},
+    {"name": "an imported assignment gets no bill for the years before billFromDayKey",
+     "assignment": {"id": "as9", "businessId": "biz1", "driverId": "d9", "carId": "c9", "startDayKey": "2021-08-14", "endDayKey": null, "period": "monthly", "dueDay": 1, "rentCents": 40000, "billFromDayKey": "2026-12-01"},
+     "existing": [], "through": "2026-12-05", "settings": {},
+     "expectIds": ["as9_2026-12-01"], "expectAmounts": [40000]}
   ],
   "lateFeeCases": [
     {"name": "fee day passed: one fee, due on the fee day",

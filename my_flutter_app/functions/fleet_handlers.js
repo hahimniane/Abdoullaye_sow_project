@@ -9,7 +9,7 @@
 const fleetBilling = require("./fleet_billing");
 const fleetBank = require("./fleet_bank");
 const fleetWhatsApp = require("./fleet_whatsapp");
-const {parseFleetSheet} = require("./fleet_import");
+const {parseFleetSheet, previousMonth} = require("./fleet_import");
 
 const STAFF = "fleet";
 const ADMIN = "fleet_admin";
@@ -417,7 +417,8 @@ function createFleetHandlers(deps) {
         if (bill.kind !== "rent" || bill.status === "void" ||
             bill.status === "waived") continue;
         const paid = Math.max(0, Number(bill.paidCents) || 0);
-        const target = keep.has(b.id) ? keep.get(b.id) : 0;
+        const target = keep.has(b.id) ? keep.get(b.id) :
+          fleetBilling.billAfterReturn(bill, endDayKey, settings);
         if (target === Number(bill.amountCents)) continue;
         const over = Math.max(0, paid - target);
         creditBack += over;
@@ -1545,17 +1546,25 @@ function createFleetHandlers(deps) {
 
   async function importSheet(uid, businessId, data) {
     await requireAdmin(uid, businessId);
-    const {data: business} = await businessOf(businessId);
+    const {ref: businessRef, data: business} = await businessOf(businessId);
     if (!fleetOn(business)) throw refuse("fleet_off");
     const rows = Array.isArray(data.rows) ? data.rows : null;
     if (!rows || rows.length < 2 || rows.length > MAX_IMPORT_ROWS ||
         !rows.every(Array.isArray)) {
       throw refuse("fleet_bad_input", "invalid-argument");
     }
+    // The months whose unpaid cells become owed bills: the month of the
+    // first import and the one before (owner, 2026-11-11), kept on the
+    // business so importing the sheet again later bills the same months.
+    const months = (list) => Array.isArray(list) ?
+      list.filter((m) => MONTH.test(m)) : [];
+    const asked = months(data.goLiveMonths);
+    const kept = months(business.fleet?.goLiveMonths);
+    const thisMonth = deps.dayKeyNow().slice(0, 7);
+    const goLiveMonths = asked.length ? asked : kept.length ? kept :
+      [previousMonth(thisMonth), thisMonth];
     const parsed = parseFleetSheet(rows.map((r) => r.map((c) => text(c, 500))),
-        {goLiveMonths: Array.isArray(data.goLiveMonths) ?
-          data.goLiveMonths.filter((m) => MONTH.test(m)) :
-          undefined});
+        {goLiveMonths});
     if (data.dryRun === true) {
       return {success: true, dryRun: true, totals: parsed.totals,
         warnings: parsed.warnings.slice(0, 200),
@@ -1605,6 +1614,9 @@ function createFleetHandlers(deps) {
         batch.set(db().collection(col).doc(docId), value, {merge: true});
       }
       await batch.commit();
+    }
+    if (!kept.length) {
+      await businessRef.set({fleet: {goLiveMonths}}, {merge: true});
     }
     await audit(businessId, uid, "fleet_settings", businessId,
         "fleet_imported", `Spreadsheet imported: ${parsed.drivers.length} ` +

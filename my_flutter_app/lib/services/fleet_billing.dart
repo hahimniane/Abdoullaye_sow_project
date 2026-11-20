@@ -66,12 +66,21 @@ class FleetBillingSettings {
 }
 
 /// The rent periods from the start to the period holding [throughDayKey]
-/// (or the end day first).
+/// (or the end day first). With a bill-from day later than the start (a
+/// driver brought in from the spreadsheet owes nothing before go-live),
+/// monthly periods run from that day and weekly ones leave out the weeks
+/// that begin before it.
 List<FleetRentPeriod> fleetRentPeriods(
   FleetAssignment a,
   String throughDayKey,
 ) {
-  final s = a.startDayKey.split('-').map(int.parse).toList();
+  final billFrom = a.billFromDayKey.compareTo(a.startDayKey) > 0
+      ? a.billFromDayKey
+      : '';
+  final anchor = billFrom.isNotEmpty && a.period != 'weekly'
+      ? billFrom
+      : a.startDayKey;
+  final s = anchor.split('-').map(int.parse).toList();
   final stop =
       a.endDayKey.isNotEmpty && a.endDayKey.compareTo(throughDayKey) < 0
       ? a.endDayKey
@@ -93,6 +102,7 @@ List<FleetRentPeriod> fleetRentPeriods(
       due = fleetMonthDay(f[0], f[1], a.dueDay);
     }
     if (from.compareTo(stop) > 0) break;
+    if (billFrom.isNotEmpty && from.compareTo(billFrom) < 0) continue;
     out.add(FleetRentPeriod(from, to, due));
   }
   return out;

@@ -54,6 +54,29 @@ describe("fleet billing: rent bills", () => {
   });
 });
 
+describe("fleet billing: a bill once the plate came back", () => {
+  const {billAfterReturn} = require("../fleet_billing");
+  const nov = {periodFrom: "2026-11-01", periodTo: "2026-11-30",
+    amountCents: 40000};
+
+  it("a period used to its last day stays as it is", () => {
+    assert.equal(billAfterReturn(nov, "2026-11-30", {}), 40000);
+    assert.equal(billAfterReturn(nov, "2027-01-10", {returnRule: "days"}),
+        40000);
+  });
+
+  it("the period the return falls in follows the return rule", () => {
+    assert.equal(billAfterReturn(nov, "2026-11-15", {}), 40000);
+    assert.equal(billAfterReturn(nov, "2026-11-15", {returnRule: "days"}),
+        20000);
+  });
+
+  it("a period that begins after the return is worth nothing", () => {
+    assert.equal(billAfterReturn(nov, "2026-10-31", {}), 0);
+    assert.equal(billAfterReturn({amountCents: 40000}, "2026-11-15", {}), 0);
+  });
+});
+
 describe("fleet billing: late fees", () => {
   for (const c of fixture.lateFeeCases) {
     it(c.name, () => {
