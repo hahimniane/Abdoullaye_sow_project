@@ -13,6 +13,7 @@ const {
   whoDroveAt,
   driverBalance,
   lateFeesToCreate,
+  nextUnbilledPeriodStart,
   rentBillsToCreate,
   rentPeriods,
 } = require("../fleet_billing");
@@ -52,6 +53,15 @@ describe("fleet billing: rent bills", () => {
     assert.equal(first.length, 4);
     assert.deepEqual(again, []);
   });
+});
+
+describe("fleet billing: where a changed fee starts", () => {
+  for (const c of fixture.nextPeriodCases) {
+    it(c.name, () => {
+      assert.equal(nextUnbilledPeriodStart(c.assignment, c.existing, c.today),
+          c.expect);
+    });
+  }
 });
 
 describe("fleet billing: a bill once the plate came back", () => {

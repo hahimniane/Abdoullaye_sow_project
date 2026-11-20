@@ -65,11 +65,30 @@ class FleetBillingSettings {
   final String lateFeeFirstMonth;
 }
 
+/// The plate fee and due day in force for a period beginning on
+/// [periodFrom]: the assignment's `rentHistory` row that covers that day,
+/// else the current values.
+({int rentCents, int dueDay}) fleetTermsAt(
+  FleetAssignment a,
+  String periodFrom,
+) {
+  for (final h in a.rentHistory) {
+    final from = '${h['fromDayKey'] ?? ''}';
+    final to = '${h['toDayKey'] ?? ''}';
+    if (from.compareTo(periodFrom) <= 0 && periodFrom.compareTo(to) <= 0) {
+      int n(Object? v) => v is num ? v.round() : int.tryParse('$v') ?? 0;
+      return (rentCents: n(h['rentCents']), dueDay: n(h['dueDay']));
+    }
+  }
+  return (rentCents: a.rentCents, dueDay: a.dueDay);
+}
+
 /// The rent periods from the start to the period holding [throughDayKey]
-/// (or the end day first). With a bill-from day later than the start (a
-/// driver brought in from the spreadsheet owes nothing before go-live),
-/// monthly periods run from that day and weekly ones leave out the weeks
-/// that begin before it.
+/// (or the end day first). Monthly billing is by calendar month: the first
+/// period runs from the start (or the bill-from day) to the end of that
+/// month, due on the later of that day and the due day; later ones are the
+/// 1st to the last day, due on the due day. Weekly periods that begin before
+/// the bill-from day are left out.
 List<FleetRentPeriod> fleetRentPeriods(
   FleetAssignment a,
   String throughDayKey,
@@ -77,10 +96,10 @@ List<FleetRentPeriod> fleetRentPeriods(
   final billFrom = a.billFromDayKey.compareTo(a.startDayKey) > 0
       ? a.billFromDayKey
       : '';
-  final anchor = billFrom.isNotEmpty && a.period != 'weekly'
+  final firstKey = billFrom.isNotEmpty && a.period != 'weekly'
       ? billFrom
       : a.startDayKey;
-  final s = anchor.split('-').map(int.parse).toList();
+  final s = firstKey.split('-').map(int.parse).toList();
   final stop =
       a.endDayKey.isNotEmpty && a.endDayKey.compareTo(throughDayKey) < 0
       ? a.endDayKey
@@ -93,13 +112,15 @@ List<FleetRentPeriod> fleetRentPeriods(
       from = fleetDayKeyOf(f);
       to = fleetDayKeyOf(f + 6);
       final weekday = ((((f + 3) % 7) + 7) % 7) + 1;
-      due = fleetDayKeyOf(f + ((a.dueDay - weekday + 7) % 7));
+      due = fleetDayKeyOf(
+        f + ((fleetTermsAt(a, from).dueDay - weekday + 7) % 7),
+      );
     } else {
-      from = fleetMonthDay(s[0], s[1] + k, s[2]);
-      final next = fleetMonthDay(s[0], s[1] + k + 1, s[2]);
-      to = fleetDayKeyOf(fleetDayNumber(next) - 1);
+      from = k == 0 ? firstKey : fleetMonthDay(s[0], s[1] + k, 1);
       final f = from.split('-').map(int.parse).toList();
-      due = fleetMonthDay(f[0], f[1], a.dueDay);
+      to = fleetMonthDay(f[0], f[1], 31);
+      due = fleetMonthDay(f[0], f[1], fleetTermsAt(a, from).dueDay);
+      if (due.compareTo(from) < 0) due = from;
     }
     if (from.compareTo(stop) > 0) break;
     if (billFrom.isNotEmpty && from.compareTo(billFrom) < 0) continue;
@@ -108,21 +129,70 @@ List<FleetRentPeriod> fleetRentPeriods(
   return out;
 }
 
-/// Rent bills not yet created, through a day. Idempotent by bill id. The
-/// period cut by the end day follows the return rule ("days": pro rata).
+/// The periods that still need a bill: no bill with their id, and (monthly)
+/// no rent bill of the assignment that is not void already overlapping their
+/// calendar month. [existing] holds bill ids (String) or the bills (a map
+/// with id, kind, status, periodFrom, periodTo); only bills carry the
+/// overlap check.
+List<FleetRentPeriod> fleetMissingRentPeriods(
+  FleetAssignment a,
+  Iterable<Object> existing,
+  String throughDayKey,
+) {
+  final have = <String>{
+    for (final x in existing)
+      if (x is String) x else if (x is Map) '${x['id']}',
+  };
+  final bills = [
+    for (final x in existing)
+      if (x is Map &&
+          (x['kind'] == null || x['kind'] == 'rent') &&
+          x['status'] != 'void')
+        x,
+  ];
+  return [
+    for (final p in fleetRentPeriods(a, throughDayKey))
+      if (!have.contains('${a.id}_${p.periodFrom}') &&
+          (a.period == 'weekly' ||
+              !bills.any((b) {
+                final f = p.periodFrom.split('-').map(int.parse).toList();
+                final first = fleetMonthDay(f[0], f[1], 1);
+                final last = fleetMonthDay(f[0], f[1], 31);
+                return '${b['periodFrom']}'.compareTo(last) <= 0 &&
+                    '${b['periodTo']}'.compareTo(first) >= 0;
+              })))
+        p,
+  ];
+}
+
+/// The first day of the next period that has no bill yet: where a changed
+/// fee or due day starts to apply ('' when nothing is left to bill).
+String fleetNextUnbilledPeriodStart(
+  FleetAssignment a,
+  Iterable<Object> existing,
+  String fromDayKey,
+) {
+  final through = fleetAddDays(fromDayKey, 800);
+  final next = fleetMissingRentPeriods(a, existing, through);
+  return next.isEmpty ? '' : next.first.periodFrom;
+}
+
+/// Rent bills not yet created, through a day. Idempotent by bill id (and
+/// never a second bill for a calendar month). The period cut by the end day
+/// follows the return rule ("days": pro rata by days used within that
+/// period). Each period is billed at the fee in force for it. [existing]
+/// holds bill ids (String) or the bills (see [fleetMissingRentPeriods]).
 List<Map<String, Object?>> fleetRentBillsToCreate(
   FleetAssignment a,
-  Iterable<String> existingBillIds,
+  Iterable<Object> existing,
   String throughDayKey, [
   FleetBillingSettings? settings,
 ]) {
-  final have = existingBillIds.toSet();
   final days = settings != null && settings.returnRule == 'days';
   final out = <Map<String, Object?>>[];
-  for (final p in fleetRentPeriods(a, throughDayKey)) {
+  for (final p in fleetMissingRentPeriods(a, existing, throughDayKey)) {
     final id = '${a.id}_${p.periodFrom}';
-    if (have.contains(id)) continue;
-    var amount = a.rentCents;
+    var amount = fleetTermsAt(a, p.periodFrom).rentCents;
     if (days &&
         a.endDayKey.isNotEmpty &&
         a.endDayKey.compareTo(p.periodFrom) >= 0 &&
@@ -161,8 +231,8 @@ String _usDate(String key) {
 }
 
 /// Late fees to create: one per open, unpaid rent bill whose fee day has come
-/// (the office's day of the due month, or of the next month when the bill is
-/// due after it), from the first month on, with no late fee yet.
+/// (the office's day of the due month when the bill is due on or before it,
+/// else three days after the due day), from the first month on, with no late fee yet.
 List<Map<String, Object?>> fleetLateFeesToCreate(
   List<FleetBill> bills,
   FleetBillingSettings settings,
@@ -189,7 +259,7 @@ List<Map<String, Object?>> fleetLateFeesToCreate(
     final due = b.dueDayKey.split('-').map(int.parse).toList();
     var fee = fleetMonthDay(due[0], due[1], settings.lateFeeDay);
     if (b.dueDayKey.compareTo(fee) > 0) {
-      fee = fleetMonthDay(due[0], due[1] + 1, settings.lateFeeDay);
+      fee = fleetAddDays(b.dueDayKey, 3);
     }
     if (todayKey.compareTo(fee) < 0) continue;
     out.add({

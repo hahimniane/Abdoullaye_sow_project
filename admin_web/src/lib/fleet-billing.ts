@@ -30,7 +30,10 @@ export type FleetAssignment = {
   rentCents?: number;
   /** The first day rent is owed from, when later than the start (an imported driver owes nothing before go-live). */
   billFromDayKey?: string | null;
+  /** The fee and due day before each change, with the days they applied to. */
+  rentHistory?: { rentCents?: number; dueDay: number; fromDayKey: string; toDayKey: string }[];
 };
+export type ExistingBill = { id: string; kind?: string; status?: string; periodFrom?: string; periodTo?: string };
 export type FleetBill = {
   id: string;
   kind?: string;
@@ -74,15 +77,30 @@ function usDate(key: string): string {
   return `${MONTHS[m - 1]} ${d}, ${y}`;
 }
 
+/** The plate fee and due day in force for a period beginning on periodFrom (rentHistory rows, else the current ones). */
+export function termsAt(assignment: FleetAssignment, periodFrom: string): { rentCents?: number; dueDay: number } {
+  const a = assignment || ({} as FleetAssignment);
+  for (const h of Array.isArray(a.rentHistory) ? a.rentHistory : []) {
+    if (h && h.fromDayKey <= periodFrom && periodFrom <= h.toDayKey) {
+      return { rentCents: h.rentCents, dueDay: h.dueDay };
+    }
+  }
+  return { rentCents: a.rentCents, dueDay: a.dueDay };
+}
+
 /**
  * The rent periods from the start to the period holding throughDayKey (or
- * endDayKey first). With billFromDayKey later than the start, monthly periods
- * run from that day and weekly ones leave out the weeks that begin before it.
+ * endDayKey first). Monthly billing is by calendar month: the first period
+ * runs from the start (or billFromDayKey) to the end of that month, due on
+ * the later of that day and the due day; later ones are the 1st to the last
+ * day, due on the due day. Weekly periods that begin before billFromDayKey
+ * are left out.
  */
 export function rentPeriods(assignment: FleetAssignment, throughDayKey: string): RentPeriod[] {
   const a = assignment || ({} as FleetAssignment);
   const billFrom = a.billFromDayKey && a.billFromDayKey > a.startDayKey ? a.billFromDayKey : "";
-  const start = parts(billFrom && a.period !== "weekly" ? billFrom : a.startDayKey);
+  const firstKey = billFrom && a.period !== "weekly" ? billFrom : a.startDayKey;
+  const start = parts(firstKey);
   const stop = a.endDayKey && a.endDayKey < throughDayKey ? a.endDayKey : throughDayKey;
   const out: RentPeriod[] = [];
   for (let k = 0; k < 10000; k++) {
@@ -94,13 +112,14 @@ export function rentPeriods(assignment: FleetAssignment, throughDayKey: string):
       from = dayKeyOf(f);
       to = dayKeyOf(f + 6);
       const weekday = ((((f + 3) % 7) + 7) % 7) + 1; // 1970-01-01 was Thursday
-      due = dayKeyOf(f + ((Number(a.dueDay) - weekday + 7) % 7));
+      const dueDay = Number(termsAt(a, from).dueDay);
+      due = dayKeyOf(f + ((dueDay - weekday + 7) % 7));
     } else {
-      from = monthDay(start.y, start.m + k, start.d);
-      const next = monthDay(start.y, start.m + k + 1, start.d);
-      to = dayKeyOf(dayNum(next) - 1);
+      from = k === 0 ? firstKey : monthDay(start.y, start.m + k, 1);
       const f = parts(from);
-      due = monthDay(f.y, f.m, Number(a.dueDay));
+      to = monthDay(f.y, f.m, 31);
+      due = monthDay(f.y, f.m, Number(termsAt(a, from).dueDay));
+      if (due < from) due = from;
     }
     if (from > stop) break;
     if (billFrom && from < billFrom) continue;
@@ -110,24 +129,62 @@ export function rentPeriods(assignment: FleetAssignment, throughDayKey: string):
 }
 
 /**
- * Rent bills not yet created, through a day. Idempotent by bill id. The
- * period cut by endDayKey follows settings.returnRule ("full" by default, or
- * "days": pro rata, start and end inclusive).
+ * The periods that still need a bill: no bill with their id, and (monthly) no
+ * rent bill of the assignment that is not void already overlapping their
+ * calendar month. `existing` is bill ids, or the bills (only bills carry the
+ * overlap check).
+ */
+export function missingRentPeriods(
+  assignment: FleetAssignment,
+  existing: (string | ExistingBill)[],
+  throughDayKey: string,
+): RentPeriod[] {
+  const a = assignment || ({} as FleetAssignment);
+  const list = existing || [];
+  const have = new Set(list.map((x) => (typeof x === "string" ? x : x?.id)));
+  const bills = list.filter(
+    (x): x is ExistingBill =>
+      !!x && typeof x === "object" && (x.kind === undefined || x.kind === "rent") && x.status !== "void",
+  );
+  return rentPeriods(a, throughDayKey).filter((p) => {
+    if (have.has(`${a.id}_${p.periodFrom}`)) return false;
+    if (a.period === "weekly") return true;
+    const f = parts(p.periodFrom);
+    const first = monthDay(f.y, f.m, 1);
+    const last = monthDay(f.y, f.m, 31);
+    return !bills.some((b) => String(b.periodFrom) <= last && String(b.periodTo) >= first);
+  });
+}
+
+/** The first day of the next period that has no bill yet: where a changed fee or due day starts to apply ("" when none). */
+export function nextUnbilledPeriodStart(
+  assignment: FleetAssignment,
+  existing: (string | ExistingBill)[],
+  fromDayKey: string,
+): string {
+  const through = dayKeyOf(dayNum(fromDayKey) + 800);
+  const next = missingRentPeriods(assignment, existing, through)[0];
+  return next ? next.periodFrom : "";
+}
+
+/**
+ * Rent bills not yet created, through a day. Idempotent by bill id (and never
+ * a second bill for a calendar month). The period cut by endDayKey follows
+ * settings.returnRule ("full" by default, or "days": pro rata by days used
+ * within that period). Each period is billed at the fee in force for it.
  */
 export function rentBillsToCreate(
   assignment: FleetAssignment,
-  existingBillIds: string[],
+  existingBillIds: (string | ExistingBill)[],
   throughDayKey: string,
   settings?: FleetSettings,
 ): Row[] {
   const a = assignment || ({} as FleetAssignment);
-  const have = new Set(existingBillIds || []);
   const days = Boolean(settings) && settings?.returnRule === "days";
   const out: Row[] = [];
-  for (const p of rentPeriods(a, throughDayKey)) {
+  for (const p of missingRentPeriods(a, existingBillIds, throughDayKey)) {
     const id = `${a.id}_${p.periodFrom}`;
-    if (have.has(id)) continue;
-    let amount = Math.round(Number(a.rentCents) || 0);
+    let amount = Math.round(Number(termsAt(a, p.periodFrom).rentCents) || 0);
     if (days && a.endDayKey && a.endDayKey >= p.periodFrom && a.endDayKey < p.periodTo) {
       const used = dayNum(a.endDayKey) - dayNum(p.periodFrom) + 1;
       const total = dayNum(p.periodTo) - dayNum(p.periodFrom) + 1;
@@ -157,8 +214,8 @@ const remaining = (b: FleetBill): number => Math.max(0, (Number(b.amountCents) |
 
 /**
  * Late fees to create: one per open, unpaid rent bill whose fee day has come
- * (the office's day of the due month, or of the next month when the bill is
- * due after it), from firstMonth on, with no late fee yet.
+ * (the office's day of the due month when the bill is due on or before it,
+ * else three days after the due day), from firstMonth on, with no late fee yet.
  */
 export function lateFeesToCreate(bills: FleetBill[], settings: FleetSettings | undefined, todayKey: string): Row[] {
   const lf = settings?.lateFee || {};
@@ -173,7 +230,7 @@ export function lateFeesToCreate(bills: FleetBill[], settings: FleetSettings | u
     if (b.dueDayKey.slice(0, 7) < lf.firstMonth) continue;
     const due = parts(b.dueDayKey);
     let fee = monthDay(due.y, due.m, dom);
-    if (b.dueDayKey > fee) fee = monthDay(due.y, due.m + 1, dom);
+    if (b.dueDayKey > fee) fee = dayKeyOf(dayNum(b.dueDayKey) + 3);
     if (todayKey < fee) continue;
     out.push({
       id: `${b.id}_late`,
