@@ -23,7 +23,7 @@ const grid = (driverId: string, name: string, last: "full" | "part" | "owed" | "
 });
 const driver = (id: string, extra: Partial<DriverRow> = {}): DriverRow => ({
   id, name: id, phone: "", status: "active", plate: "", carId: "c", owedCents: 0, lateCents: 0, creditCents: 0,
-  personalCents: 10, rentCents: 40000, search: "", ...extra,
+  rentCents: 40000, search: "", ...extra,
 });
 
 test("Payments grid: view, this month's state, late, search, sort", () => {

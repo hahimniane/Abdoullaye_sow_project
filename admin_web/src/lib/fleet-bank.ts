@@ -130,6 +130,8 @@ export function waitingReasonText(reason: string): string {
     return "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.";
   if (reason === "not_zelle")
     return "This deposit is not a Zelle (cash, a check, a card payout or a transfer). Pick the driver only if it is a driver's payment.";
+  if (reason === "shared_payer")
+    return "This person pays for more than one driver. Pick the driver.";
   if (reason === "driver_left")
     return "This sender paid for a driver who left. Pick who this payment is for.";
   if (reason === "own_transfer")

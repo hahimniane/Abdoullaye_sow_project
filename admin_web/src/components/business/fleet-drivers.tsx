@@ -21,7 +21,6 @@ import {
   type DriverFilter,
   type DriverSort,
   returnRuleText,
-  zelleAmountText,
   type FleetSettingsView,
 } from "@/lib/fleet";
 import { driverBalance, type FleetBill } from "@/lib/fleet-billing";
@@ -31,6 +30,7 @@ import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 import type { FleetState } from "./fleet-data";
 import { FriendsPanel, NotesPanel, ProfileTenureFacts, TrackRecordPanel } from "./fleet-profile";
 import { fleetLang, FleetModal, Money, SaveButton, useFleetRun } from "./fleet-ui";
+import { FleetPayerNames } from "./fleet-payer-names";
 import { FleetRemindButton } from "./fleet-whatsapp";
 
 type Row = Record<string, unknown> & { id: string };
@@ -129,7 +129,6 @@ export function FleetDrivers({
             }}>
               <option value="name">Name A–Z</option>
               <option value="owed">Most owed first</option>
-              <option value="cents">Zelle cents</option>
             </select>
           </label>
         </div>
@@ -164,7 +163,6 @@ export function FleetDrivers({
                 <span>Plate</span>
                 <span className="num">Owed</span>
                 <span className="num">Credit</span>
-                <span className="num">Zelle cents</span>
               </div>
               {shown.map((r) => (
                 <button className="fleet-grid-row fleet-drivers-cols" key={r.id} onClick={() => onOpenDriver(r.id)} type="button">
@@ -177,7 +175,6 @@ export function FleetDrivers({
                   </span>
                   <span className={`num${r.lateCents > 0 ? " fleet-late" : ""}`} data-no-translate>{r.owedCents > 0 ? moneyText(r.owedCents, lang) : "—"}</span>
                   <span className="num" data-no-translate>{r.creditCents > 0 ? moneyText(r.creditCents, lang) : "—"}</span>
-                  <span className="num" data-no-translate>{r.personalCents === null ? "—" : String(r.personalCents).padStart(2, "0")}</span>
                 </button>
               ))}
             </div>
@@ -361,7 +358,6 @@ function DriverPage({
   const shownBills = useMemo(() => bills.filter((b) => billInView(b, billView)), [bills, billView]);
   const shownPayments = useMemo(() => payments.filter((p) => paymentInView(p, paymentView)), [payments, paymentView]);
   const balance = useMemo(() => driverBalance(bills, Number(driver.creditCents) || 0, state.todayKey), [bills, driver, state.todayKey]);
-  const code = zelleAmountText(balance.owedCents, driver.personalCents);
   const address = (driver.address ?? {}) as Record<string, unknown>;
   const addressLine = [address.line1, address.city, address.state, address.zip].map(s).filter(Boolean).join(", ");
 
@@ -405,17 +401,6 @@ function DriverPage({
             </div>
           </div>
         </div>
-        <p className="lst-hint">
-          {code ? (
-            <>
-              <span>Zelle amount for this driver</span> <b data-no-translate>{code}</b>
-              <br />
-              <span>The last two digits are this driver&apos;s own, so the amount tells us who paid.</span>
-            </>
-          ) : (
-            "This driver has no Zelle cents yet (only active drivers get them)."
-          )}
-        </p>
         <div className="fleet-actions">
           <button className="lst-btn" type="button" onClick={() => setDialog("payment")}>Record a payment</button>
           <button className="lst-btn ghost" type="button" onClick={() => setDialog("charge")}>Add a charge</button>
@@ -462,6 +447,7 @@ function DriverPage({
         )}
       </Panel>
 
+      <FleetPayerNames businessId={businessId} driver={driver} />
       <TrackRecordPanel businessId={businessId} driver={driver} refresh={profileRefresh} state={state} />
       <NotesPanel businessId={businessId} driver={driver} isAdmin={isAdmin} state={state} />
       <FriendsPanel businessId={businessId} driver={driver} isAdmin={isAdmin} state={state} />

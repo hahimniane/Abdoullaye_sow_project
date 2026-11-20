@@ -30,7 +30,7 @@ import { fleetLang, SaveButton, useFleetRun } from "./fleet-ui";
 const STATUS_TIMEOUT_MS = 20_000;
 
 /** bank_status, with a load that always ends (answer, error or timeout). */
-function useFleetBank(businessId: string) {
+export function useFleetBank(businessId: string) {
   const [status, setStatus] = useState<FleetBankStatus | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -234,9 +234,9 @@ export function FleetBankRemoved({
 }
 
 /** Fleet payments: the deposits waiting for a driver, and "Check bank now". */
-export function FleetBankDeposits({ businessId, state }: { businessId: string; state: FleetState }) {
+export function FleetBankDeposits({ businessId, state, bank }: { businessId: string; state: FleetState; bank: ReturnType<typeof useFleetBank> }) {
   const lang = fleetLang();
-  const { status, error: loadError, loading, reload } = useFleetBank(businessId);
+  const { status, error: loadError, loading, reload } = bank;
   const { busy, error, setError, run } = useFleetRun(businessId);
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [flash, setFlash] = useState("");

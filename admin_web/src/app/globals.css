@@ -17908,7 +17908,7 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 .fleet-grid-head > span { font-size: 12px !important; font-weight: 700 !important; }
 .fleet-grid-foot { background: rgba(247, 247, 247, 0.95); border-top: 2px solid var(--rule); font-weight: 700; }
 
-.fleet-drivers-cols { grid-template-columns: minmax(160px, 1.6fr) minmax(120px, 1fr) minmax(70px, .6fr) minmax(90px, .8fr) minmax(84px, .8fr) minmax(84px, .8fr) minmax(70px, .6fr); min-width: 760px; }
+.fleet-drivers-cols { grid-template-columns: minmax(160px, 1.6fr) minmax(120px, 1fr) minmax(70px, .6fr) minmax(90px, .8fr) minmax(84px, .8fr) minmax(84px, .8fr); min-width: 700px; }
 .fleet-cars-cols { grid-template-columns: minmax(100px, 1fr) minmax(120px, 1.2fr) minmax(140px, 1.4fr) minmax(100px, .9fr) minmax(110px, 1fr) minmax(110px, 1fr); min-width: 720px; }
 .fleet-paper-cols { grid-template-columns: minmax(100px, 1fr) minmax(140px, 1.4fr) minmax(110px, 1fr) minmax(110px, .9fr) minmax(110px, 1fr) minmax(110px, .9fr); min-width: 720px; }
 
@@ -18106,6 +18106,12 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 .fleet-bank-deposit small { color: var(--muted); font-size: 12.5px; }
 .fleet-bank-assign { align-items: center; display: flex; flex: 1 1 280px; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .fleet-bank-assign .lst-field { flex: 1 1 180px; margin: 0; }
+.fleet-claim .fleet-bank-deposit > :last-child { margin-top: 4px; }
+.fleet-claim .bubble-image { border-radius: 8px; max-height: 280px; max-width: 100%; }
+.fleet-payer-names { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin-top: 10px; padding: 0; }
+.fleet-payer-names li { align-items: center; background: var(--paper-soft, #fafafa); border: 1px solid var(--rule); border-radius: 999px; display: inline-flex; gap: 6px; padding: 4px 6px 4px 12px; }
+.fleet-payer-add { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.fleet-payer-add .lst-field { flex: 1 1 220px; margin: 0; max-width: 360px; }
 .bp-doc-skipped { color: #047857; font-weight: 700; margin: 4px 0 0; }
 .fleet-driver-chips { margin: 10px 0; }
 .fleet-no-fee { color: #7a4b00; display: block; font-size: 12px; font-weight: 700; }

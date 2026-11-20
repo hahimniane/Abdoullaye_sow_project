@@ -48,6 +48,15 @@ export function useFleetData(businessId: string, enabled: boolean): FleetState {
   }, [drivers.rows, cars.rows, assignments.rows, bills.rows, payments.rows, notes.rows, substitutes.rows, loading, error]);
 }
 
+/**
+ * The drivers' reported payments (fleetClaims), live. Kept apart from
+ * useFleetData on purpose: the claims panel shows its own loading/error line,
+ * so a claims problem never blanks the drivers pages.
+ */
+export function useFleetClaims(businessId: string, enabled: boolean) {
+  return useBusinessCollection("fleetClaims", businessId, enabled, COMPLETE);
+}
+
 /** Calls the one Fleet callable. Throws the callable's error (read it with fleetErrorMessage). */
 export async function callFleet<T = Record<string, unknown>>(
   action: string,

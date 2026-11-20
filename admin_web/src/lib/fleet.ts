@@ -36,6 +36,9 @@ export const FLEET_REFUSALS: Record<string, string> = {
   fleet_no_phone: "This driver has no WhatsApp number. Add one in Edit details.",
   fleet_driver_left: "This driver has left.",
   fleet_staff_only:"This staff account is not allowed to manage Fleet.",
+  fleet_claim_not_found: "That claim was not found. It may already be closed.",
+  fleet_deposit_taken: "That deposit was already used for another payment.",
+  fleet_driver_not_active: "This driver is not active.",
 };
 
 /** The sentence to show for a failed Fleet call: the server's reason, else its message, else a fallback. */
@@ -117,18 +120,6 @@ export function centsToInput(cents: unknown): string {
   const n = Math.round(Number(cents) || 0);
   if (n === 0) return "";
   return n % 100 === 0 ? String(n / 100) : (n / 100).toFixed(2);
-}
-
-/**
- * The Zelle amount a driver pays: the dollars owed plus their personal cents,
- * so the amount itself is the code ("Pays $1,200.07"). Null with no code.
- */
-export function zelleAmountText(owedCents: number, personalCents: unknown): string | null {
-  const p = Number(personalCents);
-  if (!Number.isInteger(p) || p < 1 || p > 99) return null;
-  // Rounded UP, so the driver is never a few cents short (fleet_whatsapp.js).
-  const dollars = Math.ceil(Math.max(0, Number(owedCents) || 0) / 100);
-  return `$${dollars.toLocaleString("en-US")}.${String(p).padStart(2, "0")}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -308,7 +299,6 @@ export type DriverRow = {
   owedCents: number;
   lateCents: number;
   creditCents: number;
-  personalCents: number | null;
   /** The current car's plate fee (rent), 0 when none is set or no car. */
   rentCents: number;
   search: string;
@@ -320,7 +310,6 @@ export function driverRows(data: FleetData, index: FleetIndex, todayKey: string)
     const car = current ? index.carById.get(String(current.carId)) : undefined;
     const plate = str(car?.plate);
     const balance = driverBalance(index.billsByDriver.get(d.id) ?? [], num(d.creditCents), todayKey);
-    const personal = Number(d.personalCents);
     return {
       id: d.id,
       name: str(d.name),
@@ -331,7 +320,6 @@ export function driverRows(data: FleetData, index: FleetIndex, todayKey: string)
       owedCents: balance.owedCents,
       lateCents: balance.lateCents,
       creditCents: balance.creditCents,
-      personalCents: Number.isInteger(personal) && personal >= 1 ? personal : null,
       rentCents: current ? Math.max(0, num(current.rentCents)) : 0,
       search: driverSearchText(d, plate),
     };
@@ -345,7 +333,7 @@ export function driverRows(data: FleetData, index: FleetIndex, todayKey: string)
 // who is late, who has credit, no car, no plate fee, and the order.
 
 export type DriverView = "active" | "left" | "all";
-export type DriverSort = "name" | "owed" | "cents";
+export type DriverSort = "name" | "owed";
 export type DriverFilter = {
   view: DriverView;
   owes: boolean;
@@ -391,7 +379,6 @@ export function filterDriverRows(rows: readonly DriverRow[], f: DriverFilter): D
   );
   const byName = (a: DriverRow, b: DriverRow) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
   if (f.sort === "owed") return out.sort((a, b) => b.owedCents - a.owedCents || byName(a, b));
-  if (f.sort === "cents") return out.sort((a, b) => (a.personalCents ?? 100) - (b.personalCents ?? 100) || byName(a, b));
   return out.sort(byName);
 }
 

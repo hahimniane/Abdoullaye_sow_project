@@ -2,7 +2,7 @@
 
 // Fleet drivers on WhatsApp (docs/FLEET.md §9): off until a Fleet admin
 // sends a test to their own phone and switches it on. Then drivers get a
-// receipt for each payment and rent reminders with the exact Zelle amount.
+// receipt for each payment and rent reminders with the amount owed.
 // "Only chosen drivers" limits it to a few drivers: a test or a pilot.
 
 import { useMemo, useState } from "react";
@@ -122,7 +122,7 @@ export function FleetWhatsAppPanel({
   return (
     <Panel title="WhatsApp to drivers" icon={<MessageCircle size={18} />}>
       <p className="lst-hint">
-        Drivers get, on WhatsApp, in English and French: a receipt each time a payment is recorded, and a reminder 2 days before rent is due, on the due day, 3 days after if still unpaid, then every week. Each reminder says how to pay by Zelle and the exact amount to send, with the driver&apos;s cents.
+        Drivers get, on WhatsApp, in English and French: a receipt each time a payment is recorded, and a reminder 2 days before rent is due, on the due day, 3 days after if still unpaid, then every week. Each reminder says how to pay by Zelle and the amount to send.
       </p>
       {error && <div className="lst-form-error" role="alert">{error}</div>}
       <div className={`fleet-wa-state${enabled ? " on" : ""}`} role="status">

@@ -25,7 +25,6 @@ import {
   readImportPreview,
   shiftMonth,
   tenureText,
-  zelleAmountText,
   type FleetData,
 } from "./fleet.ts";
 
@@ -112,7 +111,8 @@ describe("tiles, drivers and cars", () => {
     assert.equal(rows[0].name, "Amadou Diallo");
     assert.equal(rows[0].plate, "T123456C");
     assert.equal(rows[0].owedCents, 120000);
-    assert.equal(rows[0].personalCents, 7);
+    // An old record that still carries personalCents reads without error and shows nothing.
+    assert.equal("personalCents" in rows[0], false);
     assert.equal(rows[1].creditCents, 5000);
     assert.ok(matchesSearch(rows[0].search, "t1234 amadou"));
     assert.ok(!matchesSearch(rows[0].search, "bako"));
@@ -156,14 +156,6 @@ describe("money and codes", () => {
     assert.equal(dollarsToCents(""), null);
   });
 
-  it("makes the Zelle amount the code", () => {
-    assert.equal(zelleAmountText(120000, 7), "$1,200.07");
-    assert.equal(zelleAmountText(0, 42), "$0.42");
-    // Rounded up: $349.83 owed reads "$350.17", never 66 cents short.
-    assert.equal(zelleAmountText(34983, 17), "$350.17");
-    assert.equal(zelleAmountText(1000, null), null);
-    assert.equal(zelleAmountText(1000, 100), null);
-  });
 });
 
 describe("settings and refusals", () => {
