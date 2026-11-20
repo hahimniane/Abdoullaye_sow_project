@@ -14,7 +14,10 @@ decided 2026-11-01 → 2026-11-11 (memory: project_fleet_module).
 | Q2/Q3 | Insurance is paid to the broker, not to the business: not a bill line. It is car paperwork (insurer, policy, premium, due day, autopay); drivers upload proof (phase 2), the office ticks it. |
 | Q5 | Monthly due on the 1st, weekly on Monday (editable per driver). Reminders 2 days before, on the day, late, then weekly. **Late fee**: the office sets the amount, the exact day of the month it applies and the first month it applies; one fee per late bill; admins can waive (History). Fees are paid first. |
 | Q6 | Two levels: **Fleet staff** (permission `fleet`: see all, record payments, add cars/drivers/one-off charges, tick insurance) and **Fleet admin** (`fleet_admin`, plus the owner/full access: rents, late fee, due days, waive, undo payments, settings, import, bank). History on everything. |
-| Q8 | Overpay → driver credit, applied to the next bill automatically. |
+| Q8 | Overpay → driver credit, applied to the next bill automatically (every new bill: rent, late fee, one-off charge; late fees first, then oldest due). |
+| D1 (11/19) | Monthly billing is by **calendar month**. A driver who gets a plate mid-month pays the full month, due the day they get it (or the due day, when that is later in the start month); from the next month on the bill is the 1st to the last day, due on the assignment's due day. Weekly periods are unchanged. The daily job never bills a calendar month twice (a non-void rent bill of the assignment overlapping that month blocks a new monthly period). |
+| D2 (11/19) | With `returnRule` "days", the month a plate comes back in is charged for the days used within that bill's own period; "full" keeps it whole. |
+| L4 (11/19) | **Late-fee date**: the fee day of the due month when the bill is due on or before it; otherwise the due day + 3 days. |
 | Zelle (11/05) | **No staff step.** Each active driver has personal cents (the amount is the code). A driver taps "I paid" (amount + sender name); the bank must agree. An unknown deposit is asked to drivers on WhatsApp; only a true two-driver dispute goes to the owner. Phase 1b. |
 | Q10 | A car returned mid-period: a Fleet setting the admin picks — `full` period or `days` used (pro rata by day). |
 | Q11 | Drivers see only their fleet business on Laawol (its Fleet pages and its other services), never other businesses. Setting on by default; the Fleet admin can turn it off. **Fleet drivers only** — other customers keep the marketplace (Q12). Phase 2. |
@@ -41,7 +44,9 @@ decided 2026-11-01 → 2026-11-11 (memory: project_fleet_module).
   sinceDayKey}` moves the old car into `vehicleHistory`.
 - `fleetAssignments/{id}`: `businessId, carId, driverId, startDayKey,
   endDayKey|null, rentCents, period "weekly"|"monthly", dueDay (monthly 1–28,
-  weekly 1=Mon…7=Sun), createdBy`.
+  weekly 1=Mon…7=Sun), rentHistory [{rentCents, dueDay, fromDayKey,
+  toDayKey}] (the values before each change, `assignment_update`),
+  rentFromDayKey (when the current fee started), createdBy`.
 - `fleetBills/{id}` (id = `${assignmentId}_${periodFrom}` for rent, random for
   others): `businessId, driverId, carId, assignmentId, kind
   "rent"|"charge"|"late_fee"|"ticket", label, periodFrom, periodTo, dueDayKey,
@@ -59,10 +64,18 @@ decided 2026-11-01 → 2026-11-11 (memory: project_fleet_module).
 ## 3. Pure logic (`functions/fleet_billing.js`, mirrored in `admin_web/src/lib/fleet-billing.ts`; shared fixture `functions/test/fixtures/fleet-billing-cases.json`)
 
 - `rentPeriods(assignment, throughDayKey)` — the periods from start to the
-  period containing `throughDayKey` (monthly: calendar months starting on the
-  start's due day; weekly: weeks ending before the due weekday).
-- `rentBillsToCreate(assignment, existingBillIds, throughDayKey, settings)` —
-  idempotent; a period cut by `endDayKey` follows `returnRule`.
+  period containing `throughDayKey` (monthly: the first period is the start
+  to the end of its month, due the later of the start day and the due day,
+  then calendar months due on the due day; weekly: weeks from the start's
+  weekday). Each period uses the fee and due day in force for it
+  (`rentHistory`, `termsAt`).
+- `rentBillsToCreate(assignment, existing, throughDayKey, settings)` —
+  idempotent by bill id; `existing` is ids or bills, and a monthly period is
+  skipped when a non-void rent bill of the assignment already overlaps its
+  calendar month (`missingRentPeriods`). A period cut by `endDayKey` follows
+  `returnRule` (days used within that period).
+- `nextUnbilledPeriodStart(assignment, existing, todayKey)` — where a
+  changed fee or due day starts to apply.
 - **`billFromDayKey`** (on an assignment, later than its start): the first
   day rent is owed from. Monthly periods then run from that day; weekly ones
   keep the start's weekday and leave out the weeks that begin before it. The
@@ -78,7 +91,7 @@ decided 2026-11-01 → 2026-11-11 (memory: project_fleet_module).
   assignment's periods do not name (an imported month) is worth once the
   plate is back: used in full = unchanged, cut = `returnRule`, later = 0.
 - `lateFeesToCreate(bills, settings, todayKey)` — one per open rent bill whose
-  due day has passed the office's fee day, from `firstMonth` on, not waived.
+  fee date (L4 above) has come, from `firstMonth` on, not waived.
 - `allocatePayment(openBills, amountCents)` — late fees first, then oldest due
   first; leftover → credit. Returns `{allocations, creditAddedCents}`.
 - `applyCredit(openBills, creditCents)` — same order.
@@ -89,17 +102,21 @@ decided 2026-11-01 → 2026-11-11 (memory: project_fleet_module).
 
 One new callable `fleetAction {action, businessId, ...}` (actions below) and
 one scheduled job `fleetDaily` (bills for the period, late fees; reminders in
-phase 2). Budget: four rarely used admin tools drop to `maxInstances: 1`.
+phase 2). One failing assignment never stops the rest of the business's day or
+its late fees (each has its own try/catch and a logged warning); a driver
+marked "left" is never billed. Budget: four rarely used admin tools drop to `maxInstances: 1`.
 
 | Action | Who | What |
 |---|---|---|
 | `settings_save` | admin | late fee, return rule, Zelle details, drivers-see-only switch |
 | `driver_save` / `car_save` | staff | add / edit (admin for rent-related fields) |
-| `assignment_start` / `assignment_end` | admin | car to driver with rent; return a car (bills cut by `returnRule`) |
+| `assignment_start` / `assignment_end` | admin | car to driver with rent; return a car (bills cut by `returnRule`). Refused: `fleet_car_taken` (plate has an open assignment), `fleet_car_overlap` (start on or before the plate's last end day), `fleet_already_returned`. A return voids the late fees of bills that are gone (money on them becomes credit); a retried transaction credits once |
+| `assignment_update {assignmentId, rentCents?, dueDay?}` | admin | change the plate fee / due day from the next period that has no bill; returns `{success, effectiveDayKey}`; refused `fleet_bad_input`, `fleet_already_returned`, `fleet_not_found` |
+| `driver_leave {driverId, endDayKey}` | fleet (staff) | every open plate of the driver comes back on that day, driver set to "left"; returns `{success, ended}`. `driver_save` refuses status "left" while the driver has a plate (`fleet_driver_has_plate`) |
 | `charge_add` | staff | one-off charge on a driver |
-| `bill_waive` | admin | waive a late fee or charge, with reason |
+| `bill_waive` | admin | waive a bill, with reason (a waived rent bill voids its late fee) |
 | `payment_record` | staff | cash/Zelle typed in; allocated oldest first |
-| `payment_undo` | admin | back off the bills; credit back |
+| `payment_undo` | admin | back off the bills; credit back. After a plate return the part of an allocation no longer on its bill is taken from the driver's credit (then from later bills that credit paid) |
 | `import_sheet` | admin | rows parsed from the sheet (§5), idempotent by `importKey` |
 
 ## 5. Import
