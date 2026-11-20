@@ -9,40 +9,40 @@
 
 import { useMemo, useState } from "react";
 import { MessageSquareText, RefreshCw } from "lucide-react";
-import { getDownloadURL, ref as storageRef } from "firebase/storage";
 
 import { Panel } from "@/components/panel";
 import { AttachmentPreview } from "@/components/support/attachment-preview";
 import { formatDateTime } from "@/lib/format";
-import { storage } from "@/lib/firebase";
-import { depositsForClaim, openClaimViews, type ClaimView } from "@/lib/fleet-claims";
+import { depositsForClaim, openClaimViews, PHOTO_DELETED_TEXT, PHOTO_NONE_TEXT, readPhotoAnswer, type ClaimView, type PhotoAnswer } from "@/lib/fleet-claims";
 import { moneyText } from "@/lib/invoice-ledger";
 
 import type { useFleetBank } from "./fleet-bank";
-import { useFleetClaims, type FleetState } from "./fleet-data";
+import { callFleet, useFleetClaims, type FleetState } from "./fleet-data";
 import { fleetLang, SaveButton, useFleetRun } from "./fleet-ui";
 
-/** "View photo": the stored screenshot is fetched on click (never in bulk) and shown in the row. */
-function ClaimPhoto({ path }: { path: string }) {
-  const [url, setUrl] = useState("");
-  const [state, setState] = useState<"idle" | "loading" | "gone">("idle");
-  if (!path) return <span className="lst-hint">No photo</span>;
-  if (url) return <AttachmentPreview fileName="Payment screenshot" fileUrl={url} isImage />;
-  if (state === "gone") return <span className="wa-media-gone">Photo not available</span>;
+/** "View photo": the server hands over the screenshot's link on click only (never in bulk); it is shown in the row. */
+function ClaimPhoto({ businessId, claimId, hasPhoto }: { businessId: string; claimId: string; hasPhoto: boolean }) {
+  const [answer, setAnswer] = useState<PhotoAnswer | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
+  if (!hasPhoto) return <span className="lst-hint">{PHOTO_NONE_TEXT}</span>;
+  if (answer?.kind === "url") return <AttachmentPreview fileName="Payment screenshot" fileUrl={answer.url} isImage />;
+  if (answer?.kind === "deleted") return <span className="wa-media-gone">{PHOTO_DELETED_TEXT}</span>;
+  if (answer?.kind === "none") return <span className="lst-hint">{PHOTO_NONE_TEXT}</span>;
   async function open() {
     setState("loading");
     try {
-      // A stored path, opened like the Fleet notes' files; a full link is used as given.
-      const link = /^https?:\/\//i.test(path) ? path : await getDownloadURL(storageRef(storage, path));
-      setUrl(link);
+      setAnswer(readPhotoAnswer(await callFleet("claim_photo", businessId, { claimId })));
     } catch {
-      setState("gone");
+      setState("failed");
     }
   }
   return (
-    <button className="ghost-button compact" type="button" disabled={state === "loading"} aria-busy={state === "loading"} onClick={() => void open()}>
-      {state === "loading" && <RefreshCw className="spin" size={12} aria-hidden="true" />} View photo
-    </button>
+    <>
+      <button className="ghost-button compact" type="button" disabled={state === "loading"} aria-busy={state === "loading"} onClick={() => void open()}>
+        {state === "loading" && <RefreshCw className="spin" size={12} aria-hidden="true" />} View photo
+      </button>
+      {state === "failed" && <small className="wa-media-gone" role="alert">Photo not available</small>}
+    </>
   );
 }
 
@@ -117,7 +117,7 @@ export function FleetClaimsPanel({ businessId, state, bank }: { businessId: stri
                   <span data-no-translate>{v.who}</span>
                   <small data-no-translate>{v.atMs > 0 ? formatDateTime(v.atMs) : ""}</small>
                   <small>{v.sentence}</small>
-                  <ClaimPhoto path={v.mediaPath} />
+                  <ClaimPhoto businessId={businessId} claimId={v.id} hasPhoto={v.hasPhoto} />
                 </div>
                 <div className="fleet-bank-assign">
                   {picking ? (

@@ -124,8 +124,7 @@ export function readFleetBankStatus(answer: unknown): FleetBankStatus {
 
 /** Why a deposit is waiting, in the office's words. */
 export function waitingReasonText(reason: string): string {
-  if (reason === "two_drivers") return "It could be from two drivers: pick the right one.";
-  if (reason === "undone") return "Its payment was undone: pick the right driver.";
+  if (reason === "undone") return "This deposit's payment was undone. It will not pay anyone by itself: pick the driver.";
   if (reason === "possible_duplicate")
     return "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.";
   if (reason === "not_zelle")

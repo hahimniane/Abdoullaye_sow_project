@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 
-import { useBusinessCollection } from "@/lib/business-data";
+import { useBusinessCollection, type BusinessCollectionOptions } from "@/lib/business-data";
 import { functions } from "@/lib/firebase";
 import { indexFleet, newYorkDayKey, refreshedDayKey, type FleetData, type FleetIndex } from "@/lib/fleet";
 
@@ -21,6 +21,8 @@ export type FleetState = {
 };
 
 const COMPLETE = { pageSize: null, sort: "query" } as const;
+/** The claims listener's shape; console-query-indexes.test.ts pins it. */
+export const FLEET_OPEN_CLAIMS: BusinessCollectionOptions = { pageSize: null, sort: "query", where: [["open", "==", true]] };
 const DAY_CHECK_MS = 60_000;
 
 /**
@@ -69,7 +71,9 @@ export function useFleetData(businessId: string, enabled: boolean): FleetState {
  * so a claims problem never blanks the drivers pages.
  */
 export function useFleetClaims(businessId: string, enabled: boolean) {
-  return useBusinessCollection("fleetClaims", businessId, enabled, COMPLETE);
+  // Only open claims (the server keeps `open` true until paid or closed): closed history is never downloaded.
+  // Two equalities (businessId, open): served by the single-field indexes, no composite index.
+  return useBusinessCollection("fleetClaims", businessId, enabled, FLEET_OPEN_CLAIMS);
 }
 
 /** Calls the one Fleet callable. Throws the callable's error (read it with fleetErrorMessage). */

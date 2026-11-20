@@ -6,12 +6,18 @@
 // with the plain amount owed. Off until the business switches it on
 // (after a test to its own phone). Pure: no Firestore, no WhatsApp.
 
+const fleetBilling = require("./fleet_billing");
+
 const RECEIPT_TEMPLATE = "fleet_receipt_2lang";
 const REMINDER_TEMPLATE = "fleet_rent_reminder_2lang";
 /** Reminders go out once a day at this New York hour. */
 const REMINDER_HOUR = 10;
 const LANGUAGE = "en";
 const DAY_MS = 86400000;
+/** A message row is tried at most this many times in all. */
+const MAX_ATTEMPTS = 3;
+/** A row still "queued" after this long was lost in a crash: retry it. */
+const QUEUED_STALE_MS = 10 * 60 * 1000;
 
 const EN_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
   "Sep", "Oct", "Nov", "Dec"];
@@ -24,6 +30,33 @@ const dayNum = (key) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ""));
   return m ? Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / DAY_MS) : null;
 };
+
+const dayKeyOf = (n) => new Date(n * DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * How a driver is addressed: the stored name without the office notes
+ * imported names carry ("Fawaz #9", "ABU HASSAN (25)", "... STORAGE
+ * 2/14/25"). Same rule as driverDisplayName in admin_web/src/lib/fleet.ts:
+ * a trailing "drop", "storage" or "voir folder" word and all after it, then
+ * trailing "#12", "#" and "(25)" tags, are cut; an empty result falls back
+ * to the full name. The stored name is never changed.
+ *
+ * @param {*} name The stored name.
+ * @return {string} The name to put in a message.
+ */
+function driverDisplayName(name) {
+  const full = String(name ?? "").replace(/\s+/g, " ").trim();
+  let out = full.replace(
+      /(^|\s)(?:drop|storage|voir\s+folder)(?![\p{L}\p{N}_]).*$/iu, "")
+      .trim();
+  for (let i = 0; i < 10; i++) {
+    const next = out.replace(/\s*(?:#\s*\d*|\(\s*\d+\s*\))\s*$/, "")
+        .trim();
+    if (next === out) break;
+    out = next;
+  }
+  return out || full;
+}
 
 /**
  * "$1,234.56" / "1 234,56 $".
@@ -96,6 +129,77 @@ function oldestOpenBill(bills) {
 }
 
 /**
+ * The oldest open RENT bill with money left on it. A reminder is always
+ * about a rent bill: late fees and one-off charges only add to the amount.
+ *
+ * @param {Array<object>} bills The driver's bills.
+ * @return {object|null} The bill.
+ */
+function oldestOpenRentBill(bills) {
+  return oldestOpenBill((bills || []).filter((b) => b && b.kind === "rent"));
+}
+
+/**
+ * What a reminder says is owed: everything open, minus the credit the
+ * driver holds, never below zero.
+ *
+ * @param {number} owedCents Open bills' remaining total.
+ * @param {number} creditCents Credit held.
+ * @param {number} extraCents A coming fee not billed yet.
+ * @return {number} Cents.
+ */
+function amountToState(owedCents, creditCents, extraCents = 0) {
+  return Math.max(0, Math.round(Number(owedCents) || 0) +
+    Math.round(Number(extraCents) || 0) -
+    Math.max(0, Math.round(Number(creditCents) || 0)));
+}
+
+/**
+ * Looking ahead: the bill an assignment will get for the period that is due
+ * in exactly 2 days when none exists yet (a month's bill is only made on
+ * its first day, so the "2 days before" reminder cannot come from bills).
+ * Nothing is created; this only says what the bill will be.
+ *
+ * @param {object} assignment An open assignment (with id).
+ * @param {Array<object>} existing Every bill of that assignment.
+ * @param {string} todayKey Today (New York).
+ * @param {object} settings fleet.settings.
+ * @return {object|null} The bill it will get (label, dueDayKey, periodFrom,
+ *   amountCents...), or null.
+ */
+function comingBill(assignment, existing, todayKey, settings) {
+  const today = dayNum(todayKey);
+  if (today === null || !assignment || assignment.endDayKey) return null;
+  const target = dayKeyOf(today + 2);
+  const bills = fleetBilling.rentBillsToCreate(assignment, existing || [],
+      target, settings);
+  return bills.find((b) => b.dueDayKey === target) || null;
+}
+
+/**
+ * Whether a message row may be sent again: a failed one, or one stuck in
+ * "queued" for over 10 minutes, at most MAX_ATTEMPTS times in all. A sent,
+ * stopped or skipped row is final.
+ *
+ * @param {object} row The fleetMessages row (status, attempts, queuedAtMs
+ *   or createdAt).
+ * @param {number} nowMs Now.
+ * @return {boolean} True when to send again.
+ */
+function mayRetry(row, nowMs) {
+  const attempts = Math.max(1, Number(row?.attempts) || 1);
+  if (attempts >= MAX_ATTEMPTS) return false;
+  if (row?.status === "failed") return true;
+  if (row?.status === "queued") {
+    const since = Number(row.queuedAtMs) ||
+      (typeof row.createdAt?.toMillis === "function" ?
+        row.createdAt.toMillis() : 0);
+    return nowMs - since > QUEUED_STALE_MS;
+  }
+  return false;
+}
+
+/**
  * The reminder's status line, both languages.
  *
  * @param {string} kind soon | today | late.
@@ -142,7 +246,7 @@ function reminderValues(p) {
   const zelle = zelleLine(p.settings, p.businessName);
   const business = text(p.businessName, 80) || "—";
   return [
-    text(p.driverName, 60) || "—",
+    text(driverDisplayName(p.driverName), 60) || "—",
     business, status.en, money(p.owedCents, "en"), zelle,
     money(p.owedCents, "en"),
     business, status.fr, money(p.owedCents, "fr"), zelle,
@@ -186,7 +290,7 @@ function receiptValues(p) {
       Number(p.creditCents) || 0);
   const business = text(p.businessName, 80) || "—";
   return [
-    text(p.driverName, 60) || "—",
+    text(driverDisplayName(p.driverName), 60) || "—",
     business, money(p.amountCents, "en"), dayText(p.paidDayKey, "en"),
     balance.en,
     business, money(p.amountCents, "fr"), dayText(p.paidDayKey, "fr"),
@@ -238,6 +342,11 @@ function reachable(phone) {
  */
 function messageId(kind, p) {
   if (kind === "receipt") return `receipt_${text(p.paymentId, 160)}`;
+  if (kind === "lookahead") {
+    return `reminder_${text(p.driverId, 120)}_soon_${
+      text(p.assignmentId, 200)}_${text(p.periodFrom, 10)}`
+        .replace(/\//g, "_");
+  }
   if (kind === "reminder") {
     return `reminder_${text(p.driverId, 120)}_${text(p.billId, 200)}_${
       text(p.todayKey, 10)}`.replace(/\//g, "_");
@@ -246,6 +355,13 @@ function messageId(kind, p) {
 }
 
 module.exports = {
+  MAX_ATTEMPTS,
+  QUEUED_STALE_MS,
+  amountToState,
+  comingBill,
+  driverDisplayName,
+  mayRetry,
+  oldestOpenRentBill,
   RECEIPT_TEMPLATE,
   REMINDER_HOUR,
   REMINDER_TEMPLATE,

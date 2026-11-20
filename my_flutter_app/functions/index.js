@@ -48329,23 +48329,39 @@ async function readFleetPaymentPicture(image) {
 }
 
 /**
- * One Fleet WhatsApp: its fleetMessages row (created once: a second call
- * for the same id is skipped), then the send, then the outcome on the row.
+ * One Fleet WhatsApp: its fleetMessages row (created once), then the send,
+ * then the outcome on the row. A row that failed, or that sat "queued" for
+ * over 10 minutes (a crash), is sent again on a later call with the same
+ * id, at most 3 attempts in all (`attempts` on the row); a row that was
+ * sent, stopped or skipped is final, so nobody gets a message twice.
  *
  * @param {object} args {id, row, body, reachable}.
  * @return {Promise<string>} "sent" | "failed" | "stopped" | "skipped" |
- *   "" (already handled).
+ *   "" (already handled, or another call has it in hand).
  */
 async function sendFleetMessage(args) {
   const db = admin.firestore();
   const ref = db.collection("fleetMessages").doc(args.id);
-  const created = await ref.create({...args.row,
-    status: args.reachable ? "queued" : "skipped",
-    error: args.reachable ? "" : "No WhatsApp number on file.",
-    createdAt: FirestoreFieldValue.serverTimestamp()})
-      .then(() => true, () => false);
-  if (!created) return "";
-  if (!args.reachable) return "skipped";
+  const nowMs = Date.now();
+  // One transaction decides: make the row, take a stale one over, or leave.
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) {
+      tx.create(ref, {...args.row,
+        status: args.reachable ? "queued" : "skipped",
+        error: args.reachable ? "" : "No WhatsApp number on file.",
+        attempts: 1, queuedAtMs: nowMs,
+        createdAt: FirestoreFieldValue.serverTimestamp()});
+      return args.reachable ? "send" : "skipped";
+    }
+    const row = snap.data() || {};
+    if (!require("./fleet_whatsapp").mayRetry(row, nowMs)) return "";
+    tx.update(ref, {status: "queued", queuedAtMs: nowMs,
+      attempts: (Math.max(1, Number(row.attempts) || 1)) + 1,
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+    return "send";
+  }).catch(() => "");
+  if (claimed !== "send") return claimed;
   const result = containerWhatsAppConfigured() ?
     await sendWhatsAppMessage(args.body) :
     {ok: false, messageId: "", error: "WhatsApp is not connected yet."};

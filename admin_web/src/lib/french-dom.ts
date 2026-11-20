@@ -8849,8 +8849,6 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Bank checked. New deposits from known drivers are now paid.": "Banque vérifiée. Les nouveaux dépôts des chauffeurs connus sont payés.",
   "This month's bank-check limit is reached: Laawol reads what the bank already sent.": "La limite mensuelle de vérifications de banque est atteinte : Laawol lit ce que la banque a déjà envoyé.",
   "Laawol does not know this sender yet: pick the driver once and it is remembered.": "Laawol ne connaît pas encore cet expéditeur : choisissez le chauffeur une fois et il sera retenu.",
-  "It could be from two drivers: pick the right one.": "Il peut venir de deux chauffeurs : choisissez le bon.",
-  "Its payment was undone: pick the right driver.": "Son paiement a été annulé : choisissez le bon chauffeur.",
   "That deposit was already used for another payment.": "Ce dépôt a déjà servi pour un autre paiement.",
   "The bank details took too long to load. Try again.": "Les détails de la banque ont mis trop de temps à charger. Réessayez.",
 });
@@ -8957,9 +8955,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Bills stop on this date.": "La facturation s’arrête à cette date.",
   "The driver is marked as left. Their plate came back and their bills stopped.": "Le chauffeur est marqué comme parti. Sa plaque est revenue et sa facturation s’est arrêtée.",
   "Nothing was changed.": "Rien n’a été modifié.",
-  "This driver still has a plate. Use Driver has left, which returns it.": "Ce chauffeur a encore une plaque. Utilisez « Le chauffeur est parti », qui la rend.",
   "This plate was already returned.": "Cette plaque a déjà été rendue.",
-  "This plate is still with another driver on that date.": "Cette plaque est encore chez un autre chauffeur à cette date.",
 });
 Object.assign(TEXT_TRANSLATIONS, {
   "The bank took back a deposit that had paid a driver": "La banque a repris un dépôt qui avait payé un chauffeur",
@@ -8996,9 +8992,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This phone is not one of your drivers. Find out who the payment is for.": "Ce numéro n’est pas celui d’un de vos chauffeurs. Trouvez pour qui est le paiement.",
   "Two claims point to the same deposit. Pick who it belongs to.": "Deux signalements visent le même dépôt. Choisissez à qui il appartient.",
   "A person needs to look at this claim.": "Une personne doit regarder ce signalement.",
-  "That claim was not found. It may already be closed.": "Ce signalement est introuvable. Il est peut-être déjà fermé.",
   "That deposit was already used for another payment.": "Ce dépôt a déjà servi pour un autre paiement.",
-  "This driver is not active.": "Ce chauffeur n’est pas actif.",
   "Names this driver pays from": "Noms depuis lesquels ce chauffeur paie",
   "A Zelle from one of these names pays this driver by itself.": "Un Zelle depuis l’un de ces noms paie ce chauffeur automatiquement.",
   "No name yet. It is remembered the first time a deposit is matched to this driver.": "Aucun nom pour l’instant. Il est retenu la première fois qu’un dépôt est associé à ce chauffeur.",
@@ -9011,6 +9005,22 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This sender paid for a driver who left. Pick who this payment is for.": "Cet expéditeur payait pour un chauffeur parti. Choisissez pour qui est ce paiement.",
   "This is a transfer from a bank account, not a Zelle from a person. Use it for a driver only if they really paid this way.": "C’est un virement depuis un compte bancaire, pas un Zelle d’une personne. Ne l’utilisez pour un chauffeur que s’il a vraiment payé ainsi.",
   "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.": "Ce Zelle a peut-être déjà été utilisé et renvoyé par la banque. Ne le payez que si le chauffeur l’a vraiment envoyé deux fois.",
+});
+Object.assign(TEXT_TRANSLATIONS, {
+  "The driver did not give a readable amount. Look at the photo.": "Le chauffeur n’a pas donné de montant lisible. Regardez la photo.",
+  "No deposit has shown in the bank after 2 days.": "Aucun dépôt n’est apparu en banque après 2 jours.",
+  "The payment made from this report was undone. Pick the right deposit or close it.": "Le paiement fait à partir de ce signalement a été annulé. Choisissez le bon dépôt ou fermez-le.",
+  "This photo was deleted after 12 months.": "Cette photo a été supprimée après 12 mois.",
+  "This report is already closed.": "Ce signalement est déjà fermé.",
+  "This report has no driver yet. Wait for the sender to say who it is for, or close it.": "Ce signalement n’a pas encore de chauffeur. Attendez que l’expéditeur dise pour qui il est, ou fermez-le.",
+  "That deposit is no longer waiting. Refresh and try again.": "Ce dépôt n’est plus en attente. Actualisez et réessayez.",
+  "Add the Zelle email or phone in Fleet settings first.": "Ajoutez d’abord l’e-mail ou le téléphone Zelle dans les réglages de la flotte.",
+  "That name cannot be used. Type the person's full name as the bank shows it.": "Ce nom ne peut pas être utilisé. Écrivez le nom complet de la personne tel que la banque l’affiche.",
+  "cannot be used. Type the person's full name as the bank shows it.": "ne peut pas être utilisé. Écrivez le nom complet de la personne tel que la banque l’affiche.",
+  "Type the full name as the bank shows it, at least two words.": "Écrivez le nom complet tel que la banque l’affiche, au moins deux mots.",
+  "This deposit's payment was undone. It will not pay anyone by itself: pick the driver.": "Le paiement de ce dépôt a été annulé. Il ne paiera personne automatiquement : choisissez le chauffeur.",
+  "This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.": "Ce chauffeur a encore une plaque. Récupérez-la d’abord, ou demandez à un administrateur de la flotte d’utiliser « Le chauffeur est parti ».",
+  "This plate was with another driver until that day. Pick a later start day.": "Cette plaque était chez un autre chauffeur jusqu’à ce jour. Choisissez un jour de début plus tardif.",
 });
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
