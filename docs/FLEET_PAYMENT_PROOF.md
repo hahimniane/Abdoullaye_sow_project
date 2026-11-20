@@ -170,8 +170,13 @@ slow"; a deposit waits for the office):
   valid amount for, asks the driver for the amount. A covered driver's
   picture that could not be read is a claim asking the amount; an unknown
   phone's picture that could not be read is an ordinary support message.
-  While Fleet WhatsApp is on for any business, every picture from an unknown
-  phone is sent to the Claude API to see whether it is a payment.
+  **Privacy**: a picture is read by the Claude API only when (1) some
+  business has `fleet.settings.whatsapp.enabled`, and (2) it comes from a
+  covered driver, or from a phone the whole platform does not know (no
+  business has it on a record or has messaged it, no support conversation
+  exists: the lookups `handleInbound` uses to route a message, passed in as
+  `ctx.phoneIsKnown`). A customer any business already knows goes to ordinary
+  support, unread. Text messages are never read.
 - **Already recorded**: a picture of a payment the driver's remembered name
   already paid (same amount, bank date within a day of the picture, no claim
   attached) is answered "already recorded" and closes as `paid` with

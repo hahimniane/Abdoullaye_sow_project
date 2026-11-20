@@ -84,6 +84,7 @@ function inbound(from, o = {}) {
       "text", text: o.text || "", media: o.image ?
       {id: "m1", mimeType: "image/jpeg"} : null},
     lang: o.lang || "en", kept: () => kept,
+    phoneIsKnown: async () => o.known === true,
     fetchImage: async () => ({base64: "AAAA", mimeType: "image/jpeg"}),
     keep: async (businessId, opts) => {
       kept = true;
@@ -205,6 +206,29 @@ describe("who takes part", () => {
     assert.deepEqual((await send(P_STRANGER, {image: true})).step,
         {handled: false});
   });
+});
+
+describe("privacy: only a phone nobody knows is read", () => {
+  it("a phone some business already knows is never read", async () => {
+    const calls = readCalls;
+    const {step, log} = await picture(P_STRANGER, reading(),
+        {known: true});
+    assert.deepEqual(step, {handled: false});
+    assert.equal(readCalls, calls, "the picture was not sent to the API");
+    assert.deepEqual(log.kept, []);
+  });
+  it("a completely unknown phone's payment to the Zelle name is read",
+      async () => {
+        const calls = readCalls;
+        const P = "+16465559188";
+        const {step} = await picture(P, reading({
+          recipient: "Claims Fleet Co"}), {known: false});
+        assert.equal(step.outcome, "claim_asking_driver");
+        assert.equal(readCalls, calls + 1);
+        await db.collection("fleetClaims").where("fromPhone", "==", P).get()
+            .then((snap) => Promise.all(snap.docs.map((d) =>
+              d.ref.update({state: "closed", open: false}))));
+      });
 });
 
 describe("a driver's picture is a claim; the bank is the proof", () => {

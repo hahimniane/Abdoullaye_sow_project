@@ -2042,18 +2042,28 @@ function createFleetHandlers(deps) {
   }
 
   /**
-   * A picture from a phone no Fleet business knows, that reads as a payment
+   * The Fleet businesses whose WhatsApp-to-drivers switch is on. No picture
+   * is read when there are none.
+   *
+   * @return {Promise<Array<object>>} [{id, data}].
+   */
+  async function fleetsOnWhatsApp() {
+    const snap = await db().collection("businesses")
+        .where("fleet.enabled", "==", true).get();
+    return snap.docs.map((d) => ({id: d.id, data: d.data() || {}}))
+        .filter((b) => whatsappOn(b.data));
+  }
+
+  /**
+   * A picture from a phone the whole platform does not know (no business
+   * has it on a record, no conversation exists), that reads as a payment
    * to one Fleet business's Zelle name: which driver is it for?
    *
    * @param {object} ctx The inbound context.
+   * @param {Array<object>} fleets The Fleet businesses with WhatsApp on.
    * @return {Promise<object>} {handled, outcome, notify}.
    */
-  async function pictureFromStranger(ctx) {
-    const snap = await db().collection("businesses")
-        .where("fleet.enabled", "==", true).get();
-    const fleets = snap.docs.map((d) => ({id: d.id, data: d.data() || {}}))
-        .filter((b) => whatsappOn(b.data));
-    if (fleets.length === 0) return {handled: false};
+  async function pictureFromStranger(ctx, fleets) {
     const reading = await readPicture(ctx);
     if (!reading || reading.isPayment !== true) return {handled: false};
     const owners = fleets.filter((b) => fleetClaims.recipientMatches(
@@ -2211,10 +2221,23 @@ function createFleetHandlers(deps) {
         const done = await answerClaim(ctx, asking);
         if (done.handled) return done;
       }
+      // An ordinary text costs the one query above. A picture is read only
+      // when some business has Fleet WhatsApp on.
       if (!isPicture(event)) return {handled: false};
+      const fleets = await fleetsOnWhatsApp();
+      if (fleets.length === 0) return {handled: false};
       const drivers = await db().collection("fleetDrivers")
           .where("phone", "==", phone).limit(10).get();
-      if (drivers.size === 0) return await pictureFromStranger(ctx);
+      if (drivers.size === 0) {
+        // Privacy: only a phone nobody on the platform knows is read. A
+        // customer any business already knows goes to ordinary support,
+        // unread.
+        if (typeof ctx.phoneIsKnown !== "function" ||
+            await ctx.phoneIsKnown()) {
+          return {handled: false};
+        }
+        return await pictureFromStranger(ctx, fleets);
+      }
       if (drivers.size !== 1) return {handled: false};
       const driver = {id: drivers.docs[0].id, ...drivers.docs[0].data()};
       const business = await db().collection("businesses")

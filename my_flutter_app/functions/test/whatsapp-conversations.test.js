@@ -655,6 +655,7 @@ describe("Fleet payment pictures (docs/FLEET_PAYMENT_PROOF.md)", () => {
       [BIZ]: {businessName: "Nensona", lastSentAtMs: Date.now()}}});
     anthropicText = JSON.stringify({isPayment: false});
     const claimsBefore = (await db.collection("fleetClaims").get()).size;
+    const callsBefore = anthropicCalls.length;
     await inbound(P1, "", {message: {type: "image", image: {id: "media-1", mime_type: "image/jpeg", caption: "carton"}}});
     const msg = (await messagesOf(caseRef(BIZ, P1)))[0];
     assert.equal(msg.messageType, "image");
@@ -662,13 +663,32 @@ describe("Fleet payment pictures (docs/FLEET_PAYMENT_PROOF.md)", () => {
     assert.match(msg.metadata.fileUrl, /alt=media&token=/);
     assert.equal((await db.collection("fleetClaims").get()).size, claimsBefore);
     // Text from anyone never reaches the reading.
-    const calls = anthropicCalls.length;
     await inbound(P1, "Hello again");
+    // A customer a business already knows is never read: the Claude API
+    // was not called (privacy).
+    assert.equal(anthropicCalls.length, callsBefore, "no picture was sent to the API");
+  });
+
+  it("a customer known only by a conversation is not read either", async () => {
+    const P = "+16465550888";
+    await caseRef(BIZ, P).set({caseType: "whatsapp", whatsappPhone: P, inbox: BIZ, businessId: BIZ,
+      whatsappState: "waiting_customer", lastActivityAtMs: Date.now()});
+    anthropicText = reading({recipient: "Wa Fleet Co"});
+    const calls = anthropicCalls.length;
+    await inbound(P, "", photo("media-1"));
     assert.equal(anthropicCalls.length, calls);
-    // Nor does a failed reading change where the picture goes.
-    anthropicText = null;
-    await inbound(P1, "", {message: {type: "image", image: {id: "media-1", mime_type: "image/jpeg"}}});
-    assert.equal((await messagesOf(caseRef(BIZ, P1))).filter((m) => m.messageType === "image").length, 2);
+    assert.equal((await db.collection("fleetClaims").where("fromPhone", "==", P).get()).size, 0);
+  });
+
+  it("a completely unknown phone's payment to the Zelle name starts asking_driver", async () => {
+    const P = "+16465550889";
+    anthropicText = reading({recipient: "Wa Fleet Co"});
+    const calls = anthropicCalls.length;
+    await inbound(P, "", photo("media-1"));
+    assert.equal(anthropicCalls.length, calls + 1);
+    const [claim] = (await db.collection("fleetClaims").where("fromPhone", "==", P).get()).docs;
+    assert.equal(claim.data().state, "asking_driver");
+    assert.equal(lastSentText(), "Which driver is this payment for? Send their phone number.");
   });
 
   it("a covered driver's payment picture becomes a claim, answered in the business's thread", async () => {

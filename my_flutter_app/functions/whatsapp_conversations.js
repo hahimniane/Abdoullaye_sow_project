@@ -603,7 +603,7 @@ function createWhatsAppConversations(deps) {
     // phones Fleet takes part for are handled; every other message goes on
     // exactly as before.
     if (deps.fleetClaims && !request) {
-      const step = await fleetClaimStep(event, lang);
+      const step = await fleetClaimStep(event, lang, contact);
       if (step) return step;
     }
 
@@ -751,13 +751,26 @@ function createWhatsAppConversations(deps) {
    *
    * @param {object} event The received message.
    * @param {string} lang The customer's language.
+   * @param {object} contact The phone's contact record.
    * @return {Promise<?string>} The outcome when Fleet handled it, else null.
    */
-  async function fleetClaimStep(event, lang) {
+  async function fleetClaimStep(event, lang, contact) {
     let kept = null;
     const ctx = {
       event, lang,
       kept: () => kept !== null,
+      // Whether any business already knows this phone (a record, a sent
+      // message, a conversation): the same lookups that route a message.
+      // Only a phone nobody knows has its picture read as a payment.
+      phoneIsKnown: async () => {
+        if (contact && contact.businesses &&
+            Object.keys(contact.businesses).length > 0) return true;
+        if ((await routingCandidates(event.from, contact || {},
+            {codedBusinessId: ""})).length > 0) return true;
+        const threads = await conversations()
+            .where("whatsappPhone", "==", event.from).limit(1).get();
+        return !threads.empty;
+      },
       fetchImage: async () => {
         if (!event.media?.id || !deps.graphMedia) return null;
         const {buffer, mimeType} = await deps.graphMedia(event.media.id);
