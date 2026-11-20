@@ -22,6 +22,10 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_admin_only: "Only a Fleet admin can do this.",
   fleet_not_found: "That record was not found.",
   fleet_car_taken: "This plate already has a driver. Get it back first.",
+  fleet_car_overlap: "This plate was with another driver until that day. " +
+    "Pick a later start day.",
+  fleet_already_returned: "This plate was already returned.",
+  fleet_driver_has_plate: "This driver still has a plate. Get it back first.",
   fleet_bad_input: "Some details are missing or not valid.",
   fleet_no_amount: "Enter an amount.",
   fleet_already_undone: "That payment was already undone.",
@@ -216,6 +220,12 @@ function createFleetHandlers(deps) {
       if (!doc.exists || doc.get("businessId") !== businessId) {
         throw refuse("fleet_not_found", "not-found");
       }
+      // A driver who still has a plate has not left: end the plate first
+      // (or use driver_leave).
+      if (fields.status === "left" && doc.get("status") !== "left" &&
+          (await openAssignmentsOf(driverId, businessId)).length > 0) {
+        throw refuse("fleet_driver_has_plate");
+      }
       // A changed TLC license keeps the old one with its dates.
       const before = text(doc.get("tlcLicense"), 20);
       if (before !== fields.tlcLicense) {
@@ -319,15 +329,83 @@ function createFleetHandlers(deps) {
   }
 
   // The rent bills an assignment owes through a day that do not exist yet
-  // (read inside the caller's transaction; the caller writes them).
+  // (read inside the caller's transaction; the caller writes them). The
+  // existing bills carry their periods, so a calendar month is never billed
+  // twice.
   async function billAssignment(tx, assignment, settings, throughDayKey) {
     const billsCol = db().collection("fleetBills");
     const existing = await tx.get(billsCol
         .where("assignmentId", "==", assignment.id));
-    const ids = new Set(existing.docs.map((d) => d.id));
-    const fresh = fleetBilling.rentBillsToCreate(assignment, ids,
+    const bills = existing.docs.map((d) => ({id: d.id, ...d.data()}));
+    const fresh = fleetBilling.rentBillsToCreate(assignment, bills,
         throughDayKey, settings);
     return {fresh, billsCol};
+  }
+
+  // A driver's open assignments (the plates they hold).
+  async function openAssignmentsOf(driverId, businessId) {
+    const snap = await db().collection("fleetAssignments")
+        .where("driverId", "==", driverId).get();
+    return snap.docs.filter((d) => d.get("businessId") === businessId &&
+      !d.get("endDayKey"));
+  }
+
+  // The driver and their open bills, read inside a transaction before any
+  // write (L9: credit is spent after ANY new bill, not only new rent).
+  async function creditContext(tx, driverId) {
+    if (!driverId) return {driver: null, open: [], credit: 0};
+    const driverRef = db().collection("fleetDrivers").doc(driverId);
+    const [driver, open] = await Promise.all([
+      tx.get(driverRef),
+      tx.get(db().collection("fleetBills").where("driverId", "==", driverId)
+          .where("status", "==", "open")),
+    ]);
+    return {driver, open: open.docs,
+      credit: driver.exists ?
+        Math.max(0, Number(driver.get("creditCents")) || 0) : 0};
+  }
+
+  // Writes the new bills and spends the driver's credit on every open bill
+  // (late fees first, then oldest due), new ones included. Returns the credit
+  // left: the caller writes it with its own driver update.
+  function writeBillsSpendingCredit(tx, ctx, fresh, base) {
+    const billsCol = db().collection("fleetBills");
+    const existing = ctx.open.map((d) => ({id: d.id, ...d.data()}));
+    const all = [...existing, ...fresh.map((b) => ({...b, paidCents: 0,
+      status: "open"}))];
+    const used = ctx.credit > 0 ? fleetBilling.applyCredit(all, ctx.credit) :
+      {allocations: [], creditLeftCents: ctx.credit};
+    const take = (id) => used.allocations.filter((x) => x.billId === id)
+        .reduce((sum, x) => sum + x.cents, 0);
+    for (const bill of fresh) {
+      const paid = take(bill.id);
+      tx.set(billsCol.doc(bill.id), {...bill, ...base, paidCents: paid,
+        status: paid >= bill.amountCents ? "paid" : "open",
+        createdAt: FieldValue.serverTimestamp()});
+    }
+    for (const b of existing) {
+      const more = take(b.id);
+      if (more <= 0) continue;
+      const paid = (Number(b.paidCents) || 0) + more;
+      tx.update(billsCol.doc(b.id), {paidCents: paid,
+        status: paid >= Number(b.amountCents) ? "paid" : "open",
+        updatedAt: FieldValue.serverTimestamp()});
+    }
+    return used.creditLeftCents;
+  }
+
+  // A late fee whose rent bill is gone (void, cut to zero, waived): void the
+  // fee; money already on it goes to the driver's credit. Read the fee in the
+  // transaction first (feeDoc); this only writes. Returns the cents moved to
+  // credit (the caller adds them to the driver's credit).
+  function voidLateFee(tx, feeDoc) {
+    if (!feeDoc || !feeDoc.exists) return 0;
+    const status = feeDoc.get("status");
+    if (status !== "open" && status !== "paid") return 0;
+    const paid = Math.max(0, Number(feeDoc.get("paidCents")) || 0);
+    tx.update(feeDoc.ref, {status: "void", voidReason: "rent_bill_gone",
+      paidCents: 0, updatedAt: FieldValue.serverTimestamp()});
+    return paid;
   }
 
   async function assignmentStart(uid, businessId, data) {
@@ -349,30 +427,37 @@ function createFleetHandlers(deps) {
     const today = deps.dayKeyNow();
     const ref = db().collection("fleetAssignments").doc();
     await db().runTransaction(async (tx) => {
-      const [driver, car, taken] = await Promise.all([
+      const [driver, car, onPlate] = await Promise.all([
         tx.get(db().collection("fleetDrivers").doc(driverId)),
         tx.get(db().collection("fleetCars").doc(carId)),
         tx.get(db().collection("fleetAssignments")
-            .where("carId", "==", carId).where("endDayKey", "==", null)),
+            .where("carId", "==", carId)),
       ]);
       if (!driver.exists || driver.get("businessId") !== businessId ||
           !car.exists || car.get("businessId") !== businessId) {
         throw refuse("fleet_not_found", "not-found");
       }
-      if (!taken.empty) throw refuse("fleet_car_taken");
+      const plate = onPlate.docs.filter((d) =>
+        d.get("businessId") === businessId);
+      if (plate.some((d) => !d.get("endDayKey"))) {
+        throw refuse("fleet_car_taken");
+      }
+      // A new driver cannot start on or before the day the last one left.
+      const lastEnd = plate.reduce((m, d) =>
+        String(d.get("endDayKey")) > m ? String(d.get("endDayKey")) : m, "");
+      if (lastEnd && startDayKey <= lastEnd) throw refuse("fleet_car_overlap");
       const assignment = {id: ref.id, businessId, carId, driverId,
         startDayKey, endDayKey: null, rentCents, period, dueDay};
-      const {fresh, billsCol} = await billAssignment(tx, assignment,
-          settings, today);
+      const {fresh} = await billAssignment(tx, assignment, settings, today);
+      const ctx = await creditContext(tx, driverId);
       tx.set(ref, {...assignment, createdBy: uid,
         createdAt: FieldValue.serverTimestamp()});
-      for (const bill of fresh) {
-        tx.set(billsCol.doc(bill.id), {...bill, businessId, driverId,
-          carId, createdAt: FieldValue.serverTimestamp()});
-      }
+      const creditLeft = writeBillsSpendingCredit(tx, ctx, fresh,
+          {businessId, driverId, carId});
       tx.update(car.ref, {status: "active",
         updatedAt: FieldValue.serverTimestamp()});
       tx.update(driver.ref, {status: "active",
+        ...(creditLeft !== ctx.credit ? {creditCents: creditLeft} : {}),
         updatedAt: FieldValue.serverTimestamp()});
     });
     await audit(businessId, uid, "fleet_assignment", ref.id,
@@ -384,6 +469,80 @@ function createFleetHandlers(deps) {
     return {success: true, assignmentId: ref.id};
   }
 
+  /**
+   * Ends one assignment on a day (one transaction): each rent bill is worth
+   * what the return rule says, the paid part that is no longer on a bill
+   * becomes the driver's credit, and late fees of bills that are gone are
+   * voided.
+   *
+   * @param {string} uid The staff member.
+   * @param {string} businessId The business.
+   * @param {string} assignmentId The assignment.
+   * @param {string} endDayKey The day the plate came back.
+   * @param {object} settings The fleet settings.
+   * @return {Promise<number>} Cents moved to the driver's credit.
+   */
+  async function endAssignment(uid, businessId, assignmentId, endDayKey,
+      settings) {
+    let creditBackOut = 0;
+    await db().runTransaction(async (tx) => {
+      // Computed here, not outside: a retried transaction starts again.
+      let creditBack = 0;
+      const ref = db().collection("fleetAssignments").doc(assignmentId);
+      const doc = await tx.get(ref);
+      if (!doc.exists || doc.get("businessId") !== businessId) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      const a = {id: doc.id, ...doc.data()};
+      if (a.endDayKey) throw refuse("fleet_already_returned");
+      if (endDayKey < a.startDayKey) {
+        throw refuse("fleet_bad_input", "invalid-argument");
+      }
+      const bills = await tx.get(db().collection("fleetBills")
+          .where("assignmentId", "==", assignmentId));
+      // What each rent bill is worth once the car is back: its own period,
+      // under the return rule.
+      const plan = [];
+      for (const b of bills.docs) {
+        const bill = b.data();
+        if (bill.kind !== "rent" || bill.status === "void" ||
+            bill.status === "waived") continue;
+        const paid = Math.max(0, Number(bill.paidCents) || 0);
+        const target = fleetBilling.billAfterReturn(bill, endDayKey,
+            settings);
+        if (target === Number(bill.amountCents)) continue;
+        plan.push({ref: b.ref, id: b.id, paid, target});
+      }
+      // Late fees of the bills that are gone (read before any write).
+      const fees = await Promise.all(plan.filter((x) => x.target === 0)
+          .map((x) => tx.get(db().collection("fleetBills")
+              .doc(`${x.id}_late`))));
+      const driverRef = db().collection("fleetDrivers").doc(a.driverId);
+      for (const x of plan) {
+        const over = Math.max(0, x.paid - x.target);
+        creditBack += over;
+        tx.update(x.ref, {
+          amountCents: x.target,
+          paidCents: x.paid - over,
+          status: x.target === 0 ? "void" :
+            (x.paid - over >= x.target ? "paid" : "open"),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      for (const fee of fees) creditBack += voidLateFee(tx, fee);
+      tx.update(ref, {endDayKey, endedBy: uid,
+        updatedAt: FieldValue.serverTimestamp()});
+      tx.update(db().collection("fleetCars").doc(a.carId),
+          {status: "inactive", updatedAt: FieldValue.serverTimestamp()});
+      if (creditBack > 0) {
+        tx.update(driverRef, {creditCents: FieldValue.increment(creditBack),
+          updatedAt: FieldValue.serverTimestamp()});
+      }
+      creditBackOut = creditBack;
+    });
+    return creditBackOut;
+  }
+
   async function assignmentEnd(uid, businessId, data) {
     await requireAdmin(uid, businessId);
     const {data: business} = await businessOf(businessId);
@@ -393,57 +552,108 @@ function createFleetHandlers(deps) {
     if (!assignmentId || !DAY.test(endDayKey)) {
       throw refuse("fleet_bad_input", "invalid-argument");
     }
-    const settings = business.fleet?.settings || {};
-    let creditBack = 0;
-    await db().runTransaction(async (tx) => {
-      const ref = db().collection("fleetAssignments").doc(assignmentId);
-      const doc = await tx.get(ref);
-      if (!doc.exists || doc.get("businessId") !== businessId) {
-        throw refuse("fleet_not_found", "not-found");
-      }
-      const a = {id: doc.id, ...doc.data()};
-      if (endDayKey < a.startDayKey) {
-        throw refuse("fleet_bad_input", "invalid-argument");
-      }
-      const bills = await tx.get(db().collection("fleetBills")
-          .where("assignmentId", "==", assignmentId));
-      // What each rent bill should be once the car is back.
-      const ended = {...a, endDayKey};
-      const keep = new Map(fleetBilling.rentBillsToCreate(ended, new Set(),
-          endDayKey, settings).map((b) => [b.id, b.amountCents]));
-      const driverRef = db().collection("fleetDrivers").doc(a.driverId);
-      for (const b of bills.docs) {
-        const bill = b.data();
-        if (bill.kind !== "rent" || bill.status === "void" ||
-            bill.status === "waived") continue;
-        const paid = Math.max(0, Number(bill.paidCents) || 0);
-        const target = keep.has(b.id) ? keep.get(b.id) :
-          fleetBilling.billAfterReturn(bill, endDayKey, settings);
-        if (target === Number(bill.amountCents)) continue;
-        const over = Math.max(0, paid - target);
-        creditBack += over;
-        tx.update(b.ref, {
-          amountCents: target,
-          paidCents: paid - over,
-          status: target === 0 ? "void" :
-            (paid - over >= target ? "paid" : "open"),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
-      tx.update(ref, {endDayKey, endedBy: uid,
-        updatedAt: FieldValue.serverTimestamp()});
-      tx.update(db().collection("fleetCars").doc(a.carId),
-          {status: "inactive", updatedAt: FieldValue.serverTimestamp()});
-      if (creditBack > 0) {
-        tx.update(driverRef, {creditCents: FieldValue.increment(creditBack),
-          updatedAt: FieldValue.serverTimestamp()});
-      }
-    });
+    const creditBack = await endAssignment(uid, businessId, assignmentId,
+        endDayKey, business.fleet?.settings || {});
     await audit(businessId, uid, "fleet_assignment", assignmentId,
         "fleet_assignment_ended", `Plate returned on ${endDayKey}` +
         (creditBack > 0 ? `, $${(creditBack / 100).toFixed(2)} to credit` :
           ""));
     return {success: true, creditBackCents: creditBack};
+  }
+
+  // A new plate fee and/or due day for an open assignment. It applies from
+  // the next period that has no bill yet; the bills that exist stay as they
+  // are, and the previous values are kept in rentHistory.
+  async function assignmentUpdate(uid, businessId, data) {
+    await requireAdmin(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const assignmentId = text(data.assignmentId, 180);
+    const hasRent = data.rentCents !== undefined && data.rentCents !== null;
+    const hasDue = data.dueDay !== undefined && data.dueDay !== null;
+    const rentCents = hasRent ? cents(data.rentCents) : null;
+    const dueDay = hasDue ? Math.trunc(Number(data.dueDay)) : null;
+    if (!assignmentId || (!hasRent && !hasDue) ||
+        (hasRent && !(rentCents > 0)) ||
+        (hasDue && !(dueDay >= 1))) {
+      throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    const today = deps.dayKeyNow();
+    const ref = db().collection("fleetAssignments").doc(assignmentId);
+    let effectiveDayKey = "";
+    let summary = "";
+    await db().runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists || doc.get("businessId") !== businessId) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      const a = {id: doc.id, ...doc.data()};
+      if (a.endDayKey) throw refuse("fleet_already_returned");
+      if (hasDue && dueDay > (a.period === "weekly" ? 7 : 28)) {
+        throw refuse("fleet_bad_input", "invalid-argument");
+      }
+      const bills = await tx.get(db().collection("fleetBills")
+          .where("assignmentId", "==", assignmentId));
+      const existing = bills.docs.map((d) => ({id: d.id, ...d.data()}));
+      const effective = fleetBilling.nextUnbilledPeriodStart(a, existing,
+          today);
+      if (!effective) throw refuse("fleet_bad_input", "invalid-argument");
+      const history = Array.isArray(a.rentHistory) ? [...a.rentHistory] : [];
+      history.push({rentCents: Number(a.rentCents) || 0,
+        dueDay: Number(a.dueDay) || 1,
+        fromDayKey: a.rentFromDayKey || a.startDayKey,
+        toDayKey: fleetBilling.dayBefore(effective)});
+      const patch = {rentHistory: history, rentFromDayKey: effective,
+        updatedAt: FieldValue.serverTimestamp()};
+      if (hasRent) patch.rentCents = rentCents;
+      if (hasDue) patch.dueDay = dueDay;
+      tx.update(ref, patch);
+      effectiveDayKey = effective;
+      summary = `from ${effective}` +
+        (hasRent ? `, $${(rentCents / 100).toFixed(2)}` : "") +
+        (hasDue ? `, due day ${dueDay}` : "");
+    });
+    await audit(businessId, uid, "fleet_assignment", assignmentId,
+        "fleet_assignment_updated", `Plate fee changed ${summary}`);
+    return {success: true, effectiveDayKey};
+  }
+
+  // The driver leaves: every plate they hold comes back on that day, then
+  // they are marked "left".
+  async function driverLeave(uid, businessId, data) {
+    await requireStaff(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const driverId = text(data.driverId, 180);
+    const endDayKey = text(data.endDayKey, 10);
+    if (!driverId || !DAY.test(endDayKey)) {
+      throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    const driverRef = db().collection("fleetDrivers").doc(driverId);
+    const driver = await driverRef.get();
+    if (!driver.exists || driver.get("businessId") !== businessId) {
+      throw refuse("fleet_not_found", "not-found");
+    }
+    const open = await openAssignmentsOf(driverId, businessId);
+    // Nothing is written when a plate cannot come back on that day.
+    if (open.some((d) => endDayKey < String(d.get("startDayKey")))) {
+      throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    let creditBack = 0;
+    for (const d of open) {
+      creditBack += await endAssignment(uid, businessId, d.id, endDayKey,
+          business.fleet?.settings || {});
+      await audit(businessId, uid, "fleet_assignment", d.id,
+          "fleet_assignment_ended", `Plate returned on ${endDayKey} ` +
+          "(driver left)");
+    }
+    await driverRef.set({status: "left",
+      updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    await audit(businessId, uid, "fleet_driver", driverId,
+        "fleet_driver_left", `Driver left on ${endDayKey}` +
+        (creditBack > 0 ? `, $${(creditBack / 100).toFixed(2)} to credit` :
+          ""));
+    return {success: true, ended: open.length};
   }
 
   // ---- the driver's profile: office notes and files, friends -----------
@@ -622,15 +832,24 @@ function createFleetHandlers(deps) {
     if (!driverId || !(amount > 0) || !label) {
       throw refuse("fleet_bad_input", "invalid-argument");
     }
-    const driver = await db().collection("fleetDrivers").doc(driverId).get();
-    if (!driver.exists || driver.get("businessId") !== businessId) {
-      throw refuse("fleet_not_found", "not-found");
-    }
     const ref = db().collection("fleetBills").doc();
-    await ref.set({businessId, driverId, carId: text(data.carId, 180),
-      assignmentId: "", kind: "charge", label, periodFrom: dueDayKey,
-      periodTo: dueDayKey, dueDayKey, amountCents: amount, paidCents: 0,
-      status: "open", createdBy: uid, createdAt: FieldValue.serverTimestamp()});
+    await db().runTransaction(async (tx) => {
+      const ctx = await creditContext(tx, driverId);
+      if (!ctx.driver.exists || ctx.driver.get("businessId") !== businessId) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      const charge = {id: ref.id, assignmentId: "", kind: "charge", label,
+        periodFrom: dueDayKey, periodTo: dueDayKey, dueDayKey,
+        amountCents: amount, paidCents: 0, status: "open"};
+      // The driver's credit pays the new charge too (late fees first).
+      const left = writeBillsSpendingCredit(tx, ctx, [charge],
+          {businessId, driverId, carId: text(data.carId, 180),
+            createdBy: uid});
+      if (left !== ctx.credit) {
+        tx.update(ctx.driver.ref, {creditCents: left,
+          updatedAt: FieldValue.serverTimestamp()});
+      }
+    });
     await audit(businessId, uid, "fleet_bill", ref.id, "fleet_charge_added",
         `Charge ${label}: $${(amount / 100).toFixed(2)}`);
     return {success: true, billId: ref.id};
@@ -648,9 +867,19 @@ function createFleetHandlers(deps) {
         throw refuse("fleet_not_found", "not-found");
       }
       if (doc.get("status") !== "open") throw refuse("fleet_not_open");
+      // A waived rent bill takes its late fee with it.
+      const fee = doc.get("kind") === "rent" ?
+        await tx.get(db().collection("fleetBills").doc(`${billId}_late`)) :
+        null;
       tx.update(ref, {status: "waived",
         waived: {byUid: uid, atMs: Date.now(), reason},
         updatedAt: FieldValue.serverTimestamp()});
+      const credit = voidLateFee(tx, fee);
+      if (credit > 0 && doc.get("driverId")) {
+        tx.update(db().collection("fleetDrivers").doc(doc.get("driverId")),
+            {creditCents: FieldValue.increment(credit),
+              updatedAt: FieldValue.serverTimestamp()});
+      }
     });
     await audit(businessId, uid, "fleet_bill", billId, "fleet_bill_waived",
         `Waived (${reason})`);
@@ -767,7 +996,22 @@ function createFleetHandlers(deps) {
       const creditAdded = Math.max(0, Number(p.creditAddedCents) || 0);
       const held = driver.exists ?
         Math.max(0, Number(driver.get("creditCents")) || 0) : 0;
-      const shortfall = Math.max(0, creditAdded - held);
+      // The part of each allocation that is no longer on its bill (a plate
+      // came back and the paid part became credit) is taken from the credit
+      // too, not just the extra this payment left.
+      let returned = 0;
+      const stillOn = new Map();
+      for (const [i, a] of (p.allocations || []).entries()) {
+        if (!billDocs[i].exists) continue;
+        const now = stillOn.has(billDocs[i].id) ?
+          stillOn.get(billDocs[i].id) :
+          Math.max(0, Number(billDocs[i].get("paidCents")) || 0);
+        const take = Math.min(now, Number(a.cents) || 0);
+        returned += (Number(a.cents) || 0) - take;
+        stillOn.set(billDocs[i].id, now - take);
+      }
+      const creditOut = creditAdded + returned;
+      const shortfall = Math.max(0, creditOut - held);
       const laterBills = shortfall > 0 ? (await tx.get(
           db().collection("fleetBills").where("driverId", "==", p.driverId)))
           .docs.filter((d) => d.get("businessId") === businessId) : [];
@@ -819,8 +1063,8 @@ function createFleetHandlers(deps) {
           updatedAt: FieldValue.serverTimestamp()});
       }
       const driverPatch = {};
-      if (creditAdded > 0) {
-        driverPatch.creditCents = Math.max(0, held - creditAdded);
+      if (creditOut > 0) {
+        driverPatch.creditCents = Math.max(0, held - creditOut);
       }
       // The match was wrong: this sender is no longer this driver's, or the
       // next deposit would go to the same wrong driver by itself.
@@ -834,6 +1078,7 @@ function createFleetHandlers(deps) {
       }
       tx.update(ref, {status: "undone", undoneByUid: uid,
         undoneAtMs: Date.now(),
+        ...(returned > 0 ? {returnCreditTakenCents: returned} : {}),
         ...(creditTakenBack.length ? {creditTakenBack} : {})});
       // The bank deposit goes back to "waiting" for the right driver.
       for (const c of credits) {
@@ -1637,6 +1882,8 @@ function createFleetHandlers(deps) {
     car_save: carSave,
     assignment_start: assignmentStart,
     assignment_end: assignmentEnd,
+    assignment_update: assignmentUpdate,
+    driver_leave: driverLeave,
     charge_add: chargeAdd,
     bill_waive: billWaive,
     payment_record: paymentRecord,
@@ -1687,48 +1934,105 @@ function createFleetHandlers(deps) {
       const a = {id: doc.id, ...doc.data()};
       if (!a.startDayKey || !(Number(a.rentCents) > 0)) continue;
       if (a.endDayKey && a.endDayKey < today.slice(0, 8) + "01") continue;
-      await db().runTransaction(async (tx) => {
-        const {fresh, billsCol} = await billAssignment(tx, a, settings, today);
-        if (fresh.length === 0) return;
-        const driverRef = db().collection("fleetDrivers").doc(a.driverId);
-        const driver = await tx.get(driverRef);
-        let credit = Math.max(0, Number(driver.get("creditCents")) || 0);
-        const used = credit > 0 ?
-          fleetBilling.applyCredit(fresh.map((b) => ({...b})), credit) :
-          {allocations: [], creditLeftCents: credit};
-        for (const bill of fresh) {
-          const take = used.allocations.filter((x) => x.billId === bill.id)
-              .reduce((s, x) => s + x.cents, 0);
-          tx.set(billsCol.doc(bill.id), {...bill, businessId,
-            driverId: a.driverId, carId: a.carId, paidCents: take,
-            status: take >= bill.amountCents ? "paid" : "open",
-            createdAt: FieldValue.serverTimestamp()});
-          created += 1;
-        }
-        if (credit !== used.creditLeftCents) {
-          credit = used.creditLeftCents;
-          tx.update(driverRef, {creditCents: credit,
-            updatedAt: FieldValue.serverTimestamp()});
-        }
-      });
-    }
-    if (Number(settings?.lateFee?.cents) > 0) {
-      const bills = await db().collection("fleetBills")
-          .where("businessId", "==", businessId).get();
-      const all = bills.docs.map((d) => ({id: d.id, ...d.data()}));
-      const due = fleetBilling.lateFeesToCreate(all, settings, today);
-      for (const fee of due) {
-        const rent = all.find((b) => b.id === fee.lateFeeForBillId) || {};
-        await db().collection("fleetBills").doc(fee.id).create({...fee,
-          businessId, driverId: rent.driverId || "", carId: rent.carId || "",
-          assignmentId: rent.assignmentId || "", paidCents: 0,
-          status: "open", createdAt: FieldValue.serverTimestamp()})
-            .then(() => {
-              fees += 1;
-            }, () => undefined);
+      // One failing assignment must not stop the others (or the late fees).
+      try {
+        created += await db().runTransaction(async (tx) => {
+          const {fresh} = await billAssignment(tx, a, settings, today);
+          if (fresh.length === 0) return 0;
+          const ctx = await creditContext(tx, a.driverId);
+          if (ctx.driver && ctx.driver.get("status") === "left") {
+            deps.logger.warn("Fleet: a driver who left still has an open " +
+              "assignment, nothing billed", {businessId,
+              assignmentId: a.id, driverId: a.driverId});
+            return 0;
+          }
+          const left = writeBillsSpendingCredit(tx, ctx, fresh,
+              {businessId, driverId: a.driverId, carId: a.carId});
+          if (left !== ctx.credit) {
+            tx.update(ctx.driver.ref, {creditCents: left,
+              updatedAt: FieldValue.serverTimestamp()});
+          }
+          return fresh.length;
+        });
+      } catch (error) {
+        deps.logger.warn("Fleet day: an assignment could not be billed", {
+          businessId, assignmentId: a.id,
+          error: String(error?.message || error)});
       }
     }
+    try {
+      fees = await lateFeeStep(businessId, settings, today);
+    } catch (error) {
+      deps.logger.warn("Fleet day: late fees failed", {businessId,
+        error: String(error?.message || error)});
+    }
     return {created, fees};
+  }
+
+  // Late fees: create the ones now due (the driver's credit pays them), and
+  // void the open fee of a rent bill that is void or waived.
+  async function lateFeeStep(businessId, settings, today) {
+    let fees = 0;
+    const billsCol = db().collection("fleetBills");
+    const bills = await billsCol.where("businessId", "==", businessId).get();
+    const all = bills.docs.map((d) => ({id: d.id, ...d.data()}));
+    const byId = new Map(all.map((b) => [b.id, b]));
+    for (const fee of all) {
+      if (fee.kind !== "late_fee" || fee.status !== "open") continue;
+      const rent = byId.get(fee.lateFeeForBillId);
+      if (!rent || (rent.status !== "void" && rent.status !== "waived")) {
+        continue;
+      }
+      try {
+        await db().runTransaction(async (tx) => {
+          const feeDoc = await tx.get(billsCol.doc(fee.id));
+          const credit = voidLateFee(tx, feeDoc);
+          if (credit > 0 && fee.driverId) {
+            tx.update(db().collection("fleetDrivers").doc(fee.driverId),
+                {creditCents: FieldValue.increment(credit),
+                  updatedAt: FieldValue.serverTimestamp()});
+          }
+        });
+      } catch (error) {
+        deps.logger.warn("Fleet day: a late fee could not be voided",
+            {businessId, billId: fee.id,
+              error: String(error?.message || error)});
+      }
+    }
+    if (!(Number(settings?.lateFee?.cents) > 0)) return fees;
+    const due = fleetBilling.lateFeesToCreate(all, settings, today);
+    for (const fee of due) {
+      try {
+        const made = await db().runTransaction(async (tx) => {
+          const [feeDoc, rentDoc] = await Promise.all([
+            tx.get(billsCol.doc(fee.id)),
+            tx.get(billsCol.doc(fee.lateFeeForBillId)),
+          ]);
+          if (feeDoc.exists || !rentDoc.exists ||
+              rentDoc.get("status") !== "open" ||
+              (Number(rentDoc.get("amountCents")) || 0) -
+              (Number(rentDoc.get("paidCents")) || 0) <= 0) {
+            return 0;
+          }
+          const driverId = rentDoc.get("driverId") || "";
+          const ctx = await creditContext(tx, driverId);
+          const left = writeBillsSpendingCredit(tx, ctx, [fee], {businessId,
+            driverId, carId: rentDoc.get("carId") || "",
+            assignmentId: rentDoc.get("assignmentId") || ""});
+          if (ctx.driver && ctx.driver.exists && left !== ctx.credit) {
+            tx.update(ctx.driver.ref, {creditCents: left,
+              updatedAt: FieldValue.serverTimestamp()});
+          }
+          return 1;
+        });
+        fees += made;
+      } catch (error) {
+        deps.logger.warn("Fleet day: a late fee could not be created",
+            {businessId, billId: fee.id,
+              error: String(error?.message || error)});
+      }
+    }
+    return fees;
   }
 
   async function fleetDaily() {

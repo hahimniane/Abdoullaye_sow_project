@@ -56,6 +56,14 @@ function monthDay(year, month, day) {
 }
 
 /**
+ * @param {string} key A day key.
+ * @return {string} The day before it.
+ */
+function dayBefore(key) {
+  return dayKeyOf(dayNum(key) - 1);
+}
+
+/**
  * US month-first date, e.g. "Nov 9, 2026".
  *
  * @param {string} key A day key.
@@ -273,8 +281,8 @@ const remaining = (b) =>
 /**
  * Late fees to create: one per open, unpaid rent bill whose fee day (the
  * office's day of the due month when the bill is due on or before it, else
- * three days after the due day) has come, from firstMonth on, with no late fee yet (a waived or
- * void fee still counts as the one fee).
+ * three days after the due day) has come, from firstMonth on, with no late
+ * fee yet (a waived or void fee still counts as the one fee).
  *
  * @param {Array<object>} bills The driver's (or business's) bills.
  * @param {object} settings {lateFee: {cents, dayOfMonth, firstMonth}}.
@@ -478,6 +486,7 @@ function whoDroveAt(assignments, substitutes, carId, dayKey) {
 
 module.exports = {
   FLEET_MESSAGES,
+  dayBefore,
   rentPeriods,
   rentBillsToCreate,
   missingRentPeriods,
