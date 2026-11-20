@@ -409,7 +409,7 @@ function DriverPage({
         <div className="fleet-actions">
           <button className="lst-btn" type="button" onClick={() => setDialog("payment")}>Record a payment</button>
           <button className="lst-btn ghost" type="button" onClick={() => setDialog("charge")}>Add a charge</button>
-          {s(driver.status) !== "left" && (
+          {isAdmin && s(driver.status) !== "left" && (
             <button className="lst-btn ghost" type="button" onClick={() => setDialog("leave")}>Driver has left</button>
           )}
           <FleetRemindButton

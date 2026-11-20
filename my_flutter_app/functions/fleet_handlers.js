@@ -621,7 +621,9 @@ function createFleetHandlers(deps) {
   // The driver leaves: every plate they hold comes back on that day, then
   // they are marked "left".
   async function driverLeave(uid, businessId, data) {
-    await requireStaff(uid, businessId);
+    // Returning a plate moves money (a cut bill becomes credit): the same
+    // people who may return a plate, not every Fleet staff member.
+    await requireAdmin(uid, businessId);
     const {data: business} = await businessOf(businessId);
     if (!fleetOn(business)) throw refuse("fleet_off");
     const driverId = text(data.driverId, 180);

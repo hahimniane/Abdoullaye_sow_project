@@ -1012,7 +1012,9 @@ function monthMatches(row: GridRow, month: PaymentsFilter["month"]): boolean {
   if (month === "any") return true;
   const last = row.cells[row.cells.length - 1];
   if (!last) return false;
-  if (month === "owed") return last.state === "owed";
+  // A month whose plate fee is paid but which still carries a late fee or a
+  // charge is owed, not paid: every driver is in exactly one of the three.
+  if (month === "owed") return last.state === "owed" || (last.state === "full" && last.extraOwedCents > 0);
   if (month === "part") return last.state === "part";
   // Paid in full means nothing is still owed for the month, fees and charges included.
   return last.state === "full" && last.extraOwedCents === 0;

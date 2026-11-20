@@ -683,17 +683,20 @@ describe("billing audit: returns, overlaps and leaving (L7)", () => {
           driver: {name: "Audit Leaver", status: "left"}}),
         refused("fleet_driver_has_plate"));
         assert.equal((await doc("fleetDrivers", d)).status, "active");
-        const r = await act(STAFF, "driver_leave",
+        await assert.rejects(act(STAFF, "driver_leave",
+            {driverId: d, endDayKey: "2026-10-20"}),
+        refused("fleet_admin_only"));
+        const r = await act(OWNER, "driver_leave",
             {driverId: d, endDayKey: "2026-10-20"});
         assert.deepEqual(r, {success: true, ended: 2});
         assert.equal((await doc("fleetDrivers", d)).status, "left");
         const open = await db.collection("fleetAssignments")
             .where("driverId", "==", d).where("endDayKey", "==", null).get();
         assert.equal(open.size, 0);
-        assert.deepEqual(await act(STAFF, "driver_leave",
+        assert.deepEqual(await act(OWNER, "driver_leave",
             {driverId: d, endDayKey: "2026-10-20"}),
         {success: true, ended: 0});
-        await assert.rejects(act(STAFF, "driver_leave",
+        await assert.rejects(act(OWNER, "driver_leave",
             {driverId: d, endDayKey: "nonsense"}), refused("fleet_bad_input"));
       });
 
