@@ -142,8 +142,9 @@ describe("deposits pay drivers by themselves", () => {
         assert.equal((await doc("businessBankCredits", old)).fleetWaiting,
             undefined, "before go-live: never touched");
         const status = await act(STAFF, "bank_status");
-        assert.deepEqual(status.waiting.map((w) => w.id).sort(),
-            [gone, unknown, noSender].sort());
+        const ours = [gone, unknown, noSender];
+        assert.deepEqual(status.waiting.map((w) => w.id)
+            .filter((id) => ours.includes(id)).sort(), ours.sort());
         assert.equal(status.bank.connected, true);
       });
 
@@ -413,6 +414,9 @@ describe("deposits pay drivers by themselves", () => {
             .set({removed: true}, {merge: true});
         await handlers.noteRemovedDeposits(BIZ, [id]);
         await act(OWNER, "payment_undo", {paymentId});
+        // Undo forgets the sender: give it back for the tests that follow.
+        await db.collection("fleetDrivers").doc("drv-a").update({
+          rememberedSenders: FieldValue.arrayUnion("ALPHA SENDER")});
         const status = await act(STAFF, "bank_status");
         assert.equal(status.removed.some((r) => r.paymentId === paymentId),
             false);

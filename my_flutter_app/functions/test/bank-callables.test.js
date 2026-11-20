@@ -320,7 +320,10 @@ describe("connecting the bank", () => {
             .where("businessId", "==", BIZ).get();
         assert.deepEqual(credits.docs.map((d) => d.id), [`${BIZ}_t1`]);
         assert.equal(credits.docs[0].data().amountCents, 4000);
-        assert.equal(credits.docs[0].data().senderName, "SENDER t1");
+        // The reference number "t1" is not part of a name.
+        assert.equal(credits.docs[0].data().senderName, "SENDER");
+        // A new login starts Fleet matching from this moment.
+        assert.ok(link.matchFromMs > Date.now() - 60000);
       });
 
   it("removes the old login when a new bank is connected over it",

@@ -255,7 +255,7 @@ describe("a driver's picture is a claim; the bank is the proof", () => {
     assert.equal(claim.paymentId, credit.consumedBy.id);
     assert.equal(payment.claimId, claim.id);
     assert.ok((await doc("fleetDrivers", "c-a")).rememberedSenders
-        .includes("FATOUMATA BAH"));
+        .includes("FATOUMATA B BAH"));
     assert.equal(receipts.length, 1, "the receipt is sent");
     assert.equal(receipts[0].row.driverId, "c-a");
   });
@@ -263,7 +263,7 @@ describe("a driver's picture is a claim; the bank is the proof", () => {
   it("after the first time no picture is needed", async () => {
     await openRent("c-a", 40000, "2027-01-01");
     receipts.length = 0;
-    const id = await deposit(40000, "Fatoumata Bah");
+    const id = await deposit(40000, "Fatoumata B. Bah");
     assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
         {paid: 1, waiting: 0});
     assert.equal(receipts.length, 1);
