@@ -748,6 +748,19 @@ describe("recheck fixes", () => {
     assert.equal(posted.fleetUndone, true, "carried to the posted copy");
     assert.deepEqual(await handlers.matchBankDeposits(BIZ, [txn]),
         {paid: 0, waiting: 1});
+    // The bank sends the posted row again with its line: only the line is
+    // added; the office's marks stay.
+    await bankSync.applySyncPlan({db, FieldValue, businessId: BIZ},
+        {upserts: [{businessId: BIZ, transactionId: "txn-posted-rk",
+          accountId: "acct", amountCents: 41000, pending: false,
+          atMs: AFTER + 99999, dateKey: "2026-12-02", senderName: "Recheck A",
+          zelle: true, bankLine: "ZELLE PAYMENT FROM RECHECK A"}],
+        removals: [], replacements: []});
+    const lined = await doc("businessBankCredits", txn);
+    assert.equal(lined.bankLine, "ZELLE PAYMENT FROM RECHECK A");
+    assert.equal(lined.fleetUndone, true);
+    assert.equal(lined.fleetWaiting, true);
+    assert.equal(lined.fleetWaitingReason, "undone");
     // A re-send under a new id, no link at all.
     const resend = await deposit(41000, "RECHECK A", {pending: false});
     assert.deepEqual(await handlers.matchBankDeposits(BIZ, [resend]),

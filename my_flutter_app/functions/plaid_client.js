@@ -311,7 +311,10 @@ function createPlaidClient(options) {
         country_codes: ["US"]}),
     syncTransactions: (accessToken, cursor) =>
       call("/transactions/sync", {access_token: accessToken,
-        ...(cursor ? {cursor} : {}), count: SYNC_PAGE_SIZE}),
+        ...(cursor ? {cursor} : {}), count: SYNC_PAGE_SIZE,
+        // Without this Plaid leaves original_description null, and the
+        // bank's own line (the word "Zelle") is lost.
+        options: {include_original_description: true}}),
     // Billed per call: only ever when a person presses "Check Zelle".
     refreshTransactions: (accessToken) =>
       call("/transactions/refresh", {access_token: accessToken}),

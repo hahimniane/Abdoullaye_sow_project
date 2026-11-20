@@ -247,6 +247,7 @@ describe("Plaid fetch client", () => {
     await plaid.syncTransactions("a", "cur-1");
     assert.equal(body.count, 250);
     assert.equal(body.cursor, "cur-1");
+    assert.deepEqual(body.options, {include_original_description: true});
     await plaid.syncTransactions("a", "");
     assert.equal(body.cursor, undefined);
   });
