@@ -11,6 +11,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
 import '../utils/callable_data.dart' show callableMap;
+import 'fleet_claims.dart';
 import 'fleet_models.dart';
 import 'fleet_requests.dart';
 import 'fleet_views.dart';
@@ -49,6 +50,20 @@ class FleetService {
     }
   }
 
+  /// `claim_photo`: the screenshot's download link; [url] is null when there
+  /// is none, and [deleted] true when it was deleted after 12 months.
+  Future<({String? url, bool deleted})> claimPhoto(
+    String businessId,
+    String claimId,
+  ) async {
+    final answer = await call(FleetRequests.claimPhoto(businessId, claimId));
+    final url = answer['url'];
+    return (
+      url: url is String && url.trim().isNotEmpty ? url.trim() : null,
+      deleted: answer['deleted'] == true,
+    );
+  }
+
   /// `bank_status`, read into its model.
   Future<FleetBankStatus> bankStatus(String businessId) async =>
       readFleetBankStatus(await call(FleetRequests.bankStatus(businessId)));
@@ -62,6 +77,11 @@ abstract interface class FleetSource {
 
   /// The business document (settings live in `fleet.settings`).
   Stream<Map<String, dynamic>> watchBusiness(String businessId);
+
+  /// The open payment claims drivers reported on WhatsApp (`fleetClaims`).
+  /// Read apart from the rest of Fleet: a failure here is an error on this
+  /// stream only and never blanks the other screens.
+  Stream<List<FleetClaim>> watchClaims(String businessId);
 }
 
 class FirestoreFleetSource implements FleetSource {
@@ -149,6 +169,16 @@ class FirestoreFleetSource implements FleetSource {
   }
 
   @override
+  Stream<List<FleetClaim>> watchClaims(String businessId) => _db
+      .collection('fleetClaims')
+      .where('businessId', isEqualTo: businessId)
+      .where('open', isEqualTo: true)
+      .snapshots()
+      .map(
+        (snap) => [for (final d in snap.docs) ?readFleetClaim(d.id, d.data())],
+      );
+
+  @override
   Stream<Map<String, dynamic>> watchBusiness(String businessId) => _db
       .collection('businesses')
       .doc(businessId)
@@ -228,6 +258,18 @@ class FleetController extends ChangeNotifier {
   FleetState _state;
   FleetState get state => _state;
 
+  List<FleetClaim> _claims = const [];
+
+  /// The open payment claims. Read apart from [state]: its own loading and
+  /// error flags, so a claims failure never blanks the rest of Fleet.
+  List<FleetClaim> get claims => _claims;
+  bool _claimsLoading = true;
+  bool _claimsError = false;
+  bool get claimsLoading => _claimsLoading;
+  bool get claimsError => _claimsError;
+
+  StreamSubscription<List<FleetClaim>>? _claimsSub;
+  Timer? _claimsTimer;
   StreamSubscription<FleetData>? _dataSub;
   StreamSubscription<Map<String, dynamic>>? _businessSub;
   Timer? _timer;
@@ -247,6 +289,37 @@ class FleetController extends ChangeNotifier {
     _businessSub = source
         .watchBusiness(businessId)
         .listen((business) => _set(business: business), onError: (Object _) {});
+    _startClaims();
+  }
+
+  /// The claims read always resolves: an answer, an error, or [loadTimeout].
+  void _startClaims() {
+    _claimsTimer?.cancel();
+    _claimsTimer = Timer(loadTimeout, () {
+      if (_claimsLoading) _setClaims(loading: false, error: true);
+    });
+    unawaited(_claimsSub?.cancel());
+    _claimsSub = source
+        .watchClaims(businessId)
+        .listen(
+          (rows) => _setClaims(claims: rows, loading: false, error: false),
+          onError: (Object _) => _setClaims(loading: false, error: true),
+        );
+  }
+
+  void _setClaims({List<FleetClaim>? claims, bool? loading, bool? error}) {
+    if (_disposed) return;
+    _claims = claims ?? _claims;
+    _claimsLoading = loading ?? _claimsLoading;
+    _claimsError = error ?? _claimsError;
+    if (!_claimsLoading) _claimsTimer?.cancel();
+    notifyListeners();
+  }
+
+  /// Reads the claims again after a failure.
+  void retryClaims() {
+    _setClaims(loading: true, error: false);
+    _startClaims();
   }
 
   /// Reads again after a failure.
@@ -282,8 +355,10 @@ class FleetController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    _claimsTimer?.cancel();
     unawaited(_dataSub?.cancel());
     unawaited(_businessSub?.cancel());
+    unawaited(_claimsSub?.cancel());
     super.dispose();
   }
 }

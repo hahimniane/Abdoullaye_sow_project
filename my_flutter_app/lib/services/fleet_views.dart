@@ -89,6 +89,7 @@ class FleetPeriodRow {
     required this.dueCents,
     required this.billPaidCents,
     required this.state,
+    required this.extraOwedCents,
     required this.owedCents,
     required this.lateCents,
     required this.search,
@@ -103,7 +104,17 @@ class FleetPeriodRow {
   /// Rent bills due in the period (waived and void left out) and what is paid
   /// on them.
   final int dueCents, billPaidCents;
+
+  /// The colour of the period, from its rent bill alone: paid in full, part
+  /// or owed by the bill's own `paidCents` against its amount. With no rent
+  /// bill (imported history) it is paid when payments landed and empty when
+  /// none did.
   final FleetCellState state;
+
+  /// Late fees and charges still owed that fall due in the period. Shown
+  /// apart ("+ fee owed") and never turns the colour; a period that carries
+  /// one counts as "Owes" in the filters.
+  final int extraOwedCents;
 
   /// Everything the driver owes right now, and the part past due.
   final int owedCents, lateCents;
@@ -131,13 +142,16 @@ FleetPeriodGrid fleetPeriodRows(
   }
   final due = <String, int>{};
   final duePaid = <String, int>{};
+  final extra = <String, int>{};
   for (final b in data.bills) {
-    if (b.kind != 'rent' || b.status == 'void' || b.status == 'waived') {
-      continue;
-    }
+    if (b.status == 'void' || b.status == 'waived') continue;
     if (!period.contains(b.dueDayKey)) continue;
-    due[b.driverId] = (due[b.driverId] ?? 0) + b.amountCents;
-    duePaid[b.driverId] = (duePaid[b.driverId] ?? 0) + b.paidCents;
+    if (b.kind == 'rent') {
+      due[b.driverId] = (due[b.driverId] ?? 0) + b.amountCents;
+      duePaid[b.driverId] = (duePaid[b.driverId] ?? 0) + b.paidCents;
+    } else {
+      extra[b.driverId] = (extra[b.driverId] ?? 0) + b.remainingCents;
+    }
   }
   final rows = <FleetPeriodRow>[];
   var totalPaid = 0;
@@ -146,15 +160,16 @@ FleetPeriodGrid fleetPeriodRows(
     final p = paid[d.id] ?? 0;
     final dueCents = due[d.id] ?? 0;
     final billPaid = duePaid[d.id] ?? 0;
+    final extraOwed = extra[d.id] ?? 0;
     var state = FleetCellState.none;
     if (dueCents > 0) {
       state = billPaid >= dueCents
           ? FleetCellState.full
-          : (billPaid > 0 || p > 0 ? FleetCellState.part : FleetCellState.owed);
+          : (billPaid > 0 ? FleetCellState.part : FleetCellState.owed);
     } else if (p > 0) {
       state = FleetCellState.full;
     }
-    if (!d.isActive && p == 0 && dueCents == 0) continue;
+    if (!d.isActive && p == 0 && dueCents == 0 && extraOwed == 0) continue;
     final current = index.currentByDriver[d.id];
     final plate = current == null
         ? ''
@@ -176,6 +191,7 @@ FleetPeriodGrid fleetPeriodRows(
         dueCents: dueCents,
         billPaidCents: billPaid,
         state: state,
+        extraOwedCents: extraOwed,
         owedCents: balance.owedCents,
         lateCents: balance.lateCents,
         search: _lower('${d.name} ${d.phone} $plate'),
@@ -225,6 +241,14 @@ class FleetPaymentsFilter {
   bool get narrowed => state != null || late || query.trim().isNotEmpty;
 }
 
+/// The chip a period row answers to: a period whose plate fee is paid but
+/// which still carries a late fee or a charge is owed, not paid, so every
+/// driver is in exactly one of Owes / Part paid / Paid in full.
+FleetCellState fleetFilterStateOf(FleetPeriodRow r) =>
+    r.state == FleetCellState.full && r.extraOwedCents > 0
+    ? FleetCellState.owed
+    : r.state;
+
 bool _inView(bool active, FleetDriverView v) => switch (v) {
   FleetDriverView.active => active,
   FleetDriverView.left => !active,
@@ -241,7 +265,7 @@ List<FleetPeriodRow> fleetFilterPeriodRows(
       .where(
         (r) =>
             _inView(r.active, f.view) &&
-            (f.state == null || r.state == f.state) &&
+            (f.state == null || fleetFilterStateOf(r) == f.state) &&
             (!f.late || r.lateCents > 0) &&
             (query.isEmpty || fleetMatchesSearch(r.search, query)),
       )
@@ -287,9 +311,9 @@ FleetPeriodCounts fleetPeriodCounts(
     active: rows.where((r) => r.active).length,
     left: rows.where((r) => !r.active).length,
     all: rows.length,
-    owed: n((r) => r.state == FleetCellState.owed),
-    part: n((r) => r.state == FleetCellState.part),
-    paid: n((r) => r.state == FleetCellState.full),
+    owed: n((r) => fleetFilterStateOf(r) == FleetCellState.owed),
+    part: n((r) => fleetFilterStateOf(r) == FleetCellState.part),
+    paid: n((r) => fleetFilterStateOf(r) == FleetCellState.full),
     late: n((r) => r.lateCents > 0),
   );
 }
@@ -305,10 +329,15 @@ class FleetTiles {
     required this.lateDrivers,
     required this.lateCents,
     required this.owingDrivers,
-    required this.dueThisMonthCents,
+    required this.plateFeesBilledCents,
+    required this.plateFeesPaidCents,
   });
 
-  final int collectedCents, owedCents, lateCents, dueThisMonthCents;
+  final int collectedCents, owedCents, lateCents;
+
+  /// What this month's plate-fee (rent) bills ask for (waived and void left
+  /// out), and what has been paid on those same bills.
+  final int plateFeesBilledCents, plateFeesPaidCents;
   final int lateDrivers, owingDrivers;
 }
 
@@ -335,10 +364,17 @@ FleetTiles fleetTiles(FleetData data, FleetIndex index, String todayKey) {
       lateCents += b.lateCents;
     }
   }
-  var dueThisMonth = 0;
+  // The plate-fee bills due this month that stand: what they ask for and what
+  // has been paid on them. Late fees, charges and old debts paid this month
+  // are not part of this share.
+  var billed = 0, billedPaid = 0;
   for (final b in data.bills) {
-    if (b.status == 'waived' || b.status == 'void') continue;
-    if (fleetMonthOf(b.dueDayKey) == month) dueThisMonth += b.amountCents;
+    if (b.kind != 'rent' || b.status == 'waived' || b.status == 'void') {
+      continue;
+    }
+    if (fleetMonthOf(b.dueDayKey) != month) continue;
+    billed += b.amountCents;
+    billedPaid += b.paidCents;
   }
   return FleetTiles(
     collectedCents: collected,
@@ -346,8 +382,22 @@ FleetTiles fleetTiles(FleetData data, FleetIndex index, String todayKey) {
     lateDrivers: late,
     lateCents: lateCents,
     owingDrivers: owing,
-    dueThisMonthCents: dueThisMonth,
+    plateFeesBilledCents: billed,
+    plateFeesPaidCents: billedPaid < billed ? billedPaid : billed,
   );
+}
+
+/// The paid share of this month's plate-fee bills with both amounts, so it
+/// cannot be read as collected-over-billed. [percent] is whole, [paidCents]
+/// never above [billedCents].
+({int percent, int paidCents, int billedCents}) fleetPlateFeesShare(
+  int billedCents,
+  int paidCents,
+) {
+  final billed = billedCents < 0 ? 0 : billedCents;
+  final paid = paidCents < 0 ? 0 : (paidCents > billed ? billed : paidCents);
+  final percent = billed > 0 ? (paid * 100 / billed).round() : 0;
+  return (percent: percent, paidCents: paid, billedCents: billed);
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +415,6 @@ class FleetDriverRow {
     required this.owedCents,
     required this.lateCents,
     required this.creditCents,
-    required this.personalCents,
     required this.rentCents,
     required this.search,
   });
@@ -373,7 +422,6 @@ class FleetDriverRow {
   final String id, name, phone, plate, carId, search;
   final bool active;
   final int owedCents, lateCents, creditCents, rentCents;
-  final int? personalCents;
 }
 
 List<FleetDriverRow> fleetDriverRows(
@@ -402,7 +450,6 @@ List<FleetDriverRow> fleetDriverRows(
           owedCents: balance.owedCents,
           lateCents: balance.lateCents,
           creditCents: balance.creditCents,
-          personalCents: d.personalCents,
           rentCents: current == null || current.rentCents < 0
               ? 0
               : current.rentCents,
@@ -417,7 +464,7 @@ List<FleetDriverRow> fleetDriverRows(
   return rows;
 }
 
-enum FleetDriverSort { name, owed, cents }
+enum FleetDriverSort { name, owed }
 
 class FleetDriverFilter {
   const FleetDriverFilter({
@@ -488,11 +535,6 @@ List<FleetDriverRow> fleetFilterDriverRows(
     case FleetDriverSort.owed:
       out.sort((a, b) {
         final c = b.owedCents - a.owedCents;
-        return c != 0 ? c : _byName(a.name, b.name);
-      });
-    case FleetDriverSort.cents:
-      out.sort((a, b) {
-        final c = (a.personalCents ?? 100) - (b.personalCents ?? 100);
         return c != 0 ? c : _byName(a.name, b.name);
       });
     case FleetDriverSort.name:
@@ -648,6 +690,20 @@ Map<FleetExpiry, int> fleetPaperworkCounts(List<FleetCarRow> rows) {
 }
 
 enum FleetCarView { all, driver, free }
+
+/// The plates the Paperwork mode counts and lists: those a driver has now (the
+/// default) or every plate.
+enum FleetPaperworkScope { driver, all }
+
+List<FleetCarRow> fleetCarsInPaperworkScope(
+  List<FleetCarRow> rows,
+  FleetPaperworkScope scope,
+) => scope == FleetPaperworkScope.all
+    ? [...rows]
+    : [
+        for (final r in rows)
+          if (r.hasDriver) r,
+      ];
 
 class FleetCarFilter {
   const FleetCarFilter({
@@ -1088,6 +1144,8 @@ enum FleetBillView { open, paid, waived, all }
 enum FleetPaymentView { all, zelle, cash, import, other }
 
 bool fleetBillInView(FleetBill bill, FleetBillView view) {
+  // A bill made by a fault of ours is on no list and in no count.
+  if (bill.billedByMistake) return false;
   switch (view) {
     case FleetBillView.all:
       return true;

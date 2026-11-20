@@ -8,6 +8,7 @@ import '../services/fleet_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/fleet_widgets.dart';
+import 'fleet_claims_card.dart';
 
 /// Zelle from the bank (docs/FLEET.md section 8): the bank, the deposits
 /// waiting for a driver (pick the driver; the sender is remembered), payments
@@ -112,7 +113,9 @@ class _FleetBankTabState extends State<FleetBankTab> {
       setState(() => _error = l10n.fltPickDriverFirst);
       return;
     }
-    final name = c.state.index.driverById[driverId]?.name ?? '';
+    final name = driverDisplayName(
+      c.state.index.driverById[driverId]?.name ?? '',
+    );
     final yes = await fleetConfirm(
       context,
       title: l10n.fltPayWithDepositTitle,
@@ -263,6 +266,12 @@ class _FleetBankTabState extends State<FleetBankTab> {
                   ],
                 ],
               ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            FleetClaimsCard(
+              controller: c,
+              waiting: status?.waiting ?? const [],
+              onChanged: () => unawaited(_load()),
             ),
             if (status != null && status.connected) ...[
               if (status.removed.isNotEmpty) ...[

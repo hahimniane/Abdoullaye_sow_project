@@ -26432,7 +26432,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalNoAmount.
   ///
   /// In en, this message translates to:
-  /// **'Enter an amount greater than zero.'**
+  /// **'Enter an amount.'**
   String get fltRefusalNoAmount;
 
   /// No description provided for @fltRefusalAlreadyUndone.
@@ -26468,7 +26468,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalNoteEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Write a note.'**
+  /// **'Write a note or attach a file.'**
   String get fltRefusalNoteEmpty;
 
   /// No description provided for @fltRefusalNoteVoided.
@@ -26492,7 +26492,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalNoBank.
   ///
   /// In en, this message translates to:
-  /// **'Connect the business’s bank first (Profile, Bank for Zelle checks).'**
+  /// **'Connect the business\'s bank first (Profile, Bank for Zelle checks).'**
   String get fltRefusalNoBank;
 
   /// No description provided for @fltRefusalBadPhone.
@@ -26528,7 +26528,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalStaffOnly.
   ///
   /// In en, this message translates to:
-  /// **'This account is not allowed to manage Fleet.'**
+  /// **'This staff account is not allowed to manage Fleet.'**
   String get fltRefusalStaffOnly;
 
   /// No description provided for @fltPeriodWeek.
@@ -26657,12 +26657,6 @@ abstract class AppLocalizations {
   /// **'Most paid first'**
   String get fltSortPaid;
 
-  /// No description provided for @fltSortZelleCents.
-  ///
-  /// In en, this message translates to:
-  /// **'Zelle cents'**
-  String get fltSortZelleCents;
-
   /// No description provided for @fltNoDriverMatches.
   ///
   /// In en, this message translates to:
@@ -26704,12 +26698,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Collected this month'**
   String get fltTileCollected;
-
-  /// No description provided for @fltTileOfBilled.
-  ///
-  /// In en, this message translates to:
-  /// **'of {amount} billed'**
-  String fltTileOfBilled(String amount);
 
   /// No description provided for @fltTileNothingBilled.
   ///
@@ -26896,18 +26884,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 day} other{{count} days}}'**
   String fltTenureDays(int count);
-
-  /// No description provided for @fltNoZelleCents.
-  ///
-  /// In en, this message translates to:
-  /// **'This driver has no Zelle cents yet (only active drivers get them).'**
-  String get fltNoZelleCents;
-
-  /// No description provided for @fltZelleAmountFor.
-  ///
-  /// In en, this message translates to:
-  /// **'Zelle amount for this driver: {amount}. The last two digits are the driver’s own, so the amount tells us who paid.'**
-  String fltZelleAmountFor(String amount);
 
   /// No description provided for @fltRecordPayment.
   ///
@@ -27941,16 +27917,10 @@ abstract class AppLocalizations {
   /// **'Pay {name}’s bills with this deposit? Their next deposits from the same sender are paid by themselves.'**
   String fltPayWithDepositMessage(String name);
 
-  /// No description provided for @fltWaitingTwoDrivers.
-  ///
-  /// In en, this message translates to:
-  /// **'It could be from two drivers: pick the right one.'**
-  String get fltWaitingTwoDrivers;
-
   /// No description provided for @fltWaitingUndone.
   ///
   /// In en, this message translates to:
-  /// **'Its payment was undone: pick the right driver.'**
+  /// **'This deposit\'s payment was undone. It will not pay anyone by itself: pick the driver.'**
   String get fltWaitingUndone;
 
   /// No description provided for @fltWaitingDuplicate.
@@ -28300,6 +28270,502 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Turn the pay-day bank checks off? Deposits still pay drivers when the bank updates on its own, at no cost.'**
   String get fltScheduleSaveOff;
+
+  /// No description provided for @fltRefusalClaimClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'This report is already closed.'**
+  String get fltRefusalClaimClosed;
+
+  /// No description provided for @fltRefusalClaimNoDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'This report has no driver yet. Wait for the sender to say who it is for, or close it.'**
+  String get fltRefusalClaimNoDriver;
+
+  /// No description provided for @fltRefusalDepositNotWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'That deposit is no longer waiting. Refresh and try again.'**
+  String get fltRefusalDepositNotWaiting;
+
+  /// No description provided for @fltRefusalBadName.
+  ///
+  /// In en, this message translates to:
+  /// **'That name cannot be used. Type the person\'s full name as the bank shows it.'**
+  String get fltRefusalBadName;
+
+  /// No description provided for @fltRefusalZelleMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the Zelle email or phone in Fleet settings first.'**
+  String get fltRefusalZelleMissing;
+
+  /// No description provided for @fltRefusalCarOverlap.
+  ///
+  /// In en, this message translates to:
+  /// **'This plate was with another driver until that day. Pick a later start day.'**
+  String get fltRefusalCarOverlap;
+
+  /// No description provided for @fltRefusalAlreadyReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'This plate was already returned.'**
+  String get fltRefusalAlreadyReturned;
+
+  /// No description provided for @fltRefusalDriverHasPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.'**
+  String get fltRefusalDriverHasPlate;
+
+  /// No description provided for @fltWaitingSharedPayer.
+  ///
+  /// In en, this message translates to:
+  /// **'This person pays for more than one driver. Pick the driver.'**
+  String get fltWaitingSharedPayer;
+
+  /// No description provided for @fltClaimsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported by drivers, waiting for the bank'**
+  String get fltClaimsTitle;
+
+  /// No description provided for @fltClaimsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A driver sent a payment screenshot on WhatsApp. Nobody is marked paid from a picture: the deposit in the bank is the proof.'**
+  String get fltClaimsHint;
+
+  /// No description provided for @fltClaimsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No payment reported by a driver is waiting.'**
+  String get fltClaimsEmpty;
+
+  /// No description provided for @fltClaimsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The reported payments could not be loaded. Try again in a moment.'**
+  String get fltClaimsLoadFailed;
+
+  /// No description provided for @fltClaimViewPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'View photo'**
+  String get fltClaimViewPhoto;
+
+  /// No description provided for @fltClaimNoPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'No photo'**
+  String get fltClaimNoPhoto;
+
+  /// No description provided for @fltClaimPhotoGone.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo not available'**
+  String get fltClaimPhotoGone;
+
+  /// No description provided for @fltClaimPhotoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment screenshot'**
+  String get fltClaimPhotoTitle;
+
+  /// No description provided for @fltClaimTheirs.
+  ///
+  /// In en, this message translates to:
+  /// **'This deposit is theirs'**
+  String get fltClaimTheirs;
+
+  /// No description provided for @fltClaimPickDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the deposit that is theirs.'**
+  String get fltClaimPickDeposit;
+
+  /// No description provided for @fltClaimNoDeposits.
+  ///
+  /// In en, this message translates to:
+  /// **'No deposit is waiting'**
+  String get fltClaimNoDeposits;
+
+  /// No description provided for @fltClaimDifferentAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'This deposit is for a different amount. The bank’s amount is what is recorded.'**
+  String get fltClaimDifferentAmount;
+
+  /// No description provided for @fltClaimSameAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Same amount'**
+  String get fltClaimSameAmount;
+
+  /// No description provided for @fltClaimGiveDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Give this deposit'**
+  String get fltClaimGiveDeposit;
+
+  /// No description provided for @fltClaimGiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Give this deposit?'**
+  String get fltClaimGiveTitle;
+
+  /// No description provided for @fltClaimGiveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Give this {amount} deposit from {sender} to {who}? It pays their bills, and their next deposits from the same sender are paid by themselves.'**
+  String fltClaimGiveMessage(String amount, String sender, String who);
+
+  /// No description provided for @fltClaimUnknownSender.
+  ///
+  /// In en, this message translates to:
+  /// **'an unknown sender'**
+  String get fltClaimUnknownSender;
+
+  /// No description provided for @fltClaimCloseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Close this report?'**
+  String get fltClaimCloseTitle;
+
+  /// No description provided for @fltClaimCloseMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Close this report from {who}? The bill stays unpaid and nothing is recorded.'**
+  String fltClaimCloseMessage(String who);
+
+  /// No description provided for @fltClaimClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Report closed.'**
+  String get fltClaimClosed;
+
+  /// No description provided for @fltClaimAskingDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the sender to say which driver this payment is for.'**
+  String get fltClaimAskingDriver;
+
+  /// No description provided for @fltClaimAskingAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the driver to type the amount.'**
+  String get fltClaimAskingAmount;
+
+  /// No description provided for @fltClaimAskingName.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the driver to say the name on the account they paid from.'**
+  String get fltClaimAskingName;
+
+  /// No description provided for @fltClaimNoDeposit2Days.
+  ///
+  /// In en, this message translates to:
+  /// **'The deposit has not shown in the bank after 2 days. The driver was told.'**
+  String get fltClaimNoDeposit2Days;
+
+  /// No description provided for @fltClaimWaitingBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the deposit to show in the bank.'**
+  String get fltClaimWaitingBank;
+
+  /// No description provided for @fltClaimWrongRecipient.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment went to someone other than this business. Look at the photo.'**
+  String get fltClaimWrongRecipient;
+
+  /// No description provided for @fltClaimDepositTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'The deposit it matches was already used for another payment.'**
+  String get fltClaimDepositTaken;
+
+  /// No description provided for @fltClaimTooOld.
+  ///
+  /// In en, this message translates to:
+  /// **'The screenshot is more than 10 days old.'**
+  String get fltClaimTooOld;
+
+  /// No description provided for @fltClaimNotADriver.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone is not one of your drivers. Find out who the payment is for.'**
+  String get fltClaimNotADriver;
+
+  /// No description provided for @fltClaimTwoClaims.
+  ///
+  /// In en, this message translates to:
+  /// **'Two claims point to the same deposit. Pick who it belongs to.'**
+  String get fltClaimTwoClaims;
+
+  /// No description provided for @fltClaimNeedsPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'A person needs to look at this claim.'**
+  String get fltClaimNeedsPerson;
+
+  /// No description provided for @fltPayerNamesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Names this driver pays from'**
+  String get fltPayerNamesTitle;
+
+  /// No description provided for @fltPayerNamesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A Zelle from one of these names pays this driver by itself.'**
+  String get fltPayerNamesHint;
+
+  /// No description provided for @fltPayerNamesTwoWords.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the full name as the bank shows it, at least two words.'**
+  String get fltPayerNamesTwoWords;
+
+  /// No description provided for @fltPayerNamesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No name yet. It is remembered the first time a deposit is matched to this driver.'**
+  String get fltPayerNamesEmpty;
+
+  /// No description provided for @fltPayerNameRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this name'**
+  String get fltPayerNameRemove;
+
+  /// No description provided for @fltPayerNameField.
+  ///
+  /// In en, this message translates to:
+  /// **'Name on the Zelle account'**
+  String get fltPayerNameField;
+
+  /// No description provided for @fltPayerNameAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add name'**
+  String get fltPayerNameAdd;
+
+  /// No description provided for @fltPayerNameDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'That name is already on the list.'**
+  String get fltPayerNameDuplicate;
+
+  /// No description provided for @fltPayerNameTypeFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a name first.'**
+  String get fltPayerNameTypeFirst;
+
+  /// No description provided for @fltPayerNameRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this name?'**
+  String get fltPayerNameRemoveTitle;
+
+  /// No description provided for @fltPayerNameRemoveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop paying {driver} automatically from {name}? Deposits from this name will wait for the office again.'**
+  String fltPayerNameRemoveMessage(String driver, String name);
+
+  /// No description provided for @fltPlateFeeChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change plate fee'**
+  String get fltPlateFeeChange;
+
+  /// No description provided for @fltPlateFeeSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save plate fee'**
+  String get fltPlateFeeSave;
+
+  /// No description provided for @fltPlateFeeAmountMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'New plate fee a month (\$)'**
+  String get fltPlateFeeAmountMonth;
+
+  /// No description provided for @fltPlateFeeAmountWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'New plate fee a week (\$)'**
+  String get fltPlateFeeAmountWeek;
+
+  /// No description provided for @fltPlateFeeDueMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Due day of the month, optional (1–28)'**
+  String get fltPlateFeeDueMonth;
+
+  /// No description provided for @fltPlateFeeDueWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Due weekday, optional (1 = Monday … 7 = Sunday)'**
+  String get fltPlateFeeDueWeek;
+
+  /// No description provided for @fltPlateFeeApplies.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies from {day}. Bills already made are not changed.'**
+  String fltPlateFeeApplies(String day);
+
+  /// No description provided for @fltPlateFeeNothingChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was changed.'**
+  String get fltPlateFeeNothingChanged;
+
+  /// No description provided for @fltPlateFeeConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the plate fee?'**
+  String get fltPlateFeeConfirmTitle;
+
+  /// No description provided for @fltPlateFeeConfirmBoth.
+  ///
+  /// In en, this message translates to:
+  /// **'Change {name}’s plate fee for {plate} to {amount}, due day {dueDay}? It applies from {day}. Bills already made are not changed.'**
+  String fltPlateFeeConfirmBoth(
+    String name,
+    String plate,
+    String amount,
+    String dueDay,
+    String day,
+  );
+
+  /// No description provided for @fltPlateFeeConfirmFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Change {name}’s plate fee for {plate} to {amount}? It applies from {day}. Bills already made are not changed.'**
+  String fltPlateFeeConfirmFee(
+    String name,
+    String plate,
+    String amount,
+    String day,
+  );
+
+  /// No description provided for @fltPlateFeeConfirmDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the due day of {name}’s plate fee for {plate} to {dueDay}? It applies from {day}. Bills already made are not changed.'**
+  String fltPlateFeeConfirmDue(
+    String name,
+    String plate,
+    String dueDay,
+    String day,
+  );
+
+  /// No description provided for @fltDriverLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver has left'**
+  String get fltDriverLeft;
+
+  /// No description provided for @fltDriverLeftOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Left on'**
+  String get fltDriverLeftOn;
+
+  /// No description provided for @fltDriverLeftHintPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'The plate comes back on this date and bills stop.'**
+  String get fltDriverLeftHintPlate;
+
+  /// No description provided for @fltDriverLeftHintNoPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Bills stop on this date.'**
+  String get fltDriverLeftHintNoPlate;
+
+  /// No description provided for @fltDriverLeftDone.
+  ///
+  /// In en, this message translates to:
+  /// **'The driver is marked as left. Their plate came back and their bills stopped.'**
+  String get fltDriverLeftDone;
+
+  /// No description provided for @fltDriverLeftConfirmPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark {name} as having left on {day}? Plate {plate} comes back on that date and bills stop.'**
+  String fltDriverLeftConfirmPlate(String name, String day, String plate);
+
+  /// No description provided for @fltDriverLeftConfirmNoPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark {name} as having left on {day}? Bills stop.'**
+  String fltDriverLeftConfirmNoPlate(String name, String day);
+
+  /// No description provided for @fltFeeOwedMarker.
+  ///
+  /// In en, this message translates to:
+  /// **'+ fee owed'**
+  String get fltFeeOwedMarker;
+
+  /// No description provided for @fltFeeOwedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A late fee or charge is still owed this month'**
+  String get fltFeeOwedHint;
+
+  /// No description provided for @fltTilePlateFeesPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of this month’s plate fees paid ({paid} of {billed})'**
+  String fltTilePlateFeesPaid(int percent, String paid, String billed);
+
+  /// No description provided for @fltPaperworkScopeDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Plates with a driver'**
+  String get fltPaperworkScopeDriver;
+
+  /// No description provided for @fltPaperworkScopeAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Every plate'**
+  String get fltPaperworkScopeAll;
+
+  /// No description provided for @fltRefusalBadNameNamed.
+  ///
+  /// In en, this message translates to:
+  /// **'\"{name}\" cannot be used. Type the person\'s full name as the bank shows it.'**
+  String fltRefusalBadNameNamed(String name);
+
+  /// No description provided for @fltClaimNoAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'The driver did not give a readable amount. Look at the photo.'**
+  String get fltClaimNoAmount;
+
+  /// No description provided for @fltClaimNoDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'No deposit has shown in the bank after 2 days.'**
+  String get fltClaimNoDeposit;
+
+  /// No description provided for @fltClaimPaymentUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment made from this report was undone. Pick the right deposit or close it.'**
+  String get fltClaimPaymentUndone;
+
+  /// No description provided for @fltClaimPhotoDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo was deleted after 12 months.'**
+  String get fltClaimPhotoDeleted;
 
   /// No description provided for @pcsErrPiecesTooMany.
   ///

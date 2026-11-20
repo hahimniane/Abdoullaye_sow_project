@@ -15529,54 +15529,53 @@ class AppLocalizationsFr extends AppLocalizations {
   String get fltErrUnknown => 'Une erreur est survenue. Réessayez.';
 
   @override
-  String get fltRefusalOff =>
-      'La flotte n’est pas activée pour cette entreprise.';
+  String get fltRefusalOff => 'Fleet n’est pas activé pour cette entreprise.';
 
   @override
   String get fltRefusalAdminOnly =>
-      'Seul un administrateur de la flotte peut faire cela.';
+      'Seul un administrateur Fleet peut faire cela.';
 
   @override
-  String get fltRefusalNotFound => 'Cet élément est introuvable.';
+  String get fltRefusalNotFound => 'Cet enregistrement est introuvable.';
 
   @override
   String get fltRefusalCarTaken =>
-      'Cette plaque a déjà un chauffeur. Reprenez-la d’abord.';
+      'Cette plaque a déjà un chauffeur. Récupérez-la d’abord.';
 
   @override
   String get fltRefusalBadInput =>
-      'Des informations sont manquantes ou invalides.';
+      'Certains détails sont manquants ou invalides.';
 
   @override
-  String get fltRefusalNoAmount => 'Saisissez un montant supérieur à zéro.';
+  String get fltRefusalNoAmount => 'Saisissez un montant.';
 
   @override
-  String get fltRefusalAlreadyUndone => 'Ce paiement a déjà été annulé.';
+  String get fltRefusalAlreadyUndone => 'Ce paiement a déjà été retiré.';
 
   @override
   String get fltRefusalNotOpen =>
-      'Seule une facture ouverte peut être exonérée.';
+      'Seule une facture ouverte peut être annulée.';
 
   @override
-  String get fltRefusalReasonRequired => 'Indiquez la raison.';
+  String get fltRefusalReasonRequired => 'Indiquez pourquoi.';
 
   @override
   String get fltRefusalImportLocked =>
-      'Un paiement importé depuis le tableur ne peut pas être annulé ici.';
+      'Un paiement importé du tableur ne peut pas être annulé ici.';
 
   @override
   String get fltRefusalFriendOverlap =>
-      'Un autre ami a déjà cette voiture ces jours-là.';
+      'Un autre ami a déjà cette voiture sur ces jours.';
 
   @override
-  String get fltRefusalNoteEmpty => 'Écrivez une note.';
+  String get fltRefusalNoteEmpty => 'Écrivez une note ou joignez un fichier.';
 
   @override
   String get fltRefusalNoteVoided => 'Cette note a déjà été retirée.';
 
   @override
   String get fltRefusalBadFile =>
-      'Un fichier n’est pas accepté (images ou PDF, jusqu’à 10 Mo).';
+      'Un fichier n’est pas autorisé (images ou PDF, 10 Mo maximum).';
 
   @override
   String get fltRefusalDepositUsed =>
@@ -15592,22 +15591,22 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get fltRefusalWhatsappOff =>
-      'WhatsApp est désactivé pour ce chauffeur (réglages de la flotte).';
+      'WhatsApp pour les chauffeurs est désactivé pour ce chauffeur (Paramètres de la flotte).';
 
   @override
   String get fltRefusalNothingOwed =>
-      'Ce chauffeur ne doit rien pour le moment.';
+      'Ce chauffeur ne doit rien pour l’instant.';
 
   @override
   String get fltRefusalNoPhone =>
-      'Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier.';
+      'Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier les détails.';
 
   @override
   String get fltRefusalDriverLeft => 'Ce chauffeur est parti.';
 
   @override
   String get fltRefusalStaffOnly =>
-      'Ce compte n’est pas autorisé à gérer la flotte.';
+      'Ce compte du personnel n’est pas autorisé à gérer Fleet.';
 
   @override
   String get fltPeriodWeek => 'Semaine';
@@ -15675,9 +15674,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get fltSortPaid => 'Plus payé d’abord';
 
   @override
-  String get fltSortZelleCents => 'Centimes Zelle';
-
-  @override
   String get fltNoDriverMatches =>
       'Aucun chauffeur ne correspond. Changez la recherche ou les filtres.';
 
@@ -15704,11 +15700,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get fltTileCollected => 'Encaissé ce mois-ci';
-
-  @override
-  String fltTileOfBilled(String amount) {
-    return 'sur $amount facturés';
-  }
 
   @override
   String get fltTileNothingBilled => 'Rien de facturé pour l’instant';
@@ -15829,15 +15820,6 @@ class AppLocalizationsFr extends AppLocalizations {
       one: '$count jour',
     );
     return '$_temp0';
-  }
-
-  @override
-  String get fltNoZelleCents =>
-      'Ce chauffeur n’a pas encore de centimes Zelle (seuls les chauffeurs actifs en ont).';
-
-  @override
-  String fltZelleAmountFor(String amount) {
-    return 'Montant Zelle de ce chauffeur : $amount. Les deux derniers chiffres sont ceux du chauffeur : le montant dit qui a payé.';
   }
 
   @override
@@ -16431,12 +16413,8 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get fltWaitingTwoDrivers =>
-      'Il pourrait venir de deux chauffeurs : choisissez le bon.';
-
-  @override
   String get fltWaitingUndone =>
-      'Son paiement a été annulé : choisissez le bon chauffeur.';
+      'Le paiement de ce dépôt a été annulé. Il ne paiera personne automatiquement : choisissez le chauffeur.';
 
   @override
   String get fltWaitingDuplicate =>
@@ -16676,6 +16654,320 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get fltScheduleSaveOff =>
       'Désactiver les vérifications les jours de paie ? Les dépôts paient toujours les chauffeurs quand la banque se met à jour d’elle-même, sans frais.';
+
+  @override
+  String get fltRefusalClaimClosed => 'Ce signalement est déjà fermé.';
+
+  @override
+  String get fltRefusalClaimNoDriver =>
+      'Ce signalement n’a pas encore de chauffeur. Attendez que l’expéditeur dise pour qui il est, ou fermez-le.';
+
+  @override
+  String get fltRefusalDepositNotWaiting =>
+      'Ce dépôt n’est plus en attente. Actualisez et réessayez.';
+
+  @override
+  String get fltRefusalBadName =>
+      'Ce nom ne peut pas être utilisé. Écrivez le nom complet de la personne tel que la banque l’affiche.';
+
+  @override
+  String get fltRefusalZelleMissing =>
+      'Ajoutez d’abord l’e-mail ou le téléphone Zelle dans les réglages de la flotte.';
+
+  @override
+  String get fltRefusalCarOverlap =>
+      'Cette plaque était chez un autre chauffeur jusqu’à ce jour. Choisissez un jour de début plus tardif.';
+
+  @override
+  String get fltRefusalAlreadyReturned => 'Cette plaque a déjà été rendue.';
+
+  @override
+  String get fltRefusalDriverHasPlate =>
+      'Ce chauffeur a encore une plaque. Récupérez-la d’abord, ou demandez à un administrateur de la flotte d’utiliser « Le chauffeur est parti ».';
+
+  @override
+  String get fltWaitingSharedPayer =>
+      'Cette personne paie pour plus d’un chauffeur. Choisissez le chauffeur.';
+
+  @override
+  String get fltClaimsTitle =>
+      'Signalés par les chauffeurs, en attente de la banque';
+
+  @override
+  String get fltClaimsHint =>
+      'Un chauffeur a envoyé une capture de paiement sur WhatsApp. Personne n’est marqué payé à partir d’une image : le dépôt en banque fait foi.';
+
+  @override
+  String get fltClaimsEmpty =>
+      'Aucun paiement signalé par un chauffeur n’est en attente.';
+
+  @override
+  String get fltClaimsLoadFailed =>
+      'Les paiements signalés n’ont pas pu être chargés. Réessayez dans un instant.';
+
+  @override
+  String get fltClaimViewPhoto => 'Voir la photo';
+
+  @override
+  String get fltClaimNoPhoto => 'Pas de photo';
+
+  @override
+  String get fltClaimPhotoGone => 'Photo non disponible';
+
+  @override
+  String get fltClaimPhotoTitle => 'Capture du paiement';
+
+  @override
+  String get fltClaimTheirs => 'Ce dépôt est le leur';
+
+  @override
+  String get fltClaimPickDeposit => 'Choisissez le dépôt qui est le leur.';
+
+  @override
+  String get fltClaimNoDeposits => 'Aucun dépôt n’est en attente';
+
+  @override
+  String get fltClaimDifferentAmount =>
+      'Ce dépôt est d’un autre montant. C’est le montant de la banque qui est enregistré.';
+
+  @override
+  String get fltClaimSameAmount => 'Même montant';
+
+  @override
+  String get fltClaimGiveDeposit => 'Donner ce dépôt';
+
+  @override
+  String get fltClaimGiveTitle => 'Donner ce dépôt ?';
+
+  @override
+  String fltClaimGiveMessage(String amount, String sender, String who) {
+    return 'Donner ce dépôt de $amount de $sender à $who ? Il paie ses factures, et ses prochains dépôts du même expéditeur seront payés automatiquement.';
+  }
+
+  @override
+  String get fltClaimUnknownSender => 'un expéditeur inconnu';
+
+  @override
+  String get fltClaimCloseTitle => 'Fermer ce signalement ?';
+
+  @override
+  String fltClaimCloseMessage(String who) {
+    return 'Fermer ce signalement de $who ? La facture reste impayée et rien n’est enregistré.';
+  }
+
+  @override
+  String get fltClaimClosed => 'Signalement fermé.';
+
+  @override
+  String get fltClaimAskingDriver =>
+      'En attente que l’expéditeur dise pour quel chauffeur est ce paiement.';
+
+  @override
+  String get fltClaimAskingAmount =>
+      'En attente que le chauffeur écrive le montant.';
+
+  @override
+  String get fltClaimAskingName =>
+      'En attente que le chauffeur donne le nom du compte depuis lequel il a payé.';
+
+  @override
+  String get fltClaimNoDeposit2Days =>
+      'Le dépôt n’est pas apparu en banque après 2 jours. Le chauffeur a été prévenu.';
+
+  @override
+  String get fltClaimWaitingBank =>
+      'En attente que le dépôt apparaisse en banque.';
+
+  @override
+  String get fltClaimWrongRecipient =>
+      'Le paiement est allé à quelqu’un d’autre que cette entreprise. Regardez la photo.';
+
+  @override
+  String get fltClaimDepositTaken =>
+      'Le dépôt qui correspond a déjà servi pour un autre paiement.';
+
+  @override
+  String get fltClaimTooOld => 'La capture date de plus de 10 jours.';
+
+  @override
+  String get fltClaimNotADriver =>
+      'Ce numéro n’est pas celui d’un de vos chauffeurs. Trouvez pour qui est le paiement.';
+
+  @override
+  String get fltClaimTwoClaims =>
+      'Deux signalements visent le même dépôt. Choisissez à qui il appartient.';
+
+  @override
+  String get fltClaimNeedsPerson =>
+      'Une personne doit regarder ce signalement.';
+
+  @override
+  String get fltPayerNamesTitle => 'Noms depuis lesquels ce chauffeur paie';
+
+  @override
+  String get fltPayerNamesHint =>
+      'Un Zelle depuis l’un de ces noms paie ce chauffeur automatiquement.';
+
+  @override
+  String get fltPayerNamesTwoWords =>
+      'Écrivez le nom complet tel que la banque l’affiche, au moins deux mots.';
+
+  @override
+  String get fltPayerNamesEmpty =>
+      'Aucun nom pour l’instant. Il est retenu la première fois qu’un dépôt est associé à ce chauffeur.';
+
+  @override
+  String get fltPayerNameRemove => 'Retirer ce nom';
+
+  @override
+  String get fltPayerNameField => 'Nom sur le compte Zelle';
+
+  @override
+  String get fltPayerNameAdd => 'Ajouter le nom';
+
+  @override
+  String get fltPayerNameDuplicate => 'Ce nom est déjà dans la liste.';
+
+  @override
+  String get fltPayerNameTypeFirst => 'Écrivez d’abord un nom.';
+
+  @override
+  String get fltPayerNameRemoveTitle => 'Retirer ce nom ?';
+
+  @override
+  String fltPayerNameRemoveMessage(String driver, String name) {
+    return 'Ne plus payer $driver automatiquement depuis $name ? Les dépôts de ce nom attendront de nouveau le bureau.';
+  }
+
+  @override
+  String get fltPlateFeeChange => 'Modifier les frais de plaque';
+
+  @override
+  String get fltPlateFeeSave => 'Enregistrer les frais de plaque';
+
+  @override
+  String get fltPlateFeeAmountMonth => 'Nouveaux frais de plaque par mois (\$)';
+
+  @override
+  String get fltPlateFeeAmountWeek =>
+      'Nouveaux frais de plaque par semaine (\$)';
+
+  @override
+  String get fltPlateFeeDueMonth =>
+      'Jour d’échéance du mois, facultatif (1–28)';
+
+  @override
+  String get fltPlateFeeDueWeek =>
+      'Jour de la semaine d’échéance, facultatif (1 = lundi … 7 = dimanche)';
+
+  @override
+  String fltPlateFeeApplies(String day) {
+    return 'S’applique à partir du $day. Les factures déjà créées ne sont pas modifiées.';
+  }
+
+  @override
+  String get fltPlateFeeNothingChanged => 'Rien n’a été modifié.';
+
+  @override
+  String get fltPlateFeeConfirmTitle => 'Modifier les frais de plaque ?';
+
+  @override
+  String fltPlateFeeConfirmBoth(
+    String name,
+    String plate,
+    String amount,
+    String dueDay,
+    String day,
+  ) {
+    return 'Modifier les frais de plaque de $name pour $plate à $amount, jour d’échéance $dueDay ? Cela s’applique à partir du $day. Les factures déjà créées ne sont pas modifiées.';
+  }
+
+  @override
+  String fltPlateFeeConfirmFee(
+    String name,
+    String plate,
+    String amount,
+    String day,
+  ) {
+    return 'Modifier les frais de plaque de $name pour $plate à $amount ? Cela s’applique à partir du $day. Les factures déjà créées ne sont pas modifiées.';
+  }
+
+  @override
+  String fltPlateFeeConfirmDue(
+    String name,
+    String plate,
+    String dueDay,
+    String day,
+  ) {
+    return 'Modifier le jour d’échéance des frais de plaque de $name pour $plate à $dueDay ? Cela s’applique à partir du $day. Les factures déjà créées ne sont pas modifiées.';
+  }
+
+  @override
+  String get fltDriverLeft => 'Le chauffeur est parti';
+
+  @override
+  String get fltDriverLeftOn => 'Parti le';
+
+  @override
+  String get fltDriverLeftHintPlate =>
+      'La plaque revient à cette date et la facturation s’arrête.';
+
+  @override
+  String get fltDriverLeftHintNoPlate =>
+      'La facturation s’arrête à cette date.';
+
+  @override
+  String get fltDriverLeftDone =>
+      'Le chauffeur est marqué comme parti. Sa plaque est revenue et sa facturation s’est arrêtée.';
+
+  @override
+  String fltDriverLeftConfirmPlate(String name, String day, String plate) {
+    return 'Marquer $name comme parti le $day ? La plaque $plate revient à cette date et la facturation s’arrête.';
+  }
+
+  @override
+  String fltDriverLeftConfirmNoPlate(String name, String day) {
+    return 'Marquer $name comme parti le $day ? La facturation s’arrête.';
+  }
+
+  @override
+  String get fltFeeOwedMarker => '+ frais dus';
+
+  @override
+  String get fltFeeOwedHint =>
+      'Des frais de retard ou d’autres frais sont encore dus ce mois-ci';
+
+  @override
+  String fltTilePlateFeesPaid(int percent, String paid, String billed) {
+    return '$percent % des frais de plaque de ce mois payés ($paid sur $billed)';
+  }
+
+  @override
+  String get fltPaperworkScopeDriver => 'Plaques avec un chauffeur';
+
+  @override
+  String get fltPaperworkScopeAll => 'Toutes les plaques';
+
+  @override
+  String fltRefusalBadNameNamed(String name) {
+    return '\"$name\" ne peut pas être utilisé. Écrivez le nom complet de la personne tel que la banque l’affiche.';
+  }
+
+  @override
+  String get fltClaimNoAmount =>
+      'Le chauffeur n’a pas donné de montant lisible. Regardez la photo.';
+
+  @override
+  String get fltClaimNoDeposit =>
+      'Aucun dépôt n’est apparu en banque après 2 jours.';
+
+  @override
+  String get fltClaimPaymentUndone =>
+      'Le paiement fait à partir de ce signalement a été annulé. Choisissez le bon dépôt ou fermez-le.';
+
+  @override
+  String get fltClaimPhotoDeleted =>
+      'Cette photo a été supprimée après 12 mois.';
 
   @override
   String get pcsErrPiecesTooMany => 'Un envoi peut compter au plus 60 colis.';

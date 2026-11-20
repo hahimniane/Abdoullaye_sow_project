@@ -377,8 +377,8 @@ class _Tiles extends StatelessWidget {
               const Key('fleet-tile-collected'),
               l10n.fltTileCollected,
               fleetMoney(tiles.collectedCents),
-              tiles.dueThisMonthCents > 0
-                  ? l10n.fltTileOfBilled(fleetMoney(tiles.dueThisMonthCents))
+              tiles.plateFeesBilledCents > 0
+                  ? _plateFeesLine(l10n, tiles)
                   : l10n.fltTileNothingBilled,
               color: AppColors.sage,
             ),
@@ -403,6 +403,20 @@ class _Tiles extends StatelessWidget {
       },
     );
   }
+}
+
+/// "79% of this month's plate fees paid ($11,900 of $15,100)": the paid share
+/// of this month's plate-fee bills, never collected over billed.
+String _plateFeesLine(AppLocalizations l10n, FleetTiles tiles) {
+  final share = fleetPlateFeesShare(
+    tiles.plateFeesBilledCents,
+    tiles.plateFeesPaidCents,
+  );
+  return l10n.fltTilePlateFeesPaid(
+    share.percent,
+    fleetMoney(share.paidCents),
+    fleetMoney(share.billedCents),
+  );
 }
 
 class _PeriodRowCard extends StatelessWidget {
@@ -473,6 +487,19 @@ class _PeriodRowCard extends StatelessWidget {
                   style: const TextStyle(color: AppColors.muted),
                 ),
               ?chip,
+              if (row.extraOwedCents > 0)
+                Tooltip(
+                  message: l10n.fltFeeOwedHint,
+                  child: Text(
+                    l10n.fltFeeOwedMarker,
+                    key: Key('fleet-fee-owed-${row.driverId}'),
+                    style: const TextStyle(
+                      color: AppColors.errorRed,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               if (row.lateCents > 0)
                 FleetChip(
                   label: l10n.fltLateAmount(fleetMoney(row.lateCents)),

@@ -7386,23 +7386,23 @@
   "fltRefusalNotFound": "That record was not found.",
   "fltRefusalCarTaken": "This plate already has a driver. Get it back first.",
   "fltRefusalBadInput": "Some details are missing or not valid.",
-  "fltRefusalNoAmount": "Enter an amount greater than zero.",
+  "fltRefusalNoAmount": "Enter an amount.",
   "fltRefusalAlreadyUndone": "That payment was already undone.",
   "fltRefusalNotOpen": "Only an open bill can be waived.",
   "fltRefusalReasonRequired": "Say why.",
   "fltRefusalImportLocked": "A payment brought in from the spreadsheet cannot be undone here.",
   "fltRefusalFriendOverlap": "Another friend already has this car on those days.",
-  "fltRefusalNoteEmpty": "Write a note.",
+  "fltRefusalNoteEmpty": "Write a note or attach a file.",
   "fltRefusalNoteVoided": "That note was already removed.",
   "fltRefusalBadFile": "A file is not allowed (images or PDF, up to 10 MB).",
   "fltRefusalDepositUsed": "That deposit was already used for another payment.",
-  "fltRefusalNoBank": "Connect the business’s bank first (Profile, Bank for Zelle checks).",
+  "fltRefusalNoBank": "Connect the business's bank first (Profile, Bank for Zelle checks).",
   "fltRefusalBadPhone": "Enter a phone number with its area code.",
   "fltRefusalWhatsappOff": "WhatsApp to drivers is off for this driver (Fleet settings).",
   "fltRefusalNothingOwed": "This driver owes nothing right now.",
   "fltRefusalNoPhone": "This driver has no WhatsApp number. Add one in Edit details.",
   "fltRefusalDriverLeft": "This driver has left.",
-  "fltRefusalStaffOnly": "This account is not allowed to manage Fleet.",
+  "fltRefusalStaffOnly": "This staff account is not allowed to manage Fleet.",
   "fltPeriodWeek": "Week",
   "fltPeriodMonth": "Month",
   "fltPeriodPrevious": "Previous period",
@@ -7434,7 +7434,6 @@
   "fltSortName": "Name A-Z",
   "fltSortOwed": "Most owed first",
   "fltSortPaid": "Most paid first",
-  "fltSortZelleCents": "Zelle cents",
   "fltNoDriverMatches": "No driver matches. Change the search or the filters.",
   "fltNoDriversYet": "No drivers yet.",
   "fltNoDriverInList": "No driver in this list.",
@@ -7463,14 +7462,6 @@
     }
   },
   "fltTileCollected": "Collected this month",
-  "fltTileOfBilled": "of {amount} billed",
-  "@fltTileOfBilled": {
-    "placeholders": {
-      "amount": {
-        "type": "String"
-      }
-    }
-  },
   "fltTileNothingBilled": "Nothing billed yet",
   "fltTileOwed": "Owed now",
   "fltTileDriversOwe": "{count, plural, =1{1 driver owes} other{{count} drivers owe}}",
@@ -7534,15 +7525,6 @@
     "placeholders": {
       "count": {
         "type": "int"
-      }
-    }
-  },
-  "fltNoZelleCents": "This driver has no Zelle cents yet (only active drivers get them).",
-  "fltZelleAmountFor": "Zelle amount for this driver: {amount}. The last two digits are the driver’s own, so the amount tells us who paid.",
-  "@fltZelleAmountFor": {
-    "placeholders": {
-      "amount": {
-        "type": "String"
       }
     }
   },
@@ -7925,8 +7907,7 @@
       }
     }
   },
-  "fltWaitingTwoDrivers": "It could be from two drivers: pick the right one.",
-  "fltWaitingUndone": "Its payment was undone: pick the right driver.",
+  "fltWaitingUndone": "This deposit's payment was undone. It will not pay anyone by itself: pick the driver.",
   "fltWaitingDuplicate": "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.",
   "fltWaitingNotZelle": "This deposit is not a Zelle (cash, a check, a card payout or a transfer). Pick the driver only if it is a driver’s payment.",
   "fltWaitingDriverLeft": "This sender paid for a driver who left. Pick who this payment is for.",
@@ -8036,6 +8017,217 @@
     }
   },
   "fltScheduleSaveOff": "Turn the pay-day bank checks off? Deposits still pay drivers when the bank updates on its own, at no cost.",
+  "fltRefusalClaimClosed": "This report is already closed.",
+  "fltRefusalClaimNoDriver": "This report has no driver yet. Wait for the sender to say who it is for, or close it.",
+  "fltRefusalDepositNotWaiting": "That deposit is no longer waiting. Refresh and try again.",
+  "fltRefusalBadName": "That name cannot be used. Type the person's full name as the bank shows it.",
+  "fltRefusalZelleMissing": "Add the Zelle email or phone in Fleet settings first.",
+  "fltRefusalCarOverlap": "This plate was with another driver until that day. Pick a later start day.",
+  "fltRefusalAlreadyReturned": "This plate was already returned.",
+  "fltRefusalDriverHasPlate": "This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.",
+  "fltWaitingSharedPayer": "This person pays for more than one driver. Pick the driver.",
+  "fltClaimsTitle": "Reported by drivers, waiting for the bank",
+  "fltClaimsHint": "A driver sent a payment screenshot on WhatsApp. Nobody is marked paid from a picture: the deposit in the bank is the proof.",
+  "fltClaimsEmpty": "No payment reported by a driver is waiting.",
+  "fltClaimsLoadFailed": "The reported payments could not be loaded. Try again in a moment.",
+  "fltClaimViewPhoto": "View photo",
+  "fltClaimNoPhoto": "No photo",
+  "fltClaimPhotoGone": "Photo not available",
+  "fltClaimPhotoTitle": "Payment screenshot",
+  "fltClaimTheirs": "This deposit is theirs",
+  "fltClaimPickDeposit": "Pick the deposit that is theirs.",
+  "fltClaimNoDeposits": "No deposit is waiting",
+  "fltClaimDifferentAmount": "This deposit is for a different amount. The bank’s amount is what is recorded.",
+  "fltClaimSameAmount": "Same amount",
+  "fltClaimGiveDeposit": "Give this deposit",
+  "fltClaimGiveTitle": "Give this deposit?",
+  "fltClaimGiveMessage": "Give this {amount} deposit from {sender} to {who}? It pays their bills, and their next deposits from the same sender are paid by themselves.",
+  "@fltClaimGiveMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "sender": {
+        "type": "String"
+      },
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "fltClaimUnknownSender": "an unknown sender",
+  "fltClaimCloseTitle": "Close this report?",
+  "fltClaimCloseMessage": "Close this report from {who}? The bill stays unpaid and nothing is recorded.",
+  "@fltClaimCloseMessage": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "fltClaimClosed": "Report closed.",
+  "fltClaimAskingDriver": "Waiting for the sender to say which driver this payment is for.",
+  "fltClaimAskingAmount": "Waiting for the driver to type the amount.",
+  "fltClaimAskingName": "Waiting for the driver to say the name on the account they paid from.",
+  "fltClaimNoDeposit2Days": "The deposit has not shown in the bank after 2 days. The driver was told.",
+  "fltClaimWaitingBank": "Waiting for the deposit to show in the bank.",
+  "fltClaimWrongRecipient": "The payment went to someone other than this business. Look at the photo.",
+  "fltClaimDepositTaken": "The deposit it matches was already used for another payment.",
+  "fltClaimTooOld": "The screenshot is more than 10 days old.",
+  "fltClaimNotADriver": "This phone is not one of your drivers. Find out who the payment is for.",
+  "fltClaimTwoClaims": "Two claims point to the same deposit. Pick who it belongs to.",
+  "fltClaimNeedsPerson": "A person needs to look at this claim.",
+  "fltPayerNamesTitle": "Names this driver pays from",
+  "fltPayerNamesHint": "A Zelle from one of these names pays this driver by itself.",
+  "fltPayerNamesTwoWords": "Type the full name as the bank shows it, at least two words.",
+  "fltPayerNamesEmpty": "No name yet. It is remembered the first time a deposit is matched to this driver.",
+  "fltPayerNameRemove": "Remove this name",
+  "fltPayerNameField": "Name on the Zelle account",
+  "fltPayerNameAdd": "Add name",
+  "fltPayerNameDuplicate": "That name is already on the list.",
+  "fltPayerNameTypeFirst": "Type a name first.",
+  "fltPayerNameRemoveTitle": "Remove this name?",
+  "fltPayerNameRemoveMessage": "Stop paying {driver} automatically from {name}? Deposits from this name will wait for the office again.",
+  "@fltPayerNameRemoveMessage": {
+    "placeholders": {
+      "driver": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPlateFeeChange": "Change plate fee",
+  "fltPlateFeeSave": "Save plate fee",
+  "fltPlateFeeAmountMonth": "New plate fee a month ($)",
+  "fltPlateFeeAmountWeek": "New plate fee a week ($)",
+  "fltPlateFeeDueMonth": "Due day of the month, optional (1–28)",
+  "fltPlateFeeDueWeek": "Due weekday, optional (1 = Monday … 7 = Sunday)",
+  "fltPlateFeeApplies": "Applies from {day}. Bills already made are not changed.",
+  "@fltPlateFeeApplies": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPlateFeeNothingChanged": "Nothing was changed.",
+  "fltPlateFeeConfirmTitle": "Change the plate fee?",
+  "fltPlateFeeConfirmBoth": "Change {name}’s plate fee for {plate} to {amount}, due day {dueDay}? It applies from {day}. Bills already made are not changed.",
+  "@fltPlateFeeConfirmBoth": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "dueDay": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPlateFeeConfirmFee": "Change {name}’s plate fee for {plate} to {amount}? It applies from {day}. Bills already made are not changed.",
+  "@fltPlateFeeConfirmFee": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPlateFeeConfirmDue": "Change the due day of {name}’s plate fee for {plate} to {dueDay}? It applies from {day}. Bills already made are not changed.",
+  "@fltPlateFeeConfirmDue": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      },
+      "dueDay": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltDriverLeft": "Driver has left",
+  "fltDriverLeftOn": "Left on",
+  "fltDriverLeftHintPlate": "The plate comes back on this date and bills stop.",
+  "fltDriverLeftHintNoPlate": "Bills stop on this date.",
+  "fltDriverLeftDone": "The driver is marked as left. Their plate came back and their bills stopped.",
+  "fltDriverLeftConfirmPlate": "Mark {name} as having left on {day}? Plate {plate} comes back on that date and bills stop.",
+  "@fltDriverLeftConfirmPlate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "fltDriverLeftConfirmNoPlate": "Mark {name} as having left on {day}? Bills stop.",
+  "@fltDriverLeftConfirmNoPlate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltFeeOwedMarker": "+ fee owed",
+  "fltFeeOwedHint": "A late fee or charge is still owed this month",
+  "fltTilePlateFeesPaid": "{percent}% of this month’s plate fees paid ({paid} of {billed})",
+  "@fltTilePlateFeesPaid": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      },
+      "paid": {
+        "type": "String"
+      },
+      "billed": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPaperworkScopeDriver": "Plates with a driver",
+  "fltPaperworkScopeAll": "Every plate",
+  "fltRefusalBadNameNamed": "\"{name}\" cannot be used. Type the person's full name as the bank shows it.",
+  "@fltRefusalBadNameNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fltClaimNoAmount": "The driver did not give a readable amount. Look at the photo.",
+  "fltClaimNoDeposit": "No deposit has shown in the bank after 2 days.",
+  "fltClaimPaymentUndone": "The payment made from this report was undone. Pick the right deposit or close it.",
+  "fltClaimPhotoDeleted": "This photo was deleted after 12 months.",
   "pcsErrPiecesTooMany": "A package can have at most 60 pieces.",
   "pcsErrKindInvalid": "Say what each piece is: a barrel, a box, or something else.",
   "pcsErrDescriptionRequired": "Say what each box or item is.",

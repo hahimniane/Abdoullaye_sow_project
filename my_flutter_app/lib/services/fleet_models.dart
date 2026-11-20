@@ -167,19 +167,55 @@ String fleetCentsToInput(Object? cents) {
 String fleetMoney(int cents, {String? language}) =>
     formatLotCents(cents, language: language);
 
-/// The Zelle amount a driver pays: the dollars owed (rounded up) plus their
-/// personal cents, so the amount is the code ("$1,200.07"). Null with no code.
-String? fleetZelleAmountText(int owedCents, Object? personalCents) {
-  final p = personalCents is num
-      ? personalCents.toInt()
-      : int.tryParse(_s(personalCents));
-  if (p == null || p < 1 || p > 99) return null;
-  final dollars = ((owedCents < 0 ? 0 : owedCents) / 100).ceil();
-  final whole = dollars.toString().replaceAllMapped(
-    RegExp(r'\B(?=(\d{3})+(?!\d))'),
-    (_) => ',',
-  );
-  return '\$$whole.${p.toString().padLeft(2, '0')}';
+/// The void reason of a bill made by mistake (shown nowhere).
+const fleetBilledByMistake = 'billed_by_mistake';
+
+/// How a driver is addressed (confirm texts, greetings). Imported names carry
+/// office notes ("#46", "(25)", "STORAGE 2/14/25"): this drops a trailing
+/// "#NN" / "(NN)" and anything from DROP / STORAGE / "Voir Folder" onward
+/// (case-insensitive). The stored name is never changed; an empty result
+/// falls back to the full name. Mirrors admin_web `driverDisplayName` and the
+/// server's rule for WhatsApp greetings.
+String driverDisplayName(Object? name) {
+  final full = _s(name).replaceAll(RegExp(r'\s+'), ' ').trim();
+  var out = full
+      .replaceFirst(
+        RegExp(
+          r'(^|\s)(?:drop|storage|voir\s+folder)(?![\p{L}\p{N}_]).*$',
+          caseSensitive: false,
+          unicode: true,
+        ),
+        '',
+      )
+      .trim();
+  final tail = RegExp(r'\s*(?:#\s*\d*|\(\s*\d+\s*\))\s*$');
+  for (var i = 0; i < 10; i++) {
+    final next = out.replaceFirst(tail, '').trim();
+    if (next == out) break;
+    out = next;
+  }
+  return out.isEmpty ? full : out;
+}
+
+/// Remembered payer names, cleaned the way the list is saved: trimmed, one
+/// space, no empty, no duplicate (any case).
+List<String> fleetCleanPayerNames(Iterable<Object?> names) {
+  final seen = <String>{};
+  final out = <String>[];
+  for (final n in names) {
+    final name = _s(n).replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (name.isEmpty || !seen.add(name.toLowerCase())) continue;
+    out.add(name);
+  }
+  return out;
+}
+
+/// The remembered names on a driver record (`rememberedSenders`: a list, or an
+/// older map keyed by name), read defensively.
+List<String> fleetReadPayerNames(Object? raw) {
+  if (raw is List) return fleetCleanPayerNames(raw);
+  if (raw is Map) return fleetCleanPayerNames(raw.keys);
+  return const [];
 }
 
 // ---------------------------------------------------------------------------
@@ -197,15 +233,14 @@ class FleetDriver {
     this.state = '',
     this.zip = '',
     this.status = 'active',
-    this.personalCents,
     this.creditCents = 0,
     this.notes = '',
     this.licenseHistory = const [],
+    this.payerNames = const [],
   });
 
   factory FleetDriver.fromMap(String id, Map<String, dynamic> m) {
     final a = _map(m['address']);
-    final p = _i(m['personalCents']);
     return FleetDriver(
       id: id,
       name: _s(m['name']),
@@ -216,17 +251,21 @@ class FleetDriver {
       state: _s(a['state']),
       zip: _s(a['zip']),
       status: _s(m['status']) == 'left' ? 'left' : 'active',
-      personalCents: p >= 1 ? p : null,
       creditCents: _i(m['creditCents']) < 0 ? 0 : _i(m['creditCents']),
       notes: _s(m['notes']),
       licenseHistory: _maps(m['licenseHistory']),
+      payerNames: fleetReadPayerNames(m['rememberedSenders']),
     );
   }
 
   final String id, name, phone, tlcLicense, line1, city, state, zip;
   final String status, notes;
-  final int? personalCents;
   final int creditCents;
+
+  /// The Zelle sender names remembered for this driver (`rememberedSenders`);
+  /// a deposit from one of them pays the driver by itself. An old record may
+  /// still carry `personalCents`: it is ignored (never assigned, never used).
+  final List<String> payerNames;
   final List<Map<String, dynamic>> licenseHistory;
 
   bool get isActive => status == 'active';
@@ -345,6 +384,7 @@ class FleetBill {
     this.lateFeeForBillId = '',
     this.waivedReason = '',
     this.waivedAtMs = 0,
+    this.voidReason = '',
   });
 
   factory FleetBill.fromMap(String id, Map<String, dynamic> m) {
@@ -366,12 +406,17 @@ class FleetBill {
       lateFeeForBillId: _s(m['lateFeeForBillId']),
       waivedReason: _s(w['reason']),
       waivedAtMs: _i(w['atMs']),
+      voidReason: _s(m['voidReason']),
     );
   }
 
   final String id, businessId, driverId, carId, assignmentId, kind, label;
   final String periodFrom, periodTo, dueDayKey, status, lateFeeForBillId;
   final String waivedReason;
+
+  /// Why a void bill was taken back (`billed_by_mistake`, `paid_on_time`,
+  /// `rent_bill_gone`); '' when not void.
+  final String voidReason;
   final int amountCents, paidCents, waivedAtMs;
 
   /// What is still unpaid, never below zero.
@@ -381,6 +426,11 @@ class FleetBill {
   }
 
   bool get isOpen => status == 'open';
+
+  /// A bill made by a fault of ours and taken back: never the driver's, so it
+  /// is on no list and in no count (website `billInView`).
+  bool get billedByMistake =>
+      status == 'void' && voidReason == fleetBilledByMistake;
 }
 
 class FleetPayment {

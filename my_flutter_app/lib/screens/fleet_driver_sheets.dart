@@ -886,3 +886,277 @@ class _FleetFriendSheetState extends State<FleetFriendSheet> with FleetRun {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Change plate fee (Fleet admin).
+// ---------------------------------------------------------------------------
+
+/// A new plate fee and/or due day for the driver's open plate
+/// (`assignment_update`). It applies from the first period with no bill yet;
+/// bills already made are not changed. Pops true when saved.
+class FleetPlateFeeSheet extends StatefulWidget {
+  const FleetPlateFeeSheet({
+    super.key,
+    required this.controller,
+    required this.driver,
+    required this.assignment,
+    required this.plate,
+  });
+
+  final FleetController controller;
+  final FleetDriver driver;
+  final FleetAssignment assignment;
+  final String plate;
+
+  @override
+  State<FleetPlateFeeSheet> createState() => _FleetPlateFeeSheetState();
+}
+
+class _FleetPlateFeeSheetState extends State<FleetPlateFeeSheet> with FleetRun {
+  late final _amount = TextEditingController(
+    text: fleetCentsToInput(widget.assignment.rentCents),
+  );
+  final _dueDay = TextEditingController();
+  String? _appliedFrom;
+
+  late final String _estimate = fleetEstimateFeeEffectiveDay(
+    widget.assignment,
+    widget.controller.state.index.billsByDriver[widget.driver.id] ?? const [],
+    widget.controller.state.todayKey,
+  );
+
+  bool get _weekly => widget.assignment.period == 'weekly';
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _dueDay.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
+    final input = fleetReadPlateFeeInput(
+      _amount.text,
+      _dueDay.text,
+      widget.assignment,
+    );
+    if (!input.ok) {
+      setState(
+        () => error = input.error == FleetPlateFeeError.nothingChanged
+            ? l10n.fltPlateFeeNothingChanged
+            : l10n.fltRefusalBadInput,
+      );
+      return;
+    }
+    final name = driverDisplayName(widget.driver.name);
+    final day = fleetDayLabel(_estimate);
+    final rent = input.rentCents;
+    final due = input.dueDay;
+    final message = rent != null && due != null
+        ? l10n.fltPlateFeeConfirmBoth(
+            name,
+            widget.plate,
+            fleetMoney(rent),
+            '$due',
+            day,
+          )
+        : rent != null
+        ? l10n.fltPlateFeeConfirmFee(name, widget.plate, fleetMoney(rent), day)
+        : l10n.fltPlateFeeConfirmDue(name, widget.plate, '${due ?? 0}', day);
+    final yes = await fleetConfirm(
+      context,
+      title: l10n.fltPlateFeeConfirmTitle,
+      message: message,
+      confirmLabel: l10n.fltPlateFeeSave,
+    );
+    if (!yes || !mounted) return;
+    final c = widget.controller;
+    final answer = await runFleet(
+      c.service,
+      FleetRequests.assignmentUpdate(
+        c.businessId,
+        assignmentId: widget.assignment.id,
+        rentCents: rent,
+        dueDay: due,
+      ),
+    );
+    if (answer == null || !mounted) return;
+    final server = answer['effectiveDayKey'];
+    setState(
+      () => _appliedFrom = server is String && server.isNotEmpty
+          ? server
+          : _estimate,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (_appliedFrom != null) {
+      return FleetSheetFrame(
+        title: l10n.fltSaved,
+        subtitle: '${driverDisplayName(widget.driver.name)} · ${widget.plate}',
+        actionLabel: l10n.fltClose,
+        busy: false,
+        submitKey: const Key('fleet-fee-done'),
+        onSubmit: () => Navigator.of(context).pop(true),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: Text(
+              l10n.fltPlateFeeApplies(fleetDayLabel(_appliedFrom!)),
+              key: const Key('fleet-fee-applies'),
+            ),
+          ),
+        ],
+      );
+    }
+    return FleetSheetFrame(
+      title: l10n.fltPlateFeeChange,
+      subtitle: '${driverDisplayName(widget.driver.name)} · ${widget.plate}',
+      actionLabel: l10n.fltPlateFeeSave,
+      busy: busy,
+      error: error,
+      onSubmit: _save,
+      children: [
+        FleetField(
+          controller: _amount,
+          label: _weekly
+              ? l10n.fltPlateFeeAmountWeek
+              : l10n.fltPlateFeeAmountMonth,
+          keyboard: const TextInputType.numberWithOptions(decimal: true),
+          enabled: !busy,
+        ),
+        FleetField(
+          controller: _dueDay,
+          label: _weekly ? l10n.fltPlateFeeDueWeek : l10n.fltPlateFeeDueMonth,
+          hint: '${widget.assignment.dueDay}',
+          keyboard: TextInputType.number,
+          enabled: !busy,
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: Text(
+            l10n.fltPlateFeeApplies(fleetDayLabel(_estimate)),
+            key: const Key('fleet-fee-estimate'),
+            style: const TextStyle(color: AppColors.muted),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Driver has left (Fleet admin).
+// ---------------------------------------------------------------------------
+
+/// The driver left on a day: their plate comes back and bills stop
+/// (`driver_leave`). Pops true when saved.
+class FleetDriverLeftSheet extends StatefulWidget {
+  const FleetDriverLeftSheet({
+    super.key,
+    required this.controller,
+    required this.driver,
+    required this.plate,
+  });
+
+  final FleetController controller;
+  final FleetDriver driver;
+
+  /// The plate they have now, '' when none.
+  final String plate;
+
+  @override
+  State<FleetDriverLeftSheet> createState() => _FleetDriverLeftSheetState();
+}
+
+class _FleetDriverLeftSheetState extends State<FleetDriverLeftSheet>
+    with FleetRun {
+  late String _day = widget.controller.state.todayKey;
+  bool _done = false;
+
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_day.isEmpty) {
+      setState(() => error = l10n.fltRefusalBadInput);
+      return;
+    }
+    final name = driverDisplayName(widget.driver.name);
+    final yes = await fleetConfirm(
+      context,
+      title: l10n.fltDriverLeft,
+      message: widget.plate.isEmpty
+          ? l10n.fltDriverLeftConfirmNoPlate(name, fleetDayLabel(_day))
+          : l10n.fltDriverLeftConfirmPlate(
+              name,
+              fleetDayLabel(_day),
+              widget.plate,
+            ),
+      confirmLabel: l10n.fltDriverLeft,
+      destructive: true,
+    );
+    if (!yes || !mounted) return;
+    final c = widget.controller;
+    final answer = await runFleet(
+      c.service,
+      FleetRequests.driverLeave(
+        c.businessId,
+        driverId: widget.driver.id,
+        endDayKey: _day,
+      ),
+    );
+    if (answer != null && mounted) setState(() => _done = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (_done) {
+      return FleetSheetFrame(
+        title: l10n.fltDriverLeft,
+        subtitle: driverDisplayName(widget.driver.name),
+        actionLabel: l10n.fltClose,
+        busy: false,
+        submitKey: const Key('fleet-left-done'),
+        onSubmit: () => Navigator.of(context).pop(true),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: Text(
+              l10n.fltDriverLeftDone,
+              key: const Key('fleet-left-result'),
+            ),
+          ),
+        ],
+      );
+    }
+    return FleetSheetFrame(
+      title: l10n.fltDriverLeft,
+      subtitle: driverDisplayName(widget.driver.name),
+      actionLabel: l10n.fltDriverLeft,
+      destructive: true,
+      busy: busy,
+      error: error,
+      onSubmit: _save,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: Text(
+            widget.plate.isEmpty
+                ? l10n.fltDriverLeftHintNoPlate
+                : l10n.fltDriverLeftHintPlate,
+            style: const TextStyle(color: AppColors.muted),
+          ),
+        ),
+        FleetDayField(
+          label: l10n.fltDriverLeftOn,
+          value: _day,
+          enabled: !busy,
+          onChanged: (v) => setState(() => _day = v),
+        ),
+      ],
+    );
+  }
+}

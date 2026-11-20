@@ -7380,28 +7380,28 @@
   "fltLoadFailed": "La flotte n’a pas pu être chargée. Vérifiez votre connexion et réessayez.",
   "fltErrOffline": "Pas de connexion. Vérifiez votre internet et réessayez.",
   "fltErrUnknown": "Une erreur est survenue. Réessayez.",
-  "fltRefusalOff": "La flotte n’est pas activée pour cette entreprise.",
-  "fltRefusalAdminOnly": "Seul un administrateur de la flotte peut faire cela.",
-  "fltRefusalNotFound": "Cet élément est introuvable.",
-  "fltRefusalCarTaken": "Cette plaque a déjà un chauffeur. Reprenez-la d’abord.",
-  "fltRefusalBadInput": "Des informations sont manquantes ou invalides.",
-  "fltRefusalNoAmount": "Saisissez un montant supérieur à zéro.",
-  "fltRefusalAlreadyUndone": "Ce paiement a déjà été annulé.",
-  "fltRefusalNotOpen": "Seule une facture ouverte peut être exonérée.",
-  "fltRefusalReasonRequired": "Indiquez la raison.",
-  "fltRefusalImportLocked": "Un paiement importé depuis le tableur ne peut pas être annulé ici.",
-  "fltRefusalFriendOverlap": "Un autre ami a déjà cette voiture ces jours-là.",
-  "fltRefusalNoteEmpty": "Écrivez une note.",
+  "fltRefusalOff": "Fleet n’est pas activé pour cette entreprise.",
+  "fltRefusalAdminOnly": "Seul un administrateur Fleet peut faire cela.",
+  "fltRefusalNotFound": "Cet enregistrement est introuvable.",
+  "fltRefusalCarTaken": "Cette plaque a déjà un chauffeur. Récupérez-la d’abord.",
+  "fltRefusalBadInput": "Certains détails sont manquants ou invalides.",
+  "fltRefusalNoAmount": "Saisissez un montant.",
+  "fltRefusalAlreadyUndone": "Ce paiement a déjà été retiré.",
+  "fltRefusalNotOpen": "Seule une facture ouverte peut être annulée.",
+  "fltRefusalReasonRequired": "Indiquez pourquoi.",
+  "fltRefusalImportLocked": "Un paiement importé du tableur ne peut pas être annulé ici.",
+  "fltRefusalFriendOverlap": "Un autre ami a déjà cette voiture sur ces jours.",
+  "fltRefusalNoteEmpty": "Écrivez une note ou joignez un fichier.",
   "fltRefusalNoteVoided": "Cette note a déjà été retirée.",
-  "fltRefusalBadFile": "Un fichier n’est pas accepté (images ou PDF, jusqu’à 10 Mo).",
+  "fltRefusalBadFile": "Un fichier n’est pas autorisé (images ou PDF, 10 Mo maximum).",
   "fltRefusalDepositUsed": "Ce dépôt a déjà servi pour un autre paiement.",
   "fltRefusalNoBank": "Connectez d’abord la banque de l’entreprise (Profil, Banque pour les vérifications Zelle).",
   "fltRefusalBadPhone": "Saisissez un numéro de téléphone avec son indicatif.",
-  "fltRefusalWhatsappOff": "WhatsApp est désactivé pour ce chauffeur (réglages de la flotte).",
-  "fltRefusalNothingOwed": "Ce chauffeur ne doit rien pour le moment.",
-  "fltRefusalNoPhone": "Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier.",
+  "fltRefusalWhatsappOff": "WhatsApp pour les chauffeurs est désactivé pour ce chauffeur (Paramètres de la flotte).",
+  "fltRefusalNothingOwed": "Ce chauffeur ne doit rien pour l’instant.",
+  "fltRefusalNoPhone": "Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier les détails.",
   "fltRefusalDriverLeft": "Ce chauffeur est parti.",
-  "fltRefusalStaffOnly": "Ce compte n’est pas autorisé à gérer la flotte.",
+  "fltRefusalStaffOnly": "Ce compte du personnel n’est pas autorisé à gérer Fleet.",
   "fltPeriodWeek": "Semaine",
   "fltPeriodMonth": "Mois",
   "fltPeriodPrevious": "Période précédente",
@@ -7433,7 +7433,6 @@
   "fltSortName": "Nom A-Z",
   "fltSortOwed": "Plus dû d’abord",
   "fltSortPaid": "Plus payé d’abord",
-  "fltSortZelleCents": "Centimes Zelle",
   "fltNoDriverMatches": "Aucun chauffeur ne correspond. Changez la recherche ou les filtres.",
   "fltNoDriversYet": "Aucun chauffeur pour le moment.",
   "fltNoDriverInList": "Aucun chauffeur dans cette liste.",
@@ -7462,14 +7461,6 @@
     }
   },
   "fltTileCollected": "Encaissé ce mois-ci",
-  "fltTileOfBilled": "sur {amount} facturés",
-  "@fltTileOfBilled": {
-    "placeholders": {
-      "amount": {
-        "type": "String"
-      }
-    }
-  },
   "fltTileNothingBilled": "Rien de facturé pour l’instant",
   "fltTileOwed": "Dû maintenant",
   "fltTileDriversOwe": "{count, plural, one{{count} chauffeur doit} other{{count} chauffeurs doivent}}",
@@ -7533,15 +7524,6 @@
     "placeholders": {
       "count": {
         "type": "int"
-      }
-    }
-  },
-  "fltNoZelleCents": "Ce chauffeur n’a pas encore de centimes Zelle (seuls les chauffeurs actifs en ont).",
-  "fltZelleAmountFor": "Montant Zelle de ce chauffeur : {amount}. Les deux derniers chiffres sont ceux du chauffeur : le montant dit qui a payé.",
-  "@fltZelleAmountFor": {
-    "placeholders": {
-      "amount": {
-        "type": "String"
       }
     }
   },
@@ -7924,8 +7906,7 @@
       }
     }
   },
-  "fltWaitingTwoDrivers": "Il pourrait venir de deux chauffeurs : choisissez le bon.",
-  "fltWaitingUndone": "Son paiement a été annulé : choisissez le bon chauffeur.",
+  "fltWaitingUndone": "Le paiement de ce dépôt a été annulé. Il ne paiera personne automatiquement : choisissez le chauffeur.",
   "fltWaitingDuplicate": "C’est peut-être un Zelle déjà utilisé, renvoyé par la banque. Ne le payez que si le chauffeur l’a vraiment envoyé deux fois.",
   "fltWaitingNotZelle": "Ce dépôt n’est pas un Zelle (espèces, chèque, versement de carte ou virement). Choisissez le chauffeur seulement si c’est le paiement d’un chauffeur.",
   "fltWaitingDriverLeft": "Cet expéditeur payait pour un chauffeur parti. Choisissez pour qui est ce paiement.",
@@ -8035,6 +8016,217 @@
     }
   },
   "fltScheduleSaveOff": "Désactiver les vérifications les jours de paie ? Les dépôts paient toujours les chauffeurs quand la banque se met à jour d’elle-même, sans frais.",
+  "fltRefusalClaimClosed": "Ce signalement est déjà fermé.",
+  "fltRefusalClaimNoDriver": "Ce signalement n’a pas encore de chauffeur. Attendez que l’expéditeur dise pour qui il est, ou fermez-le.",
+  "fltRefusalDepositNotWaiting": "Ce dépôt n’est plus en attente. Actualisez et réessayez.",
+  "fltRefusalBadName": "Ce nom ne peut pas être utilisé. Écrivez le nom complet de la personne tel que la banque l’affiche.",
+  "fltRefusalZelleMissing": "Ajoutez d’abord l’e-mail ou le téléphone Zelle dans les réglages de la flotte.",
+  "fltRefusalCarOverlap": "Cette plaque était chez un autre chauffeur jusqu’à ce jour. Choisissez un jour de début plus tardif.",
+  "fltRefusalAlreadyReturned": "Cette plaque a déjà été rendue.",
+  "fltRefusalDriverHasPlate": "Ce chauffeur a encore une plaque. Récupérez-la d’abord, ou demandez à un administrateur de la flotte d’utiliser « Le chauffeur est parti ».",
+  "fltWaitingSharedPayer": "Cette personne paie pour plus d’un chauffeur. Choisissez le chauffeur.",
+  "fltClaimsTitle": "Signalés par les chauffeurs, en attente de la banque",
+  "fltClaimsHint": "Un chauffeur a envoyé une capture de paiement sur WhatsApp. Personne n’est marqué payé à partir d’une image : le dépôt en banque fait foi.",
+  "fltClaimsEmpty": "Aucun paiement signalé par un chauffeur n’est en attente.",
+  "fltClaimsLoadFailed": "Les paiements signalés n’ont pas pu être chargés. Réessayez dans un instant.",
+  "fltClaimViewPhoto": "Voir la photo",
+  "fltClaimNoPhoto": "Pas de photo",
+  "fltClaimPhotoGone": "Photo non disponible",
+  "fltClaimPhotoTitle": "Capture du paiement",
+  "fltClaimTheirs": "Ce dépôt est le leur",
+  "fltClaimPickDeposit": "Choisissez le dépôt qui est le leur.",
+  "fltClaimNoDeposits": "Aucun dépôt n’est en attente",
+  "fltClaimDifferentAmount": "Ce dépôt est d’un autre montant. C’est le montant de la banque qui est enregistré.",
+  "fltClaimSameAmount": "Même montant",
+  "fltClaimGiveDeposit": "Donner ce dépôt",
+  "fltClaimGiveTitle": "Donner ce dépôt ?",
+  "fltClaimGiveMessage": "Donner ce dépôt de {amount} de {sender} à {who} ? Il paie ses factures, et ses prochains dépôts du même expéditeur seront payés automatiquement.",
+  "@fltClaimGiveMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "sender": {
+        "type": "String"
+      },
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "fltClaimUnknownSender": "un expéditeur inconnu",
+  "fltClaimCloseTitle": "Fermer ce signalement ?",
+  "fltClaimCloseMessage": "Fermer ce signalement de {who} ? La facture reste impayée et rien n’est enregistré.",
+  "@fltClaimCloseMessage": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "fltClaimClosed": "Signalement fermé.",
+  "fltClaimAskingDriver": "En attente que l’expéditeur dise pour quel chauffeur est ce paiement.",
+  "fltClaimAskingAmount": "En attente que le chauffeur écrive le montant.",
+  "fltClaimAskingName": "En attente que le chauffeur donne le nom du compte depuis lequel il a payé.",
+  "fltClaimNoDeposit2Days": "Le dépôt n’est pas apparu en banque après 2 jours. Le chauffeur a été prévenu.",
+  "fltClaimWaitingBank": "En attente que le dépôt apparaisse en banque.",
+  "fltClaimWrongRecipient": "Le paiement est allé à quelqu’un d’autre que cette entreprise. Regardez la photo.",
+  "fltClaimDepositTaken": "Le dépôt qui correspond a déjà servi pour un autre paiement.",
+  "fltClaimTooOld": "La capture date de plus de 10 jours.",
+  "fltClaimNotADriver": "Ce numéro n’est pas celui d’un de vos chauffeurs. Trouvez pour qui est le paiement.",
+  "fltClaimTwoClaims": "Deux signalements visent le même dépôt. Choisissez à qui il appartient.",
+  "fltClaimNeedsPerson": "Une personne doit regarder ce signalement.",
+  "fltPayerNamesTitle": "Noms depuis lesquels ce chauffeur paie",
+  "fltPayerNamesHint": "Un Zelle depuis l’un de ces noms paie ce chauffeur automatiquement.",
+  "fltPayerNamesTwoWords": "Écrivez le nom complet tel que la banque l’affiche, au moins deux mots.",
+  "fltPayerNamesEmpty": "Aucun nom pour l’instant. Il est retenu la première fois qu’un dépôt est associé à ce chauffeur.",
+  "fltPayerNameRemove": "Retirer ce nom",
+  "fltPayerNameField": "Nom sur le compte Zelle",
+  "fltPayerNameAdd": "Ajouter le nom",
+  "fltPayerNameDuplicate": "Ce nom est déjà dans la liste.",
+  "fltPayerNameTypeFirst": "Écrivez d’abord un nom.",
+  "fltPayerNameRemoveTitle": "Retirer ce nom ?",
+  "fltPayerNameRemoveMessage": "Ne plus payer {driver} automatiquement depuis {name} ? Les dépôts de ce nom attendront de nouveau le bureau.",
+  "@fltPayerNameRemoveMessage": {
+    "placeholders": {
+      "driver": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPlateFeeChange": "Modifier les frais de plaque",
+  "fltPlateFeeSave": "Enregistrer les frais de plaque",
+  "fltPlateFeeAmountMonth": "Nouveaux frais de plaque par mois ($)",
+  "fltPlateFeeAmountWeek": "Nouveaux frais de plaque par semaine ($)",
+  "fltPlateFeeDueMonth": "Jour d’échéance du mois, facultatif (1–28)",
+  "fltPlateFeeDueWeek": "Jour de la semaine d’échéance, facultatif (1 = lundi … 7 = dimanche)",
+  "fltPlateFeeApplies": "S’applique à partir du {day}. Les factures déjà créées ne sont pas modifiées.",
+  "@fltPlateFeeApplies": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPlateFeeNothingChanged": "Rien n’a été modifié.",
+  "fltPlateFeeConfirmTitle": "Modifier les frais de plaque ?",
+  "fltPlateFeeConfirmBoth": "Modifier les frais de plaque de {name} pour {plate} à {amount}, jour d’échéance {dueDay} ? Cela s’applique à partir du {day}. Les factures déjà créées ne sont pas modifiées.",
+  "@fltPlateFeeConfirmBoth": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "dueDay": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPlateFeeConfirmFee": "Modifier les frais de plaque de {name} pour {plate} à {amount} ? Cela s’applique à partir du {day}. Les factures déjà créées ne sont pas modifiées.",
+  "@fltPlateFeeConfirmFee": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPlateFeeConfirmDue": "Modifier le jour d’échéance des frais de plaque de {name} pour {plate} à {dueDay} ? Cela s’applique à partir du {day}. Les factures déjà créées ne sont pas modifiées.",
+  "@fltPlateFeeConfirmDue": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      },
+      "dueDay": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltDriverLeft": "Le chauffeur est parti",
+  "fltDriverLeftOn": "Parti le",
+  "fltDriverLeftHintPlate": "La plaque revient à cette date et la facturation s’arrête.",
+  "fltDriverLeftHintNoPlate": "La facturation s’arrête à cette date.",
+  "fltDriverLeftDone": "Le chauffeur est marqué comme parti. Sa plaque est revenue et sa facturation s’est arrêtée.",
+  "fltDriverLeftConfirmPlate": "Marquer {name} comme parti le {day} ? La plaque {plate} revient à cette date et la facturation s’arrête.",
+  "@fltDriverLeftConfirmPlate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "fltDriverLeftConfirmNoPlate": "Marquer {name} comme parti le {day} ? La facturation s’arrête.",
+  "@fltDriverLeftConfirmNoPlate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltFeeOwedMarker": "+ frais dus",
+  "fltFeeOwedHint": "Des frais de retard ou d’autres frais sont encore dus ce mois-ci",
+  "fltTilePlateFeesPaid": "{percent} % des frais de plaque de ce mois payés ({paid} sur {billed})",
+  "@fltTilePlateFeesPaid": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      },
+      "paid": {
+        "type": "String"
+      },
+      "billed": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPaperworkScopeDriver": "Plaques avec un chauffeur",
+  "fltPaperworkScopeAll": "Toutes les plaques",
+  "fltRefusalBadNameNamed": "\"{name}\" ne peut pas être utilisé. Écrivez le nom complet de la personne tel que la banque l’affiche.",
+  "@fltRefusalBadNameNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fltClaimNoAmount": "Le chauffeur n’a pas donné de montant lisible. Regardez la photo.",
+  "fltClaimNoDeposit": "Aucun dépôt n’est apparu en banque après 2 jours.",
+  "fltClaimPaymentUndone": "Le paiement fait à partir de ce signalement a été annulé. Choisissez le bon dépôt ou fermez-le.",
+  "fltClaimPhotoDeleted": "Cette photo a été supprimée après 12 mois.",
   "pcsErrPiecesTooMany": "Un envoi peut compter au plus 60 colis.",
   "pcsErrKindInvalid": "Indiquez ce qu'est chaque colis : un baril, un carton ou autre chose.",
   "pcsErrDescriptionRequired": "Indiquez ce qu'est chaque carton ou article.",
