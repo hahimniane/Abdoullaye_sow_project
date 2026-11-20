@@ -46,6 +46,8 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_whatsapp_off:
       "WhatsApp to drivers is off for this driver (Fleet settings).",
   fleet_nothing_owed: "This driver owes nothing right now.",
+  fleet_zelle_missing:
+      "Add the Zelle email or phone in Fleet settings first.",
   fleet_no_phone:
       "This driver has no WhatsApp number. Add one in Edit details.",
   fleet_driver_left: "This driver has left.",
@@ -1668,9 +1670,25 @@ function createFleetHandlers(deps) {
         if (!whatsappOn(business)) continue;
         if (business.fleet?.remindersSentDayKey === today) continue;
         try {
-          await b.ref.update({"fleet.remindersSentDayKey": today});
-          const tried = await remindBusiness(b.id, business, today);
-          deps.logger.info("Fleet reminders", {businessId: b.id, tried});
+          // No Zelle address: a reminder would tell drivers to pay nobody.
+          // Skipped, and said once a business a day.
+          if (!zelleHandle(business)) {
+            if (business.fleet?.remindersZelleLoggedDayKey !== today) {
+              await b.ref.update({"fleet.remindersZelleLoggedDayKey": today});
+              deps.logger.warn("Fleet reminders skipped: no Zelle address",
+                  {businessId: b.id});
+            }
+            continue;
+          }
+          const {tried, failed} = await remindBusiness(b.id, business, today);
+          // The day is done only once nothing is left to retry: a pass with
+          // a failed send is looked at again on the next tick, and a row
+          // that was sent is never sent twice (sendFleetMessage).
+          if (failed === 0) {
+            await b.ref.update({"fleet.remindersSentDayKey": today});
+          }
+          deps.logger.info("Fleet reminders", {businessId: b.id, tried,
+            failed});
         } catch (error) {
           deps.logger.warn("Fleet reminders failed", {businessId: b.id,
             error: String(error?.message || error)});
@@ -1712,6 +1730,11 @@ function createFleetHandlers(deps) {
 
   function whatsappOn(business) {
     return business?.fleet?.settings?.whatsapp?.enabled === true;
+  }
+
+  // The Zelle address drivers are told to pay (empty: none set).
+  function zelleHandle(business) {
+    return text(business?.fleet?.settings?.zelle?.handle, 120);
   }
 
   /**
@@ -1790,15 +1813,20 @@ function createFleetHandlers(deps) {
 
   /**
    * One business's reminders for today: each active driver whose oldest
-   * open bill is due in 2 days, due today, 3 days late or a further week
-   * late. Idempotent per driver, bill and day.
+   * open RENT bill is due in 2 days, due today, 3 days late or a further
+   * week late, and (looking ahead) each driver whose next period is due in
+   * exactly 2 days and has no bill yet. At most one automatic reminder per
+   * driver a day. Idempotent per message id; a failed row is retried by
+   * sendFleetMessage on a later call.
    *
    * @param {string} businessId The business.
    * @param {object} business Its record.
    * @param {string} todayKey Today (New York).
-   * @return {Promise<number>} Messages sent or tried.
+   * @return {Promise<object>} {tried, failed}: messages sent or tried, and
+   *   how many of them failed or threw (the day is not done while > 0).
    */
   async function remindBusiness(businessId, business, todayKey) {
+    if (!zelleHandle(business)) return {tried: 0, failed: 0};
     const [drivers, open] = await Promise.all([
       activeDrivers(businessId),
       db().collection("fleetBills").where("businessId", "==", businessId)
@@ -1819,10 +1847,22 @@ function createFleetHandlers(deps) {
       fleetClaims.PAUSES_LATE_REMINDER_STATES.includes(d.get("state")))
         .map((d) => d.get("driverId")));
     let tried = 0;
+    let failed = 0;
+    const send = async (message, driverId) => {
+      tried += 1;
+      const status = await deps.sendFleetMessage(message)
+          .catch((error) => {
+            deps.logger.warn("Fleet reminder not sent",
+                {businessId, driverId, error: String(error?.message || error)});
+            return "failed";
+          });
+      if (status === "failed") failed += 1;
+    };
+    const reminded = new Set();
     for (const driver of drivers) {
       if (!whatsappAllows(business, driver.id)) continue;
       const bills = billsByDriver.get(driver.id) || [];
-      const oldest = fleetWhatsApp.oldestOpenBill(bills);
+      const oldest = fleetWhatsApp.oldestOpenRentBill(bills);
       if (!oldest) continue;
       const kind = fleetWhatsApp.reminderKind(oldest.dueDayKey, todayKey);
       if (!kind) continue;
@@ -1830,13 +1870,71 @@ function createFleetHandlers(deps) {
       const message = reminderMessage({businessId, business, driver, bills,
         oldest, kind, todayKey});
       if (!message) continue;
-      await deps.sendFleetMessage(message)
-          .catch((error) => deps.logger.warn("Fleet reminder not sent",
-              {businessId, driverId: driver.id,
-                error: String(error?.message || error)}));
-      tried += 1;
+      reminded.add(driver.id);
+      await send(message, driver.id);
     }
-    return tried;
+    // Looking ahead: a month's bill is only made on its first day, so the
+    // "2 days before" reminder for a coming period comes from the
+    // assignment, not from a bill.
+    const assignments = await db().collection("fleetAssignments")
+        .where("businessId", "==", businessId).get();
+    const byId = new Map(drivers.map((d) => [d.id, d]));
+    const settings = business.fleet?.settings || {};
+    for (const doc of assignments.docs) {
+      const a = {id: doc.id, ...doc.data()};
+      const driver = byId.get(a.driverId);
+      if (!driver || a.endDayKey || reminded.has(driver.id)) continue;
+      if (!whatsappAllows(business, driver.id)) continue;
+      if (!fleetWhatsApp.comingBill(a, [], todayKey, settings)) continue;
+      const existing = await db().collection("fleetBills")
+          .where("assignmentId", "==", a.id).get();
+      const coming = fleetWhatsApp.comingBill(a,
+          existing.docs.map((d) => ({id: d.id, ...d.data()})), todayKey,
+          settings);
+      if (!coming) continue;
+      const message = comingReminderMessage({businessId, business, driver,
+        bills: billsByDriver.get(driver.id) || [], assignment: a, coming,
+        todayKey});
+      if (!message) continue;
+      reminded.add(driver.id);
+      await send(message, driver.id);
+    }
+    return {tried, failed};
+  }
+
+  /**
+   * The "2 days before" reminder for a period that has no bill yet. It
+   * states what the driver will owe on the due day: the coming fee plus
+   * anything already owed, minus credit; null when that is nothing.
+   *
+   * @param {object} p {businessId, business, driver, bills (open), assignment,
+   *   coming (the bill it will get), todayKey}.
+   * @return {object|null} The sendFleetMessage args.
+   */
+  function comingReminderMessage(p) {
+    const {businessId, business, driver, coming} = p;
+    if (driver.status === "left") return null;
+    const balance = fleetBilling.driverBalance(p.bills,
+        Number(driver.creditCents) || 0, p.todayKey);
+    const owed = fleetWhatsApp.amountToState(balance.owedCents,
+        driver.creditCents, coming.amountCents);
+    if (!(owed > 0)) return null;
+    const values = fleetWhatsApp.reminderValues({
+      driverName: driver.name, businessName: business.name,
+      businessPhone: business.phone, settings: business.fleet?.settings,
+      kind: "soon", dueDayKey: coming.dueDayKey, owedCents: owed});
+    return {
+      id: fleetWhatsApp.messageId("lookahead", {driverId: driver.id,
+        assignmentId: p.assignment.id, periodFrom: coming.periodFrom}),
+      row: {businessId, driverId: driver.id, kind: "reminder",
+        reminder: "soon", lookAhead: true, assignmentId: p.assignment.id,
+        periodFrom: coming.periodFrom, label: coming.label,
+        template: fleetWhatsApp.REMINDER_TEMPLATE,
+        phone: String(driver.phone || ""), name: String(driver.name || "")},
+      body: fleetWhatsApp.templateBody(fleetWhatsApp.REMINDER_TEMPLATE,
+          driver.phone, values),
+      reachable: fleetWhatsApp.reachable(driver.phone),
+    };
   }
 
   /**
@@ -1849,13 +1947,18 @@ function createFleetHandlers(deps) {
    */
   function reminderMessage(p) {
     const {businessId, business, driver, bills, oldest, kind, todayKey} = p;
+    if (driver.status === "left") return null;
     const balance = fleetBilling.driverBalance(bills,
         Number(driver.creditCents) || 0, todayKey);
-    if (!(balance.owedCents > 0)) return null;
+    // What the driver owes after the credit they hold (late fees and
+    // charges add to it; the reminder is still about the rent bill).
+    const owed = fleetWhatsApp.amountToState(balance.owedCents,
+        driver.creditCents);
+    if (!(owed > 0)) return null;
     const values = fleetWhatsApp.reminderValues({
       driverName: driver.name, businessName: business.name,
       businessPhone: business.phone, settings: business.fleet?.settings,
-      kind, dueDayKey: oldest.dueDayKey, owedCents: balance.owedCents});
+      kind, dueDayKey: oldest.dueDayKey, owedCents: owed});
     const base = fleetWhatsApp.messageId("reminder",
         {driverId: driver.id, billId: oldest.id, todayKey});
     return {
@@ -1901,7 +2004,8 @@ function createFleetHandlers(deps) {
     if (!fleetWhatsApp.reachable(driver.phone)) throw refuse("fleet_no_phone");
     const todayKey = deps.dayKeyNow();
     const {bills} = await driverMoney(driverId, driver);
-    const oldest = fleetWhatsApp.oldestOpenBill(bills);
+    if (!zelleHandle(business)) throw refuse("fleet_zelle_missing");
+    const oldest = fleetWhatsApp.oldestOpenRentBill(bills);
     const kind = !oldest ? null : oldest.dueDayKey > todayKey ? "soon" :
       oldest.dueDayKey === todayKey ? "today" : "late";
     const message = oldest && reminderMessage({businessId, business, driver,
@@ -1921,6 +2025,9 @@ function createFleetHandlers(deps) {
     if (!fleetOn(business)) throw refuse("fleet_off");
     if (typeof data.enabled !== "boolean") {
       throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    if (data.enabled && !zelleHandle(business)) {
+      throw refuse("fleet_zelle_missing");
     }
     const update = {"fleet.settings.whatsapp.enabled": data.enabled,
       "fleet.settings.whatsapp.updatedAtMs": Date.now(),
