@@ -238,15 +238,41 @@ unknown-deposit question waits (the office's "Zelle from the bank" list).
   recorded payment (`payment_record`, a bank deposit matched or picked by
   the office), never for imported history. Says the amount, the day, and
   what is still owed or the credit.
-- **Reminder** (`fleet_rent_reminder_2lang`): for each active driver's
-  oldest open bill, 2 days before its due day, on the day, 3 days after,
-  then every 7 days while open; says the amount owed, Landa's Zelle
-  (settings zelle name + handle) and the exact amount to send (whole
-  dollars owed + the driver's personal cents). Sent once a day from 10 AM
-  New York by `fleetBankRefresh` (`fleet.remindersSentDayKey`).
+- **Reminder** (`fleet_rent_reminder_2lang`; wording fixed by Meta, only the
+  values change): about each active driver's oldest open **rent** bill
+  (never a late fee or charge: those only add to the amount, and a driver
+  who owes only those gets no automatic reminder), 2 days before its due
+  day, on the day, 3 days after, then every 7 days while open. **Looking
+  ahead** (2026-11-20): a month's bill is only made on its first day, so for
+  each active driver with an open assignment whose next period is due in
+  exactly 2 days and has no bill yet, the "soon" reminder is sent for that
+  coming period (nothing is created; `fleet_billing.rentPeriods` rules:
+  billFromDayKey, rentHistory, endDayKey). Id
+  `reminder_<driver>_soon_<assignment>_<periodFrom>`. At most one automatic
+  reminder per driver a day (the look-ahead yields to a regular one).
+  The amount stated is what is owed (coming fee included for a look-ahead)
+  **minus the credit the driver holds**, never below zero; at zero nothing
+  is sent (the manual button refuses with "owes nothing"). It names the
+  business's Zelle (settings zelle name + handle) and the plain amount. The
+  driver is greeted by `driverDisplayName` (office notes like "#49" or
+  "STORAGE 2/14/25" cut, same rule as the console), in receipts too.
+  Nothing goes to a driver who has left (their payment's receipt still does).
+  Sent once a day from 10 AM New York by `fleetBankRefresh`
+  (`fleet.remindersSentDayKey`, set only after the pass finished without a
+  failed send; a pass with failures is looked at again every 15 minutes that
+  day, and a pass that sent everything is not repeated).
+- **No Zelle address**: `whatsapp_save {enabled: true}` is refused with
+  `fleet_zelle_missing` ("Add the Zelle email or phone in Fleet settings
+  first.") while `fleet.settings.zelle.handle` is blank; reminders (daily
+  and manual) are skipped while it is blank, logged once a business a day
+  (`fleet.remindersZelleLoggedDayKey`).
 - **Rows**: `fleetMessages/{receipt_<paymentId> | reminder_<driver>_<bill>_<day>
-  | test_...}` created once (never sent twice), status queued / sent /
-  failed / stopped / skipped (no phone). Server-only collection.
+  | reminder_<driver>_soon_<assignment>_<periodFrom> | test_...}` status
+  queued / sent / failed / stopped / skipped (no phone), with `attempts`.
+  A row that is `failed`, or `queued` for over 10 minutes (a crash), is sent
+  again by a later call with the same id, 3 attempts in all; `sent`,
+  `stopped` and `skipped` rows are final, so nobody gets a message twice.
+  Server-only collection.
 - Pure: `fleet_whatsapp.js` + `test/fleet-whatsapp.test.js`; emulator:
   `test/fleet-whatsapp-callables.test.js` (in `npm run test:fleet`).
 - Templates submitted with `~/laawol-deploy-logs/create_fleet_templates.py`
