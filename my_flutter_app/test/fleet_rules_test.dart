@@ -69,7 +69,7 @@ void main() {
       test('rent bills: ${c['name']}', () {
         final bills = fleetRentBillsToCreate(
           assignmentOf(c['assignment'] as J),
-          [for (final id in c['existing'] as List) id as String],
+          [for (final e in c['existing'] as List) e as Object],
           c['through'] as String,
           FleetBillingSettings.fromMap(c['settings'] as J?),
         );
@@ -80,6 +80,17 @@ void main() {
         if (c['expectAmounts'] != null) {
           expect([for (final b in bills) b['amountCents']], c['expectAmounts']);
         }
+      });
+    }
+
+    for (final c in cases('nextPeriodCases')) {
+      test('next period: ${c['name']}', () {
+        expect(
+          fleetNextUnbilledPeriodStart(assignmentOf(c['assignment'] as J), [
+            for (final e in c['existing'] as List) e as Object,
+          ], c['today'] as String),
+          c['expect'],
+        );
       });
     }
 

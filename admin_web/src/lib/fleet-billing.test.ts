@@ -12,6 +12,7 @@ import {
   assignPersonalCents,
   driverBalance,
   lateFeesToCreate,
+  nextUnbilledPeriodStart,
   rentBillsToCreate,
   rentPeriods,
   whoDroveAt,
@@ -27,13 +28,14 @@ const fixture = JSON.parse(readFileSync(fixtureUrl, "utf8")) as {
   billCases: {
     name: string;
     assignment: FleetAssignment;
-    existing: string[];
+    existing: (string | { id: string; kind?: string; status?: string; periodFrom?: string; periodTo?: string })[];
     through: string;
     settings: FleetSettings;
     expect?: Row[];
     expectIds?: string[];
     expectAmounts?: number[];
   }[];
+  nextPeriodCases: { name: string; assignment: FleetAssignment; existing: string[]; today: string; expect: string }[];
   lateFeeCases: { name: string; settings: FleetSettings; today: string; bills: FleetBill[]; expect: Row[] }[];
   allocationCases: { name: string; bills: FleetBill[]; amountCents: number; expect: Row }[];
   creditCases: { name: string; bills: FleetBill[]; creditCents: number; expect: Row }[];
@@ -59,6 +61,14 @@ describe("fleet billing (console): rent bills", () => {
       if (c.expect) assert.deepEqual(bills, c.expect);
       if (c.expectIds) assert.deepEqual(bills.map((b) => b.id), c.expectIds);
       if (c.expectAmounts) assert.deepEqual(bills.map((b) => b.amountCents), c.expectAmounts);
+    });
+  }
+});
+
+describe("fleet billing (console): where a changed fee starts", () => {
+  for (const c of fixture.nextPeriodCases) {
+    it(c.name, () => {
+      assert.equal(nextUnbilledPeriodStart(c.assignment, c.existing, c.today), c.expect);
     });
   }
 });
