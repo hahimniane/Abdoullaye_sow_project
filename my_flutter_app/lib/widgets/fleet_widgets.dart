@@ -66,7 +66,9 @@ String fleetRefusalText(AppLocalizations l10n, FleetFailure failure) {
     case 'fleet_deposit_not_waiting':
       return l10n.fltRefusalDepositNotWaiting;
     case 'fleet_bad_name':
-      return l10n.fltRefusalBadName;
+      return failure.name.isEmpty
+          ? l10n.fltRefusalBadName
+          : l10n.fltRefusalBadNameNamed(failure.name);
     case 'fleet_zelle_missing':
       return l10n.fltRefusalZelleMissing;
     case 'fleet_car_overlap':
@@ -113,6 +115,9 @@ String fleetClaimSentenceText(AppLocalizations l10n, FleetClaimSentence s) =>
       FleetClaimSentence.tooOld => l10n.fltClaimTooOld,
       FleetClaimSentence.notADriver => l10n.fltClaimNotADriver,
       FleetClaimSentence.twoClaims => l10n.fltClaimTwoClaims,
+      FleetClaimSentence.noAmount => l10n.fltClaimNoAmount,
+      FleetClaimSentence.noDeposit => l10n.fltClaimNoDeposit,
+      FleetClaimSentence.paymentUndone => l10n.fltClaimPaymentUndone,
       FleetClaimSentence.needsPerson => l10n.fltClaimNeedsPerson,
       FleetClaimSentence.none => '',
     };

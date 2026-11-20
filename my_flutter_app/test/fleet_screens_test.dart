@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
@@ -257,7 +258,7 @@ void main() {
       await tester.pumpAndSettle();
       await _tapKey(tester, 'fleet-driver-pay');
       await _tapKey(tester, 'fleet-payment-submit');
-      expect(find.text('Enter an amount greater than zero.'), findsOneWidget);
+      expect(find.text('Enter an amount.'), findsOneWidget);
       expect(rig.backend.of('payment_record'), isEmpty);
     },
   );
@@ -452,7 +453,7 @@ void main() {
     expect(find.text('Called him'), findsWidgets);
     await _tapKey(tester, 'fleet-note-add');
     await _tapKey(tester, 'fleet-note-submit');
-    expect(find.text('Write a note.'), findsOneWidget);
+    expect(find.text('Write a note or attach a file.'), findsOneWidget);
     await tester.enterText(_field('Note'), 'Brought the papers');
     await _tapKey(tester, 'fleet-note-submit');
     final sent = rig.backend.of('note_add').single;
@@ -665,7 +666,7 @@ void main() {
     await _tapKey(tester, 'fleet-bank-check');
     expect(
       find.text(
-        'Connect the business’s bank first (Profile, Bank for Zelle checks).',
+        "Connect the business's bank first (Profile, Bank for Zelle checks).",
       ),
       findsOneWidget,
     );
@@ -851,7 +852,15 @@ void main() {
     // A photo that was deleted says so.
     rig.backend.photoUrl = null;
     await _openPhoto(tester, 'c1');
-    expect(find.text('Photo not available'), findsOneWidget);
+    expect(
+      find.text('This photo was deleted after 12 months.'),
+      findsOneWidget,
+    );
+    // No url and not deleted: just "No photo".
+    rig.backend.photoDeleted = false;
+    await _openPhoto(tester, 'c1');
+    expect(find.text('No photo'), findsWidgets);
+    expect(find.text('This photo was deleted after 12 months.'), findsNothing);
     expect(find.byKey(const Key('fleet-claim-photo-image')), findsNothing);
   });
 
@@ -914,7 +923,7 @@ void main() {
     await _tapKey(tester, 'fleet-sheet-submit');
     await _tapKey(tester, 'fleet-confirm-yes');
     expect(
-      find.text('That deposit is not waiting for the office.'),
+      find.text('That deposit is no longer waiting. Refresh and try again.'),
       findsOneWidget,
     );
     // The sheet is still open and not stuck busy.
@@ -1012,6 +1021,10 @@ void main() {
     );
     expect(find.byKey(const Key('fleet-payer-name-AWA BAH')), findsOneWidget);
     expect(find.byKey(const Key('fleet-payer-hint')), findsOneWidget);
+    expect(
+      find.text('Type the full name as the bank shows it, at least two words.'),
+      findsOneWidget,
+    );
 
     // Nothing typed, then a duplicate: told in words, nothing sent.
     await _tapKey(tester, 'fleet-payer-add');
@@ -1033,15 +1046,16 @@ void main() {
     );
 
     // The server refuses what is not a person's name.
-    rig.backend.errors['payer_names_save'] = fleetRefusal(
-      'fleet_bad_name',
+    rig.backend.errors['payer_names_save'] = FirebaseFunctionsException(
+      message: 'refused',
       code: 'invalid-argument',
+      details: {'reason': 'fleet_bad_name', 'name': 'Zelle'},
     );
     await tester.enterText(_field('Name on the Zelle account'), 'Zelle');
     await _tapKey(tester, 'fleet-payer-add');
     expect(
       find.text(
-        'That is not a person’s name (at least two words, not an account or an app).',
+        '"Zelle" cannot be used. Type the person\'s full name as the bank shows it.',
       ),
       findsOneWidget,
     );
@@ -1169,7 +1183,7 @@ void main() {
     await _tapKey(tester, 'fleet-sheet-submit');
     expect(
       find.text(
-        'This driver still has a plate. Use Driver has left, which returns it.',
+        'This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.',
       ),
       findsOneWidget,
     );
@@ -1367,7 +1381,7 @@ void main() {
     await tester.enterText(_field('Nom sur le compte Zelle'), 'Zelle');
     await _tapKey(tester, 'fleet-payer-add');
     expect(
-      find.textContaining('Ce n’est pas le nom d’une personne'),
+      find.textContaining('Ce nom ne peut pas être utilisé'),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -1443,6 +1457,80 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Plaques avec un chauffeur (1)'), findsOneWidget);
     expect(find.text('Toutes les plaques (2)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Fleet admin actions: hidden for staff, refused in words', (
+    tester,
+  ) async {
+    // (Hidden for staff: see the plate fee test above.)
+    // An admin whose rights were taken away meanwhile is refused in words.
+    final rig = _rig();
+    await _pump(tester, rig);
+    await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+    await tester.pumpAndSettle();
+    rig.backend.errors['driver_leave'] = fleetRefusal('fleet_admin_only');
+    await _tapKey(tester, 'fleet-driver-left');
+    await _tapKey(tester, 'fleet-sheet-submit');
+    await _tapKey(tester, 'fleet-confirm-yes');
+    expect(find.text('Only a Fleet admin can do this.'), findsOneWidget);
+  });
+
+  testWidgets('claims: the new reasons read in words, French fits 320 px', (
+    tester,
+  ) async {
+    final rig = _rig(
+      claims: [
+        for (final r in ['no_amount', 'no_deposit', 'payment_undone'])
+          readFleetClaim('x-$r', {
+            'driverId': 'd1',
+            'state': 'office',
+            'reason': r,
+            'createdAtMs': claimAt,
+          })!,
+      ],
+    );
+    rig.backend.bankAnswer = {
+      ...bankAnswer,
+      'waiting': [
+        {'id': 'u1', 'amountCents': 100, 'reason': 'undone'},
+      ],
+    };
+    await _pump(tester, rig, language: 'fr', width: 320);
+    await _openTab(tester, 'Banque');
+    expect(
+      find.text(
+        'Le chauffeur n’a pas donné de montant lisible. Regardez la photo.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Aucun dépôt n’est apparu en banque après 2 jours.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'Le paiement fait à partir de ce signalement a été annulé.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Le paiement de ce dépôt a été annulé.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    // A long refusal in French inside a sheet does not overflow either.
+    await _openTab(tester, 'Paiements');
+    await tester.tap(find.byKey(const Key('fleet-payment-row-d1')));
+    await tester.pumpAndSettle();
+    rig.backend.errors['driver_leave'] = fleetRefusal('fleet_driver_has_plate');
+    await _tapKey(tester, 'fleet-driver-left');
+    await _tapKey(tester, 'fleet-sheet-submit');
+    await _tapKey(tester, 'fleet-confirm-yes');
+    expect(
+      find.textContaining('demandez à un administrateur de la flotte'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

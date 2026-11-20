@@ -15529,54 +15529,53 @@ class AppLocalizationsFr extends AppLocalizations {
   String get fltErrUnknown => 'Une erreur est survenue. Réessayez.';
 
   @override
-  String get fltRefusalOff =>
-      'La flotte n’est pas activée pour cette entreprise.';
+  String get fltRefusalOff => 'Fleet n’est pas activé pour cette entreprise.';
 
   @override
   String get fltRefusalAdminOnly =>
-      'Seul un administrateur de la flotte peut faire cela.';
+      'Seul un administrateur Fleet peut faire cela.';
 
   @override
-  String get fltRefusalNotFound => 'Cet élément est introuvable.';
+  String get fltRefusalNotFound => 'Cet enregistrement est introuvable.';
 
   @override
   String get fltRefusalCarTaken =>
-      'Cette plaque a déjà un chauffeur. Reprenez-la d’abord.';
+      'Cette plaque a déjà un chauffeur. Récupérez-la d’abord.';
 
   @override
   String get fltRefusalBadInput =>
-      'Des informations sont manquantes ou invalides.';
+      'Certains détails sont manquants ou invalides.';
 
   @override
-  String get fltRefusalNoAmount => 'Saisissez un montant supérieur à zéro.';
+  String get fltRefusalNoAmount => 'Saisissez un montant.';
 
   @override
-  String get fltRefusalAlreadyUndone => 'Ce paiement a déjà été annulé.';
+  String get fltRefusalAlreadyUndone => 'Ce paiement a déjà été retiré.';
 
   @override
   String get fltRefusalNotOpen =>
-      'Seule une facture ouverte peut être exonérée.';
+      'Seule une facture ouverte peut être annulée.';
 
   @override
-  String get fltRefusalReasonRequired => 'Indiquez la raison.';
+  String get fltRefusalReasonRequired => 'Indiquez pourquoi.';
 
   @override
   String get fltRefusalImportLocked =>
-      'Un paiement importé depuis le tableur ne peut pas être annulé ici.';
+      'Un paiement importé du tableur ne peut pas être annulé ici.';
 
   @override
   String get fltRefusalFriendOverlap =>
-      'Un autre ami a déjà cette voiture ces jours-là.';
+      'Un autre ami a déjà cette voiture sur ces jours.';
 
   @override
-  String get fltRefusalNoteEmpty => 'Écrivez une note.';
+  String get fltRefusalNoteEmpty => 'Écrivez une note ou joignez un fichier.';
 
   @override
   String get fltRefusalNoteVoided => 'Cette note a déjà été retirée.';
 
   @override
   String get fltRefusalBadFile =>
-      'Un fichier n’est pas accepté (images ou PDF, jusqu’à 10 Mo).';
+      'Un fichier n’est pas autorisé (images ou PDF, 10 Mo maximum).';
 
   @override
   String get fltRefusalDepositUsed =>
@@ -15592,22 +15591,22 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get fltRefusalWhatsappOff =>
-      'WhatsApp est désactivé pour ce chauffeur (réglages de la flotte).';
+      'WhatsApp pour les chauffeurs est désactivé pour ce chauffeur (Paramètres de la flotte).';
 
   @override
   String get fltRefusalNothingOwed =>
-      'Ce chauffeur ne doit rien pour le moment.';
+      'Ce chauffeur ne doit rien pour l’instant.';
 
   @override
   String get fltRefusalNoPhone =>
-      'Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier.';
+      'Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier les détails.';
 
   @override
   String get fltRefusalDriverLeft => 'Ce chauffeur est parti.';
 
   @override
   String get fltRefusalStaffOnly =>
-      'Ce compte n’est pas autorisé à gérer la flotte.';
+      'Ce compte du personnel n’est pas autorisé à gérer Fleet.';
 
   @override
   String get fltPeriodWeek => 'Semaine';
@@ -16415,7 +16414,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get fltWaitingUndone =>
-      'Son paiement a été annulé : choisissez le bon chauffeur.';
+      'Le paiement de ce dépôt a été annulé. Il ne paiera personne automatiquement : choisissez le chauffeur.';
 
   @override
   String get fltWaitingDuplicate =>
@@ -16657,33 +16656,34 @@ class AppLocalizationsFr extends AppLocalizations {
       'Désactiver les vérifications les jours de paie ? Les dépôts paient toujours les chauffeurs quand la banque se met à jour d’elle-même, sans frais.';
 
   @override
-  String get fltRefusalClaimClosed => 'Ce signalement est fermé ou déjà payé.';
+  String get fltRefusalClaimClosed => 'Ce signalement est déjà fermé.';
 
   @override
   String get fltRefusalClaimNoDriver =>
-      'Ce signalement n’a pas encore de chauffeur.';
+      'Ce signalement n’a pas encore de chauffeur. Attendez que l’expéditeur dise pour qui il est, ou fermez-le.';
 
   @override
-  String get fltRefusalDepositNotWaiting => 'Ce dépôt n’attend pas le bureau.';
+  String get fltRefusalDepositNotWaiting =>
+      'Ce dépôt n’est plus en attente. Actualisez et réessayez.';
 
   @override
   String get fltRefusalBadName =>
-      'Ce n’est pas le nom d’une personne (au moins deux mots, pas un compte ni une application).';
+      'Ce nom ne peut pas être utilisé. Écrivez le nom complet de la personne tel que la banque l’affiche.';
 
   @override
   String get fltRefusalZelleMissing =>
-      'Ajoutez d’abord le nom Zelle de l’entreprise dans les réglages de la flotte.';
+      'Ajoutez d’abord l’e-mail ou le téléphone Zelle dans les réglages de la flotte.';
 
   @override
   String get fltRefusalCarOverlap =>
-      'Cette plaque est encore chez un autre chauffeur à cette date.';
+      'Cette plaque était chez un autre chauffeur jusqu’à ce jour. Choisissez un jour de début plus tardif.';
 
   @override
   String get fltRefusalAlreadyReturned => 'Cette plaque a déjà été rendue.';
 
   @override
   String get fltRefusalDriverHasPlate =>
-      'Ce chauffeur a encore une plaque. Utilisez « Le chauffeur est parti », qui la rend.';
+      'Ce chauffeur a encore une plaque. Récupérez-la d’abord, ou demandez à un administrateur de la flotte d’utiliser « Le chauffeur est parti ».';
 
   @override
   String get fltWaitingSharedPayer =>
@@ -16810,7 +16810,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get fltPayerNamesTwoWords =>
-      'Écrivez le nom d’une personne : au moins deux mots, pas un compte ni une application.';
+      'Écrivez le nom complet tel que la banque l’affiche, au moins deux mots.';
 
   @override
   String get fltPayerNamesEmpty =>
@@ -16947,6 +16947,27 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get fltPaperworkScopeAll => 'Toutes les plaques';
+
+  @override
+  String fltRefusalBadNameNamed(String name) {
+    return '\"$name\" ne peut pas être utilisé. Écrivez le nom complet de la personne tel que la banque l’affiche.';
+  }
+
+  @override
+  String get fltClaimNoAmount =>
+      'Le chauffeur n’a pas donné de montant lisible. Regardez la photo.';
+
+  @override
+  String get fltClaimNoDeposit =>
+      'Aucun dépôt n’est apparu en banque après 2 jours.';
+
+  @override
+  String get fltClaimPaymentUndone =>
+      'Le paiement fait à partir de ce signalement a été annulé. Choisissez le bon dépôt ou fermez-le.';
+
+  @override
+  String get fltClaimPhotoDeleted =>
+      'Cette photo a été supprimée après 12 mois.';
 
   @override
   String get pcsErrPiecesTooMany => 'Un envoi peut compter au plus 60 colis.';

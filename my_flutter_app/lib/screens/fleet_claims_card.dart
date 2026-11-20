@@ -55,10 +55,15 @@ class _FleetClaimsCardState extends State<FleetClaimsCard> {
       _flash = null;
     });
     try {
-      final url = await c.service.claimPhotoUrl(c.businessId, v.id);
+      final photo = await c.service.claimPhoto(c.businessId, v.id);
+      final url = photo.url;
       if (!mounted) return;
       if (url == null) {
-        setState(() => _error = l10n.fltClaimPhotoGone);
+        setState(
+          () => _error = photo.deleted
+              ? l10n.fltClaimPhotoDeleted
+              : l10n.fltClaimNoPhoto,
+        );
       } else {
         await showFleetPhoto(context, url);
       }

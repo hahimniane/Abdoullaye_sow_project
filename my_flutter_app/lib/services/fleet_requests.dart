@@ -84,7 +84,7 @@ const fleetRefusalReasons = <String>[
 
 /// A Fleet call the server refused, or that never reached it.
 class FleetFailure implements Exception {
-  const FleetFailure({required this.code, this.reason = ''});
+  const FleetFailure({required this.code, this.reason = '', this.name = ''});
 
   /// The Functions code (`failed-precondition`, `permission-denied`,
   /// `unavailable`...).
@@ -92,6 +92,9 @@ class FleetFailure implements Exception {
 
   /// One of [fleetRefusalReasons] when the server named it; else ''.
   final String reason;
+
+  /// The name the server refused (`details.name` of `fleet_bad_name`), or ''.
+  final String name;
 
   bool get offline =>
       code == 'unavailable' ||
@@ -107,9 +110,17 @@ class FleetFailure implements Exception {
 /// The refusal reason from a callable error: `details.reason`.
 FleetFailure parseFleetFailure(String code, Object? details) {
   var reason = '';
-  if (details is Map) reason = '${details['reason'] ?? ''}'.trim();
+  var name = '';
+  if (details is Map) {
+    reason = '${details['reason'] ?? ''}'.trim();
+    name = '${details['name'] ?? ''}'.trim();
+  }
   if (!fleetRefusalReasons.contains(reason)) reason = '';
-  return FleetFailure(code: code.trim().toLowerCase(), reason: reason);
+  return FleetFailure(
+    code: code.trim().toLowerCase(),
+    reason: reason,
+    name: reason == 'fleet_bad_name' ? name : '',
+  );
 }
 
 // ---------------------------------------------------------------------------

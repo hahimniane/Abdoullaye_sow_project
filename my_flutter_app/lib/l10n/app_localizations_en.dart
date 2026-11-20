@@ -15304,7 +15304,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fltRefusalBadInput => 'Some details are missing or not valid.';
 
   @override
-  String get fltRefusalNoAmount => 'Enter an amount greater than zero.';
+  String get fltRefusalNoAmount => 'Enter an amount.';
 
   @override
   String get fltRefusalAlreadyUndone => 'That payment was already undone.';
@@ -15324,7 +15324,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Another friend already has this car on those days.';
 
   @override
-  String get fltRefusalNoteEmpty => 'Write a note.';
+  String get fltRefusalNoteEmpty => 'Write a note or attach a file.';
 
   @override
   String get fltRefusalNoteVoided => 'That note was already removed.';
@@ -15339,7 +15339,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fltRefusalNoBank =>
-      'Connect the business’s bank first (Profile, Bank for Zelle checks).';
+      'Connect the business\'s bank first (Profile, Bank for Zelle checks).';
 
   @override
   String get fltRefusalBadPhone => 'Enter a phone number with its area code.';
@@ -15360,7 +15360,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fltRefusalStaffOnly =>
-      'This account is not allowed to manage Fleet.';
+      'This staff account is not allowed to manage Fleet.';
 
   @override
   String get fltPeriodWeek => 'Week';
@@ -16172,7 +16172,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fltWaitingUndone =>
-      'Its payment was undone: pick the right driver.';
+      'This deposit\'s payment was undone. It will not pay anyone by itself: pick the driver.';
 
   @override
   String get fltWaitingDuplicate =>
@@ -16406,34 +16406,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'Turn the pay-day bank checks off? Deposits still pay drivers when the bank updates on its own, at no cost.';
 
   @override
-  String get fltRefusalClaimClosed =>
-      'This report is closed or was already paid.';
+  String get fltRefusalClaimClosed => 'This report is already closed.';
 
   @override
-  String get fltRefusalClaimNoDriver => 'This report has no driver yet.';
+  String get fltRefusalClaimNoDriver =>
+      'This report has no driver yet. Wait for the sender to say who it is for, or close it.';
 
   @override
   String get fltRefusalDepositNotWaiting =>
-      'That deposit is not waiting for the office.';
+      'That deposit is no longer waiting. Refresh and try again.';
 
   @override
   String get fltRefusalBadName =>
-      'That is not a person’s name (at least two words, not an account or an app).';
+      'That name cannot be used. Type the person\'s full name as the bank shows it.';
 
   @override
   String get fltRefusalZelleMissing =>
-      'Add the business’s Zelle name in the Fleet settings first.';
+      'Add the Zelle email or phone in Fleet settings first.';
 
   @override
   String get fltRefusalCarOverlap =>
-      'This plate is still with another driver on that date.';
+      'This plate was with another driver until that day. Pick a later start day.';
 
   @override
   String get fltRefusalAlreadyReturned => 'This plate was already returned.';
 
   @override
   String get fltRefusalDriverHasPlate =>
-      'This driver still has a plate. Use Driver has left, which returns it.';
+      'This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.';
 
   @override
   String get fltWaitingSharedPayer =>
@@ -16557,7 +16557,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fltPayerNamesTwoWords =>
-      'Write a person’s name: at least two words, not an account or an app.';
+      'Type the full name as the bank shows it, at least two words.';
 
   @override
   String get fltPayerNamesEmpty =>
@@ -16690,6 +16690,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fltPaperworkScopeAll => 'Every plate';
+
+  @override
+  String fltRefusalBadNameNamed(String name) {
+    return '\"$name\" cannot be used. Type the person\'s full name as the bank shows it.';
+  }
+
+  @override
+  String get fltClaimNoAmount =>
+      'The driver did not give a readable amount. Look at the photo.';
+
+  @override
+  String get fltClaimNoDeposit =>
+      'No deposit has shown in the bank after 2 days.';
+
+  @override
+  String get fltClaimPaymentUndone =>
+      'The payment made from this report was undone. Pick the right deposit or close it.';
+
+  @override
+  String get fltClaimPhotoDeleted => 'This photo was deleted after 12 months.';
 
   @override
   String get pcsErrPiecesTooMany => 'A package can have at most 60 pieces.';

@@ -26432,7 +26432,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalNoAmount.
   ///
   /// In en, this message translates to:
-  /// **'Enter an amount greater than zero.'**
+  /// **'Enter an amount.'**
   String get fltRefusalNoAmount;
 
   /// No description provided for @fltRefusalAlreadyUndone.
@@ -26468,7 +26468,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalNoteEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Write a note.'**
+  /// **'Write a note or attach a file.'**
   String get fltRefusalNoteEmpty;
 
   /// No description provided for @fltRefusalNoteVoided.
@@ -26492,7 +26492,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalNoBank.
   ///
   /// In en, this message translates to:
-  /// **'Connect the business’s bank first (Profile, Bank for Zelle checks).'**
+  /// **'Connect the business\'s bank first (Profile, Bank for Zelle checks).'**
   String get fltRefusalNoBank;
 
   /// No description provided for @fltRefusalBadPhone.
@@ -26528,7 +26528,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalStaffOnly.
   ///
   /// In en, this message translates to:
-  /// **'This account is not allowed to manage Fleet.'**
+  /// **'This staff account is not allowed to manage Fleet.'**
   String get fltRefusalStaffOnly;
 
   /// No description provided for @fltPeriodWeek.
@@ -27920,7 +27920,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltWaitingUndone.
   ///
   /// In en, this message translates to:
-  /// **'Its payment was undone: pick the right driver.'**
+  /// **'This deposit\'s payment was undone. It will not pay anyone by itself: pick the driver.'**
   String get fltWaitingUndone;
 
   /// No description provided for @fltWaitingDuplicate.
@@ -28274,37 +28274,37 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalClaimClosed.
   ///
   /// In en, this message translates to:
-  /// **'This report is closed or was already paid.'**
+  /// **'This report is already closed.'**
   String get fltRefusalClaimClosed;
 
   /// No description provided for @fltRefusalClaimNoDriver.
   ///
   /// In en, this message translates to:
-  /// **'This report has no driver yet.'**
+  /// **'This report has no driver yet. Wait for the sender to say who it is for, or close it.'**
   String get fltRefusalClaimNoDriver;
 
   /// No description provided for @fltRefusalDepositNotWaiting.
   ///
   /// In en, this message translates to:
-  /// **'That deposit is not waiting for the office.'**
+  /// **'That deposit is no longer waiting. Refresh and try again.'**
   String get fltRefusalDepositNotWaiting;
 
   /// No description provided for @fltRefusalBadName.
   ///
   /// In en, this message translates to:
-  /// **'That is not a person’s name (at least two words, not an account or an app).'**
+  /// **'That name cannot be used. Type the person\'s full name as the bank shows it.'**
   String get fltRefusalBadName;
 
   /// No description provided for @fltRefusalZelleMissing.
   ///
   /// In en, this message translates to:
-  /// **'Add the business’s Zelle name in the Fleet settings first.'**
+  /// **'Add the Zelle email or phone in Fleet settings first.'**
   String get fltRefusalZelleMissing;
 
   /// No description provided for @fltRefusalCarOverlap.
   ///
   /// In en, this message translates to:
-  /// **'This plate is still with another driver on that date.'**
+  /// **'This plate was with another driver until that day. Pick a later start day.'**
   String get fltRefusalCarOverlap;
 
   /// No description provided for @fltRefusalAlreadyReturned.
@@ -28316,7 +28316,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltRefusalDriverHasPlate.
   ///
   /// In en, this message translates to:
-  /// **'This driver still has a plate. Use Driver has left, which returns it.'**
+  /// **'This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.'**
   String get fltRefusalDriverHasPlate;
 
   /// No description provided for @fltWaitingSharedPayer.
@@ -28526,7 +28526,7 @@ abstract class AppLocalizations {
   /// No description provided for @fltPayerNamesTwoWords.
   ///
   /// In en, this message translates to:
-  /// **'Write a person’s name: at least two words, not an account or an app.'**
+  /// **'Type the full name as the bank shows it, at least two words.'**
   String get fltPayerNamesTwoWords;
 
   /// No description provided for @fltPayerNamesEmpty.
@@ -28736,6 +28736,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Every plate'**
   String get fltPaperworkScopeAll;
+
+  /// No description provided for @fltRefusalBadNameNamed.
+  ///
+  /// In en, this message translates to:
+  /// **'\"{name}\" cannot be used. Type the person\'s full name as the bank shows it.'**
+  String fltRefusalBadNameNamed(String name);
+
+  /// No description provided for @fltClaimNoAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'The driver did not give a readable amount. Look at the photo.'**
+  String get fltClaimNoAmount;
+
+  /// No description provided for @fltClaimNoDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'No deposit has shown in the bank after 2 days.'**
+  String get fltClaimNoDeposit;
+
+  /// No description provided for @fltClaimPaymentUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment made from this report was undone. Pick the right deposit or close it.'**
+  String get fltClaimPaymentUndone;
+
+  /// No description provided for @fltClaimPhotoDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo was deleted after 12 months.'**
+  String get fltClaimPhotoDeleted;
 
   /// No description provided for @pcsErrPiecesTooMany.
   ///

@@ -50,12 +50,18 @@ class FleetService {
     }
   }
 
-  /// `claim_photo`: the screenshot's download link, null when there is none or
-  /// it was deleted after 12 months.
-  Future<String?> claimPhotoUrl(String businessId, String claimId) async {
+  /// `claim_photo`: the screenshot's download link; [url] is null when there
+  /// is none, and [deleted] true when it was deleted after 12 months.
+  Future<({String? url, bool deleted})> claimPhoto(
+    String businessId,
+    String claimId,
+  ) async {
     final answer = await call(FleetRequests.claimPhoto(businessId, claimId));
     final url = answer['url'];
-    return url is String && url.trim().isNotEmpty ? url.trim() : null;
+    return (
+      url: url is String && url.trim().isNotEmpty ? url.trim() : null,
+      deleted: answer['deleted'] == true,
+    );
   }
 
   /// `bank_status`, read into its model.

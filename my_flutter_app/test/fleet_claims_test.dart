@@ -102,6 +102,9 @@ void main() {
         'too_old',
         'not_a_driver',
         'two_claims',
+        'no_amount',
+        'no_deposit',
+        'payment_undone',
         '',
         'new_reason',
       ]) {
@@ -109,8 +112,8 @@ void main() {
           fleetClaimSentence(claim('x', {'state': 'office', 'reason': r})),
         );
       }
-      // Four states, the late one, five reasons, one fallback.
-      expect(seen.length, 11);
+      // Four states, the late one, eight reasons, one fallback.
+      expect(seen.length, 14);
       expect(seen, isNot(contains(FleetClaimSentence.none)));
       final en = lookupAppLocalizations(const Locale('en'));
       final fr = lookupAppLocalizations(const Locale('fr'));
@@ -373,20 +376,49 @@ void main() {
       final fr = lookupAppLocalizations(const Locale('fr'));
       const expected = {
         'fleet_driver_has_plate':
-            'This driver still has a plate. Use Driver has left, which returns it.',
+            'This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.',
         'fleet_already_returned': 'This plate was already returned.',
         'fleet_car_overlap':
-            'This plate is still with another driver on that date.',
-        'fleet_claim_closed': 'This report is closed or was already paid.',
-        'fleet_claim_no_driver': 'This report has no driver yet.',
+            'This plate was with another driver until that day. Pick a later start day.',
+        'fleet_claim_closed': 'This report is already closed.',
+        'fleet_claim_no_driver':
+            'This report has no driver yet. Wait for the sender to say who it is for, or close it.',
         'fleet_deposit_not_waiting':
-            'That deposit is not waiting for the office.',
+            'That deposit is no longer waiting. Refresh and try again.',
+        'fleet_zelle_missing':
+            'Add the Zelle email or phone in Fleet settings first.',
+        'fleet_admin_only': 'Only a Fleet admin can do this.',
+        'fleet_no_amount': 'Enter an amount.',
+        'fleet_note_empty': 'Write a note or attach a file.',
+        'fleet_staff_only':
+            'This staff account is not allowed to manage Fleet.',
+        'fleet_no_bank':
+            "Connect the business's bank first (Profile, Bank for Zelle checks).",
       };
       expected.forEach((reason, sentence) {
         final f = FleetFailure(code: 'failed-precondition', reason: reason);
         expect(fleetRefusalText(en, f), sentence);
         expect(fleetRefusalText(fr, f), isNot(sentence));
       });
+      // A refused name says which name, and is never translated.
+      final named = parseFleetFailure('invalid-argument', {
+        'reason': 'fleet_bad_name',
+        'name': 'Zelle',
+      });
+      expect(named.name, 'Zelle');
+      expect(
+        fleetRefusalText(en, named),
+        '"Zelle" cannot be used. Type the person\'s full name as the bank shows it.',
+      );
+      expect(fleetRefusalText(fr, named), startsWith('"Zelle" ne peut pas'));
+      const plain = FleetFailure(
+        code: 'invalid-argument',
+        reason: 'fleet_bad_name',
+      );
+      expect(
+        fleetRefusalText(en, plain),
+        'That name cannot be used. Type the person\'s full name as the bank shows it.',
+      );
       for (final reason in [
         'fleet_bad_name',
         'fleet_zelle_missing',
@@ -657,6 +689,11 @@ void main() {
   test('the Fleet waiting reasons include the new ones, once each', () {
     expect(fleetWaitingReasons, contains('shared_payer'));
     expect(fleetWaitingReasons, contains('undone'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(
+      fleetWaitingReasonText(en, 'undone'),
+      "This deposit's payment was undone. It will not pay anyone by itself: pick the driver.",
+    );
     expect(fleetWaitingReasons, isNot(contains('two_drivers')));
   });
 }

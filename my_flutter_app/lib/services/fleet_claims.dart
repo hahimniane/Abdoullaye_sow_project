@@ -110,6 +110,9 @@ enum FleetClaimSentence {
   tooOld,
   notADriver,
   twoClaims,
+  noAmount,
+  noDeposit,
+  paymentUndone,
   needsPerson,
   none,
 }
@@ -133,6 +136,9 @@ FleetClaimSentence fleetClaimSentence(FleetClaim claim) {
         'too_old' => FleetClaimSentence.tooOld,
         'not_a_driver' => FleetClaimSentence.notADriver,
         'two_claims' => FleetClaimSentence.twoClaims,
+        'no_amount' => FleetClaimSentence.noAmount,
+        'no_deposit' => FleetClaimSentence.noDeposit,
+        'payment_undone' => FleetClaimSentence.paymentUndone,
         _ => FleetClaimSentence.needsPerson,
       };
     default:

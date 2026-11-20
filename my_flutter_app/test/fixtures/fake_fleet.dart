@@ -109,6 +109,9 @@ class FakeFleetBackend {
   /// What `claim_photo` answers as `url` (null: no photo).
   String? photoUrl = 'https://example.test/shot.png';
 
+  /// With no url: true is "deleted after 12 months", false just no photo.
+  bool photoDeleted = true;
+
   /// What `assignment_update` answers as `effectiveDayKey`.
   String effectiveDayKey = '2026-12-01';
 
@@ -143,7 +146,11 @@ class FakeFleetBackend {
       case 'bank_status':
         return bankAnswer ?? {'success': true};
       case 'claim_photo':
-        return {'success': true, 'url': photoUrl, 'deleted': photoUrl == null};
+        return {
+          'success': true,
+          'url': photoUrl,
+          'deleted': photoUrl == null && photoDeleted,
+        };
       case 'claim_assign':
       case 'claim_close':
         // The server closes the claim: it leaves the open list.
