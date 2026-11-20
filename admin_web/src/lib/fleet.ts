@@ -36,18 +36,33 @@ export const FLEET_REFUSALS: Record<string, string> = {
   fleet_no_phone: "This driver has no WhatsApp number. Add one in Edit details.",
   fleet_driver_left: "This driver has left.",
   fleet_staff_only:"This staff account is not allowed to manage Fleet.",
-  fleet_claim_not_found: "That claim was not found. It may already be closed.",
-  fleet_deposit_taken: "That deposit was already used for another payment.",
-  fleet_driver_not_active: "This driver is not active.",
-  fleet_driver_has_plate: "This driver still has a plate. Use Driver has left, which returns it.",
+  fleet_claim_closed: "This report is already closed.",
+  fleet_claim_no_driver: "This report has no driver yet. Wait for the sender to say who it is for, or close it.",
+  fleet_deposit_not_waiting: "That deposit is no longer waiting. Refresh and try again.",
+  fleet_zelle_missing: "Add the Zelle email or phone in Fleet settings first.",
+  fleet_bad_name: "That name cannot be used. Type the person's full name as the bank shows it.",
+  fleet_driver_has_plate: "This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.",
   fleet_already_returned: "This plate was already returned.",
-  fleet_car_overlap: "This plate is still with another driver on that date.",
+  fleet_car_overlap: "This plate was with another driver until that day. Pick a later start day.",
 };
+
+/** The sentence for a refused name: it says which name (the server's details.name) when it has one. */
+export function badNameMessage(name: unknown): string {
+  const n = String(name ?? "").trim();
+  return n ? `"${n}" cannot be used. Type the person's full name as the bank shows it.` : FLEET_REFUSALS.fleet_bad_name;
+}
+
+/** Splits `badNameMessage` back into the typed name and the fixed sentences, so the name is never translated. */
+export function splitBadName(message: string): { name: string; rest: string } | null {
+  const m = /^"(.+)" (cannot be used\.) (Type the person's full name as the bank shows it\.)$/.exec(message);
+  return m ? { name: m[1], rest: `${m[2]} ${m[3]}` } : null;
+}
 
 /** The sentence to show for a failed Fleet call: the server's reason, else its message, else a fallback. */
 export function fleetErrorMessage(error: unknown): string {
-  const e = error as { details?: { reason?: unknown }; message?: unknown } | null;
+  const e = error as { details?: { reason?: unknown; name?: unknown }; message?: unknown } | null;
   const reason = String(e?.details?.reason ?? "");
+  if (reason === "fleet_bad_name") return badNameMessage(e?.details?.name);
   if (reason && FLEET_REFUSALS[reason]) return FLEET_REFUSALS[reason];
   const message = String(e?.message ?? "").trim();
   return message || "Something went wrong. Try again.";

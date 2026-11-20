@@ -515,9 +515,9 @@ describe("S5: plate fee and leaving", () => {
   });
 
   it("words the refusals", () => {
-    assert.equal(fleetErrorMessage({ details: { reason: "fleet_driver_has_plate" } }), "This driver still has a plate. Use Driver has left, which returns it.");
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_driver_has_plate" } }), "This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.");
     assert.equal(fleetErrorMessage({ details: { reason: "fleet_already_returned" } }), "This plate was already returned.");
-    assert.equal(fleetErrorMessage({ details: { reason: "fleet_car_overlap" } }), "This plate is still with another driver on that date.");
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_car_overlap" } }), "This plate was with another driver until that day. Pick a later start day.");
     assert.equal(fleetErrorMessage({ details: { reason: "fleet_admin_only" } }), "Only a Fleet admin can do this.");
     assert.equal(fleetErrorMessage({ details: { reason: "fleet_bad_input" } }), "Some details are missing or not valid.");
     assert.equal(fleetErrorMessage({ details: { reason: "fleet_not_found" } }), "That record was not found.");
@@ -571,8 +571,8 @@ describe("French for the new fleet screen strings", () => {
     "Due weekday, optional (1 = Monday … 7 = Sunday)", "Due day of the month, optional (1–28)", "Applies from",
     "Bills already made are not changed.", "The plate comes back on this date and bills stop.", "Bills stop on this date.",
     "The driver is marked as left. Their plate came back and their bills stopped.", "Nothing was changed.",
-    "This driver still has a plate. Use Driver has left, which returns it.", "This plate was already returned.",
-    "This plate is still with another driver on that date.",
+    "This driver still has a plate. Get it back first, or ask a Fleet admin to use Driver has left.", "This plate was already returned.",
+    "This plate was with another driver until that day. Pick a later start day.",
   ];
   for (const english of strings) {
     it(english, () => assert.notEqual(translateValue(english, "fr"), english));

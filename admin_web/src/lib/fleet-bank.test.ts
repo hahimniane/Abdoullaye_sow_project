@@ -48,6 +48,14 @@ test("a shared payer waits for the office with its own words", () => {
   assert.notEqual(waitingReasonText("shared_payer"), waitingReasonText("unknown"));
 });
 
+test("every waiting reason the server sends has its own sentence; none mentions cents", () => {
+  const reasons = ["unknown", "shared_payer", "undone", "driver_left", "own_transfer", "not_zelle", "possible_duplicate"];
+  const texts = reasons.map(waitingReasonText);
+  assert.equal(new Set(texts).size, reasons.length);
+  assert.equal(waitingReasonText("undone"), "This deposit's payment was undone. It will not pay anyone by itself: pick the driver.");
+  for (const t of texts) assert.ok(!/cents/i.test(t), t);
+});
+
 test("the new words read in French", () => {
   for (const english of [
     "Pay-day bank checks",
@@ -56,7 +64,6 @@ test("the new words read in French", () => {
     "Pay this driver",
     "Save the schedule",
     waitingReasonText("unknown"),
-    waitingReasonText("two_drivers"),
     waitingReasonText("undone"),
     waitingReasonText("possible_duplicate"),
     waitingReasonText("own_transfer"),
