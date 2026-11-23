@@ -52,6 +52,7 @@ import {
 import { unitOf } from "@/lib/package-price-list";
 import { CopyValue } from "@/components/copy-value";
 import { auth, functions } from "@/lib/firebase";
+import { RECEIPT_MODE_OPTIONS, receiptSendMode, type ReceiptSendMode } from "@/lib/package-receipt";
 import { currentLanguage } from "@/lib/format";
 import { chargeTypeFor, payChip, requestPayNowOf } from "@/lib/pay-now";
 import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, centsToInput as ledgerCentsToInput, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
@@ -1054,6 +1055,54 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
 // Request settings (owner).
 // ---------------------------------------------------------------------------
 
+/**
+ * "Package receipts": does the receipt go with the confirmation, or do staff
+ * press Send receipt (docs/PACKAGE_RECEIPT_SEND.md). Saves on its own through
+ * setPackageReceiptMode; the server allows only the owner or a business admin.
+ */
+function PackageReceiptsSetting({ businessId, business }: { businessId: string; business: FirestoreRow | null }) {
+  const [mode, setMode] = useState<ReceiptSendMode>(() => receiptSendMode(business));
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  async function choose(next: ReceiptSendMode) {
+    if (busy || next === mode) return;
+    const before = mode;
+    setMode(next);
+    setBusy(true);
+    setMessage("");
+    setFailed(false);
+    try {
+      const result = await callRequest<{ success?: boolean; sendMode?: string }>("setPackageReceiptMode", { businessId, sendMode: next });
+      setMode(result.sendMode === "auto" ? "auto" : "button");
+      setMessage("Saved.");
+    } catch {
+      setMode(before);
+      setFailed(true);
+      setMessage("Could not save. Only the business owner or an admin can change this. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="pkq-settings-block">
+      <h4>Package receipts</h4>
+      {RECEIPT_MODE_OPTIONS.map((option) => (
+        <div className="pkq-proof-switch" key={option.value}>
+          <label className="ctn-notify">
+            <input checked={mode === option.value} disabled={busy} name="package-receipt-mode" onChange={() => void choose(option.value)} type="radio" />
+            <span>{option.label}</span>
+          </label>
+          <small className="lst-hint">{option.hint}</small>
+        </div>
+      ))}
+      {message && <small className={failed ? "ctn-wa-fail" : "lst-hint"} role="status">{message}</small>}
+    </section>
+  );
+}
+
 function RequestSettingsDialog({ businessId, business, officeLocations, onClose, onFlash }: {
   businessId: string;
   business: FirestoreRow | null;
@@ -1218,6 +1267,8 @@ function RequestSettingsDialog({ businessId, business, officeLocations, onClose,
                 : "Stripe is not connected: Laawol collects the card payments and pays you every Monday. See Laawol owes you under This month."}
             </small>
           </section>
+
+          {isOwner && <PackageReceiptsSetting business={business} businessId={businessId} />}
 
           {/* Proof on every package (docs/AIR_PACKAGES.md §1 decision 3):
               three switches, all off until the owner turns them on. */}

@@ -18523,3 +18523,22 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
     align-self: flex-start;
   }
 }
+
+/* Send receipt on a package (docs/PACKAGE_RECEIPT_SEND.md) */
+.ctn-receipt-button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 3px 10px; border: 1px solid var(--rule); border-radius: 999px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600; cursor: pointer; }
+.ctn-receipt-button:hover { border-color: var(--brand); color: var(--brand-strong); }
+.rcp-body { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+.rcp-methods { display: flex; flex-wrap: wrap; gap: 8px; }
+.rcp-method { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px; border: 1.5px solid var(--rule); border-radius: 999px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.rcp-method.on { border-color: var(--brand); color: var(--brand-strong); }
+.rcp-pane { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; border: 1px solid var(--rule); border-radius: 12px; }
+.rcp-pane > .lst-add, .rcp-pane > a.lst-add { text-decoration: none; }
+.rcp-qr { align-items: center; }
+.rcp-qr-img { width: 220px; height: 220px; }
+.rcp-field, .rcp-link label { display: flex; flex-direction: column; gap: 4px; width: 100%; font-size: 13px; }
+.rcp-field input, .rcp-link input { min-height: 38px; padding: 6px 10px; border: 1.5px solid var(--rule); border-radius: 10px; font: inherit; }
+.rcp-link { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.rcp-state { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; }
+.rcp-state.ok { background: #ecfdf5; color: #047857; }
+.rcp-state.wait { background: #f3f5f4; color: var(--ink); }
+.rcp-state.bad { background: #fef2f2; color: #b91c1c; }
