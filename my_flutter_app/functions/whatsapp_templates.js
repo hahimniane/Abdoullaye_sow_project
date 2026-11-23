@@ -331,6 +331,9 @@ const TEMPLATE_BY_UPDATE = Object.freeze({
   // The pickup number, when the line has one, rides in the address line.
   arrived: TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
   delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
+  // The sender's package receipt on its own (docs/PACKAGE_RECEIPT_SEND.md):
+  // the received body with the receipt PDF as the document header.
+  receipt: TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG,
 });
 
 // The fallback set. `at_port` is a legacy row written before the two
@@ -344,6 +347,8 @@ const LEGACY_TEMPLATE_BY_UPDATE = Object.freeze({
   // one, whichever set is switched on. The same for the confirmation.
   delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
   confirm: TEMPLATE.PACKAGE_CONFIRM_2LANG,
+  // Likewise bilingual-only: the receipt message has no legacy version.
+  receipt: TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG,
 });
 
 // What a template carries besides its body. Every template has the

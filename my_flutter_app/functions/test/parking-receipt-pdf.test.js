@@ -305,7 +305,7 @@ describe("the package receipt", () => {
     line: {...LINE, ...line},
     contentsEn: "2 barrels, 1 box", contentsFr: "2 barils, 1 carton",
     destinationEn: "Guinea", destinationFr: "Guinée",
-    receivedByName: "Awa Cashier", ...extra,
+    ...extra,
   });
 
   it("shows the date US style, month first, with a 12-hour clock", () => {
@@ -326,7 +326,7 @@ describe("the package receipt", () => {
     assert.equal(m.reference, "REC-CL-K7M4P2");
     assert.deepEqual(m.rows.map((r) => r.label.split(" / ")[0]), [
       "Status", "Sender", "Phone", "Receiver", "Destination", "Contents",
-      "Ship mode", "Tracking code", "Received on", "Received by"]);
+      "Ship mode", "Tracking code", "Received on"]);
     for (const row of m.rows) assert.match(row.label, / \/ /);
     const rows = rowsOf(m);
     assert.equal(rows["Status / Statut"], "Package received / Colis reçu");
@@ -338,7 +338,11 @@ describe("the package receipt", () => {
     assert.equal(rows["Ship mode / Mode d'expédition"], "Sea / Mer");
     assert.equal(rows["Tracking code / Code de suivi"], "CL-K7M4P2");
     assert.equal(rows["Received on / Reçu le"], "Nov 7, 2026, 3:42 PM");
-    assert.equal(rows["Received by / Reçu par"], "Awa Cashier");
+    // No "Received by": the package receipt names the business, not staff,
+    // even when a caller still passes a name.
+    assert.equal(rows["Received by / Reçu par"], undefined);
+    const named = rowsOf(pkg({receivedByName: "Awa Cashier"}));
+    assert.equal(named["Received by / Reçu par"], undefined);
   });
 
   it("prints the sender's own phone and never the receiver's", () => {
@@ -396,7 +400,7 @@ describe("the package receipt", () => {
       destinationEn: "", destinationFr: ""});
     const labels = m.rows.map((r) => r.label.split(" / ")[0]);
     for (const gone of ["Sender", "Phone", "Receiver", "Destination",
-      "Contents", "Ship mode", "Received on", "Received by"]) {
+      "Contents", "Ship mode", "Received on"]) {
       assert.ok(!labels.includes(gone), gone);
     }
     assert.equal(m.businessName, "Laawol");
@@ -413,11 +417,12 @@ describe("the package receipt", () => {
         for (const expected of ["PACKAGE RECEIPT", "REÇU DE COLIS",
           "REC-CL-K7M4P2",
           "Fatou Diallo", "Mariama Bah", "Guinea / Gu", "CL-K7M4P2",
-          "Nov 7, 2026, 3:42 PM", "Awa Cashier", "$300.00", "$100.00",
+          "Nov 7, 2026, 3:42 PM", "$300.00", "$100.00",
           "$200.00", "Dala Shipping"]) {
           assert.ok(words.includes(expected), `${expected}\n${words}`);
         }
         assert.ok(!words.includes("224620000000"));
+        assert.ok(!words.includes("Received by"));
       });
 });
 

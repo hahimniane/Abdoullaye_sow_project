@@ -279,8 +279,10 @@ describe("the server wiring", () => {
     const body = section("exports.updateContainerLine = onCall(",
         "\nexports.");
     assert.match(body, /containerLineDelivery\(admin\.firestore\(\)/);
-    assert.match(body,
-        /secrets: \[whatsappAccessToken, whatsappPhoneNumberId\]/);
+    // WhatsApp for the messages; Twilio for Send receipt by text.
+    assert.match(body, new RegExp("secrets: \\[whatsappAccessToken, " +
+      "whatsappPhoneNumberId,\\s+twilioAccountSid, twilioAuthToken, " +
+      "twilioFromNumber\\]"));
     // The action is dispatched before the containers-only edit gate.
     assert.ok(body.indexOf("containerLineDelivery(") <
       body.indexOf("requireBusinessPermission(uid, businessId, " +

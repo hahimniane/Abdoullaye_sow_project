@@ -1436,3 +1436,79 @@ describe("the package receipt on the sender's received message", () => {
         {ok: false, httpStatus: 404, errorCode: 132001}), false);
   });
 });
+
+// The `receipt` update (docs/PACKAGE_RECEIPT_SEND.md): the sender's receipt
+// PDF as a message of its own. It is a document, not shipment news.
+describe("the receipt update", () => {
+  const {
+    CONTAINER_UPDATE,
+    CONTAINER_UPDATES,
+    withDeliveryTick,
+  } = require("../container_updates");
+  const LINK = "https://laawoldigital.com/d?view=packageReceiptPdf&t=tok" +
+    "&p=line1&e=1&s=sig";
+  const message = (extra = {}) => whatsappUpdateMessage({
+    phone: "+16465550100", name: "Fatou Diallo", businessName: "Dala Shipping",
+    businessPhone: "+16465550199", line: line(),
+    container: {destinationCountryId: "gn", destinationCountryName: "Guinea"},
+    update: "receipt", trackingCode: "CL-K7M4P2", role: "sender",
+    receiptDocument: {link: LINK, filename: "Receipt CL-K7M4P2.pdf"},
+    ...extra,
+  });
+
+  it("is never a moment on a timeline or a shipment summary", () => {
+    assert.equal(CONTAINER_UPDATE.RECEIPT, "receipt");
+    assert.ok(!CONTAINER_UPDATES.includes("receipt"));
+    assert.equal(messageUpdateFor("receipt"), null);
+    assert.equal(updateRank("receipt"), 0);
+    assert.equal(latestCustomerUpdate([{customerUpdate: "receipt",
+      timestamp: 5}]), null);
+    assert.equal(mergeLastCustomerUpdate(null, "receipt",
+        [{role: "sender", status: "sent"}], 1), null);
+    // ... and never replaces the shipment news already on the line.
+    const before = {update: "shipped", results: [{role: "sender",
+      status: "sent"}], atMs: 1};
+    assert.equal(mergeLastCustomerUpdate(before, "receipt",
+        [{role: "sender", status: "failed"}], 2), null);
+    assert.equal(withDeliveryTick(before, "receipt", "sender", "failed",
+        "131026"), null);
+  });
+
+  it("sends the sender the receipt template with the PDF header", () => {
+    const body = message();
+    assert.equal(body.template.name, "shipment_received_doc_2lang");
+    const header = body.template.components[0];
+    assert.equal(header.parameters[0].document.link, LINK);
+    assert.equal(header.parameters[0].document.filename,
+        "Receipt CL-K7M4P2.pdf");
+  });
+
+  it("is no message without its PDF, and never the receiver's", () => {
+    assert.equal(message({receiptDocument: null}), null);
+    assert.equal(message({receiptDocument: {link: ""}}), null);
+    assert.equal(message({role: "receiver"}), null);
+    assert.equal(message({role: ""}), null);
+  });
+
+  it("is not claimed for the WhatsApp sender when it is a text log row",
+      () => {
+        assert.equal(shouldSendQueuedRow(null,
+            {status: "queued", channel: "sms", update: "receipt"}), false);
+        assert.equal(shouldSendQueuedRow(null,
+            {status: "queued", update: "receipt"}), true);
+      });
+
+  it("is wired: button mode never attaches, auto queues one row", () => {
+    const source = readFileSync(path.join(__dirname, "..", "index.js"),
+        "utf8");
+    const start = source.indexOf("exports.deliverContainerCustomerUpdate");
+    const body = source.slice(start,
+        source.indexOf("exports.requeueTemplateWaitingUpdates", start));
+    assert.match(body, /receiptSend\.sendModeOf\(business\) ===/);
+    assert.match(body, /autoReceiptRowWanted\(/);
+    assert.match(body, /queueAutoReceiptRow\(/);
+    // No plain message stands in for a receipt row that cannot be built.
+    assert.match(body, /if \(isReceiptRow && !receipt\)/);
+    assert.match(body, /A receipt only goes to the sender/);
+  });
+});

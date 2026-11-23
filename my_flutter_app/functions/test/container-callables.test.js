@@ -145,8 +145,12 @@ async function deliver(rowId, {before = null, ageMs = 0} = {}) {
 
 before(async () => {
   await Promise.all([
+    // Receipts ride on the confirmation (auto) for the suites written before
+    // the button became the default; "Send receipt" flips it back to the
+    // default where it tests that.
     db.collection("businesses").doc(BIZ).set({
       name: "Dala Shipping", status: "approved",
+      packageReceiptSettings: {sendMode: "auto"},
     }),
     db.collection("users").doc(OWNER).set({
       role: "businessOwner", businessId: BIZ, email: "owner@example.test",
@@ -5917,5 +5921,485 @@ describe("the package receipt on the sender's message", () => {
     fakeWhatsApp(OK);
     await deliver(row(lineId, "receiver").id);
     assert.equal(whatsappCalls[0].template.name, "shipment_received_2lang");
+  });
+});
+
+// "Send receipt" (docs/PACKAGE_RECEIPT_SEND.md): the business's mode, the
+// receipt link, the receipt by WhatsApp or text, and the automatic receipt.
+describe("Send receipt", () => {
+  const proof = require("../package_proof");
+  const dropOff = (extra = {}) => call("addWaitingPackage", {kind: "barrels",
+    quantity: 2, ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", destinationCountryId: "gn",
+    destinationCountryName: "Guinea", priceCents: 30000, payOnArrival: true,
+    ...extra});
+  const rowRef = (lineId, role, update = "received") =>
+    db.collection("containerUpdates").doc(`${lineId}_${role}_${update}`);
+  const lineRef = (lineId) => db.collection("containerLines").doc(lineId);
+  const receiptRows = async (lineId) => (await db.collection(
+      "containerUpdates").where("lineId", "==", lineId)
+      .where("update", "==", "receipt").get()).docs;
+  const setMode = (sendMode) => db.collection("businesses").doc(BIZ).set(
+      {packageReceiptSettings: {sendMode}}, {merge: true});
+  const reasonOf = (promise) => promise.then(() => "", (error) =>
+    error.details?.reason || error.code);
+  const send = (lineId, channel, uid = OWNER) =>
+    call("updateContainerLine", {action: "receipt_send", lineId, channel},
+        uid);
+  const headerOf = (body) => body.template.components
+      .find((part) => part.type === "header");
+  const TWILIO_SID = `AC${"0123456789abcdef".repeat(2)}`;
+  const twilioCalls = [];
+  function fakeTwilio(status = 201) {
+    twilioCalls.length = 0;
+    global.fetch = async (url, init) => {
+      if (String(url).endsWith("/assets/logo.png")) {
+        return new Response("", {status: 404});
+      }
+      if (String(url).includes("api.twilio.com")) {
+        twilioCalls.push({url: String(url),
+          body: new URLSearchParams(init.body)});
+        return new Response(JSON.stringify({sid: "SMTEST"}), {status});
+      }
+      return realFetch(url, init);
+    };
+  }
+  function twilioOn() {
+    process.env.TWILIO_ACCOUNT_SID = TWILIO_SID;
+    process.env.TWILIO_AUTH_TOKEN = "token";
+    process.env.TWILIO_FROM_NUMBER = "+15550001111";
+  }
+  function twilioOff() {
+    delete process.env.TWILIO_ACCOUNT_SID;
+    delete process.env.TWILIO_AUTH_TOKEN;
+    delete process.env.TWILIO_FROM_NUMBER;
+  }
+
+  afterEach(async () => {
+    global.fetch = realFetch;
+    disconnectWhatsApp();
+    twilioOff();
+    await setMode("auto");
+  });
+
+  describe("the business's mode", () => {
+    it("is the button until the owner chooses, and only the owner chooses",
+        async () => {
+          const set = (sendMode, uid = OWNER) =>
+            functions.setPackageReceiptMode.run({auth: {uid, token: {}},
+              data: {businessId: BIZ, sendMode}});
+          assert.equal(functions.setPackageReceiptMode.__endpoint
+              .callableTrigger !== undefined, true);
+          assert.deepEqual(await set("button"),
+              {success: true, sendMode: "button"});
+          let biz = (await db.collection("businesses").doc(BIZ).get())
+              .data();
+          assert.equal(biz.packageReceiptSettings.sendMode, "button");
+          assert.equal(biz.packageReceiptSettings.updatedByUid, OWNER);
+          assert.deepEqual(await set("auto"),
+              {success: true, sendMode: "auto"});
+          biz = (await db.collection("businesses").doc(BIZ).get()).data();
+          assert.equal(biz.packageReceiptSettings.sendMode, "auto");
+          for (const bad of ["", "AUTO", "manual", null, undefined, 1]) {
+            assert.equal(await reasonOf(set(bad)), "invalid_send_mode",
+                String(bad));
+          }
+          // Staff with the containers permission cannot; nor can another
+          // business's people.
+          assert.equal(await reasonOf(set("button", RECEIVER)),
+              "permission-denied");
+          assert.equal(await reasonOf(set("button", OTHER_BIZ_STAFF)),
+              "permission-denied");
+          assert.equal((await db.collection("businesses").doc(BIZ).get())
+              .get("packageReceiptSettings.sendMode"), "auto");
+        });
+  });
+
+  describe("the receipt link", () => {
+    it("renders the receipt now and returns a 30-day link to it", async () => {
+      const {lineId} = await dropOff();
+      const before = Date.now();
+      const out = await call("updateContainerLine",
+          {action: "receipt_link", lineId}, RECEIVER);
+      const line = (await lineRef(lineId).get()).data();
+      assert.equal(out.success, true);
+      assert.equal(out.filename, `Receipt ${line.trackingCode}.pdf`);
+      assert.equal(out.smsReady, false);
+      assert.deepEqual(out.sender, {name: "Fatou Diallo",
+        phone: "+16465550100", email: ""});
+      assert.ok(out.expiresAtMs >= before + proof.PHOTO_LINK_MS - 5000);
+      // The short human link, signed with the line's own token.
+      assert.match(out.link, new RegExp(
+          "^https://laawoldigital\\.com/d\\?view=packageReceiptPdf&t=" +
+          `${line.documentToken}&p=${lineId}&e=${out.expiresAtMs}&s=`));
+      const query = Object.fromEntries(new URL(out.link).searchParams);
+      assert.equal(proof.packageReceiptLinkValid(query, line.documentToken,
+          Date.now()), true);
+      const [exists] = await admin.storage()
+          .bucket(`${process.env.GCLOUD_PROJECT}.firebasestorage.app`)
+          .file(`packageReceipts/${BIZ}/${lineId}.pdf`).exists();
+      assert.equal(exists, true);
+    });
+
+    it("says whether texting is set up", async () => {
+      twilioOn();
+      const {lineId} = await dropOff();
+      const out = await call("updateContainerLine",
+          {action: "receipt_link", lineId});
+      assert.equal(out.smsReady, true);
+    });
+
+    it("is for people who edit packages, and for this business's lines",
+        async () => {
+          const {lineId} = await dropOff();
+          assert.equal(await reasonOf(call("updateContainerLine",
+              {action: "receipt_link", lineId}, NO_CONTAINERS)),
+          "permission-denied");
+          assert.equal(await reasonOf(call("updateContainerLine",
+              {action: "receipt_link", lineId: "no-such-line"})),
+          "receipt_line_gone");
+          await lineRef(lineId).update({businessId: "some-other-business"});
+          assert.equal(await reasonOf(call("updateContainerLine",
+              {action: "receipt_link", lineId})), "receipt_line_gone");
+          await lineRef(lineId).update({businessId: BIZ, voided: true});
+          assert.equal(await reasonOf(call("updateContainerLine",
+              {action: "receipt_link", lineId})), "receipt_line_gone");
+        });
+  });
+
+  describe("the receipt by WhatsApp", () => {
+    it("queues a sender-only receipt row, and the sender sends it",
+        async () => {
+          await setMode("button");
+          connectWhatsApp();
+          const {lineId} = await dropOff();
+          const out = await send(lineId, "whatsapp", RECEIVER);
+          assert.equal(out.success, true);
+          assert.equal(out.channel, "whatsapp");
+          const rows = await receiptRows(lineId);
+          assert.equal(rows.length, 1);
+          assert.equal(rows[0].id, out.messageId);
+          const queued = rows[0].data();
+          assert.equal(queued.update, "receipt");
+          assert.equal(queued.role, "sender");
+          assert.equal(queued.trigger, "button");
+          assert.equal(queued.requestedByUid, RECEIVER);
+          assert.equal(queued.phone, "+16465550100");
+          assert.equal(queued.name, "Fatou Diallo");
+          assert.equal(queued.status, "queued");
+          assert.equal(queued.channel, undefined);
+
+          fakeWhatsApp(OK);
+          await deliver(out.messageId);
+          assert.equal(whatsappCalls.length, 1);
+          const [body] = whatsappCalls;
+          assert.equal(body.to, "16465550100");
+          assert.equal(body.template.name, "shipment_received_doc_2lang");
+          const line = (await lineRef(lineId).get()).data();
+          assert.equal(headerOf(body).parameters[0].document.filename,
+              `Receipt ${line.trackingCode}.pdf`);
+          assert.match(headerOf(body).parameters[0].document.link,
+              /parkingDocument\?view=packageReceiptPdf/);
+          const sent = (await receiptRows(lineId))[0].data();
+          assert.equal(sent.status, "sent");
+          assert.equal(sent.receiptDocument, "attached");
+          // Not shipment news: the line's summary is not about it.
+          assert.notEqual(line.lastCustomerUpdate?.update, "receipt");
+        });
+
+    it("refuses a second send within a minute, even two at once", async () => {
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      const results = await Promise.allSettled([
+        send(lineId, "whatsapp"), send(lineId, "whatsapp"),
+        send(lineId, "whatsapp")]);
+      assert.equal(results.filter((r) => r.status === "fulfilled").length,
+          1);
+      for (const lost of results.filter((r) => r.status === "rejected")) {
+        assert.equal(lost.reason.details.reason, "receipt_too_soon");
+      }
+      assert.equal((await receiptRows(lineId)).length, 1);
+      assert.equal(await reasonOf(send(lineId, "whatsapp")),
+          "receipt_too_soon");
+      // The guard is per channel, and a minute later it lets go.
+      await lineRef(lineId).update({
+        "lastReceiptSend.whatsapp.atMs": Date.now() - 61000});
+      assert.equal((await send(lineId, "whatsapp")).success, true);
+      assert.equal((await receiptRows(lineId)).length, 2);
+    });
+
+    it("says why nothing was sent", async () => {
+      const {lineId} = await dropOff();
+      // WhatsApp is not connected.
+      assert.equal(await reasonOf(send(lineId, "whatsapp")),
+          "receipt_whatsapp_off");
+      connectWhatsApp();
+      assert.equal(await reasonOf(send(lineId, "carrier-pigeon")),
+          "receipt_channel_invalid");
+      assert.equal(await reasonOf(send("no-such-line", "whatsapp")),
+          "receipt_line_gone");
+      assert.equal(await reasonOf(send(lineId, "whatsapp", NO_CONTAINERS)),
+          "permission-denied");
+      await lineRef(lineId).update({customerPhone: ""});
+      assert.equal(await reasonOf(send(lineId, "whatsapp")),
+          "receipt_no_sender_phone");
+      await lineRef(lineId).update({customerPhone: "6465550100"});
+      // A local number of a business with no country cannot be messaged.
+      assert.equal(await reasonOf(send(lineId, "whatsapp")),
+          "receipt_no_sender_phone");
+      assert.equal((await receiptRows(lineId)).length, 0);
+    });
+
+    it("never sends a receipt row to the receiver, and fails a receipt " +
+        "it cannot draw", async () => {
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      const id = `${lineId}_receiver_receipt`;
+      await db.collection("containerUpdates").doc(id).set({
+        businessId: BIZ, lineId, update: "receipt", role: "receiver",
+        phone: "+224620000000", name: "Mariama Bah", status: "queued",
+        attempts: 0});
+      fakeWhatsApp(OK);
+      await deliver(id);
+      assert.equal(whatsappCalls.length, 0);
+      const row = (await db.collection("containerUpdates").doc(id).get())
+          .data();
+      assert.equal(row.status, "failed");
+      assert.match(row.error, /only goes to the sender/);
+
+      // The line is gone: no receipt to draw, and no plain message either.
+      const sender = await send(lineId, "whatsapp");
+      await lineRef(lineId).delete();
+      fakeWhatsApp(OK);
+      await deliver(sender.messageId);
+      assert.equal(whatsappCalls.length, 0);
+      assert.equal((await db.collection("containerUpdates")
+          .doc(sender.messageId).get()).get("status"), "failed");
+    });
+
+    it("fails with a clear error when the PDF cannot be built, never a " +
+        "plain message", async () => {
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      const sender = await send(lineId, "whatsapp");
+      const pdf = require("../parking_receipt_pdf");
+      const real = pdf.renderReceiptPdf;
+      pdf.renderReceiptPdf = async () => {
+        throw new Error("font missing");
+      };
+      try {
+        fakeWhatsApp(OK);
+        await deliver(sender.messageId);
+      } finally {
+        pdf.renderReceiptPdf = real;
+      }
+      assert.equal(whatsappCalls.length, 0);
+      const row = (await db.collection("containerUpdates")
+          .doc(sender.messageId).get()).data();
+      assert.equal(row.status, "failed");
+      assert.match(row.error, /The receipt could not be made: font missing/);
+    });
+
+    it("waits for the template like any message, and Send again repeats " +
+        "a failed one", async () => {
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      const {messageId} = await send(lineId, "whatsapp");
+      fakeWhatsApp({status: 404, body: {error: {code: 132001,
+        message: "Template name does not exist"}}});
+      await deliver(messageId);
+      // Waiting for Meta, and no plain message went in its place.
+      assert.equal(whatsappCalls.length, 1);
+      assert.equal((await db.collection("containerUpdates").doc(messageId)
+          .get()).get("status"), "waiting_for_template");
+      // Delivered but reported undeliverable (131026: not on WhatsApp).
+      fakeWhatsApp(OK);
+      await db.collection("containerUpdates").doc(messageId).update({
+        status: "queued"});
+      await deliver(messageId, {before: {status: "waiting_for_template"}});
+      await db.collection("containerUpdates").doc(messageId).update({
+        deliveryStatus: "failed", deliveryErrorCode: 131026,
+        deliveryError: "Message undeliverable"});
+      const again = await call("updateContainerLine",
+          {action: "resend_update", lineId, update: "receipt"}, RECEIVER);
+      assert.equal(again.update, "receipt");
+      assert.equal(again.queued, 1);
+      const row = (await db.collection("containerUpdates").doc(messageId)
+          .get()).data();
+      assert.equal(row.status, "queued");
+      assert.equal(row.deliveryStatus, undefined);
+      assert.equal(row.deliveryErrorCode, undefined);
+      assert.equal(row.handResends, 1);
+      assert.equal((await receiptRows(lineId)).length, 1);
+      // A delivered one is not sent twice.
+      await db.collection("containerUpdates").doc(messageId).update({
+        status: "sent", deliveryStatus: "delivered"});
+      const none = await call("updateContainerLine",
+          {action: "resend_update", lineId, update: "receipt"});
+      assert.deepEqual([none.queued, none.alreadySent], [0, 1]);
+    });
+  });
+
+  describe("the receipt by text message", () => {
+    it("is refused while Twilio holds placeholders", async () => {
+      process.env.TWILIO_ACCOUNT_SID = "ACplaceholder";
+      process.env.TWILIO_AUTH_TOKEN = "placeholder";
+      process.env.TWILIO_FROM_NUMBER = "placeholder";
+      const {lineId} = await dropOff();
+      assert.equal(await reasonOf(send(lineId, "sms")),
+          "receipt_sms_not_set_up");
+      assert.equal((await receiptRows(lineId)).length, 0);
+      const out = await call("updateContainerLine",
+          {action: "receipt_link", lineId});
+      assert.equal(out.smsReady, false);
+    });
+
+    it("texts the link through Twilio and logs it for the screens",
+        async () => {
+          twilioOn();
+          fakeTwilio();
+          const {lineId} = await dropOff();
+          const out = await send(lineId, "sms", RECEIVER);
+          assert.equal(out.channel, "sms");
+          assert.equal(twilioCalls.length, 1);
+          assert.match(twilioCalls[0].url, new RegExp(
+              `/Accounts/${TWILIO_SID}/Messages\\.json$`));
+          assert.equal(twilioCalls[0].body.get("To"), "+16465550100");
+          assert.equal(twilioCalls[0].body.get("From"), "+15550001111");
+          const line = (await lineRef(lineId).get()).data();
+          assert.match(twilioCalls[0].body.get("Body"), new RegExp(
+              `^Dala Shipping: your package receipt ${line.trackingCode} / ` +
+              `votre reçu de colis ${line.trackingCode} : ` +
+              "https://laawoldigital\\.com/d\\?view=packageReceiptPdf"));
+          const [log] = await receiptRows(lineId);
+          assert.equal(log.id, out.messageId);
+          const row = log.data();
+          assert.equal(row.channel, "sms");
+          assert.equal(row.status, "sent");
+          assert.equal(row.twilioSid, "SMTEST");
+          assert.equal(row.role, "sender");
+          assert.equal(row.trigger, "button");
+          assert.equal(row.requestedByUid, RECEIVER);
+          assert.ok(row.sentAt);
+          // Never a WhatsApp send.
+          fakeWhatsApp(OK);
+          connectWhatsApp();
+          await deliver(log.id);
+          assert.equal(whatsappCalls.length, 0);
+          assert.equal(await reasonOf(send(lineId, "sms")),
+              "receipt_too_soon");
+          assert.equal(twilioCalls.length, 1);
+        });
+
+    it("lets go of the guard when Twilio refuses, so a retry is possible",
+        async () => {
+          twilioOn();
+          fakeTwilio(400);
+          const {lineId} = await dropOff();
+          assert.equal(await reasonOf(send(lineId, "sms")),
+              "receipt_sms_failed");
+          const [log] = await receiptRows(lineId);
+          assert.equal(log.get("status"), "failed");
+          assert.equal(log.get("channel"), "sms");
+          fakeTwilio();
+          assert.equal((await send(lineId, "sms")).success, true);
+        });
+  });
+
+  describe("button and automatic modes", () => {
+    it("button mode sends the plain confirmation and queues no receipt",
+        async () => {
+          await setMode("button");
+          connectWhatsApp();
+          const {lineId} = await dropOff();
+          fakeWhatsApp(OK);
+          await deliver(rowRef(lineId, "sender").id);
+          assert.equal(whatsappCalls[0].template.name,
+              "shipment_received_2lang");
+          assert.equal(headerOf(whatsappCalls[0]), undefined);
+          const sent = (await rowRef(lineId, "sender").get()).data();
+          assert.equal(sent.status, "sent");
+          assert.equal(sent.receiptDocument, undefined);
+          assert.equal((await receiptRows(lineId)).length, 0);
+        });
+
+    it("a business with no setting is in button mode", async () => {
+      await db.collection("businesses").doc(BIZ).update({
+        packageReceiptSettings: admin.firestore.FieldValue.delete()});
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      fakeWhatsApp(OK);
+      await deliver(rowRef(lineId, "sender").id);
+      assert.equal(whatsappCalls[0].template.name,
+          "shipment_received_2lang");
+    });
+
+    it("auto mode attaches the receipt to the confirmation", async () => {
+      await setMode("auto");
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      fakeWhatsApp(OK);
+      await deliver(rowRef(lineId, "sender").id);
+      assert.equal(whatsappCalls[0].template.name,
+          "shipment_received_doc_2lang");
+      assert.equal((await rowRef(lineId, "sender").get())
+          .get("receiptDocument"), "attached");
+      assert.equal((await receiptRows(lineId)).length, 0);
+    });
+
+    it("auto mode with a drop-off photo queues one separate receipt",
+        async () => {
+          await setMode("auto");
+          connectWhatsApp();
+          const {lineId} = await dropOff();
+          await lineRef(lineId).update({photoPaths: [
+            `packageProofs/${BIZ}/${lineId}/dropoff.jpg`]});
+          fakeWhatsApp(OK);
+          await deliver(rowRef(lineId, "sender").id);
+          assert.equal(whatsappCalls.length, 1);
+          assert.equal(whatsappCalls[0].template.name,
+              "shipment_received_photo_2lang");
+          const rows = await receiptRows(lineId);
+          assert.deepEqual(rows.map((r) => r.id),
+              [`${lineId}_receipt_auto`]);
+          const queued = rows[0].data();
+          assert.equal(queued.trigger, "auto");
+          assert.equal(queued.role, "sender");
+          assert.equal(queued.phone, "+16465550100");
+          assert.equal(queued.status, "queued");
+          assert.equal(queued.requestedByUid, undefined);
+          // A retried or repeated confirmation never queues a second one.
+          await rowRef(lineId, "sender").update({status: "queued"});
+          fakeWhatsApp(OK);
+          await deliver(rowRef(lineId, "sender").id);
+          assert.equal((await receiptRows(lineId)).length, 1);
+          // The receipt goes on its own message, as the document.
+          fakeWhatsApp(OK);
+          await deliver(rows[0].id);
+          assert.equal(whatsappCalls[0].template.name,
+              "shipment_received_doc_2lang");
+          // The receiver hears the photo message and never a receipt.
+          fakeWhatsApp(OK);
+          await deliver(rowRef(lineId, "receiver").id);
+          assert.equal(whatsappCalls[0].template.name,
+              "shipment_received_photo_2lang");
+          assert.equal((await receiptRows(lineId)).length, 1);
+          assert.equal((await db.collection("containerUpdates")
+              .doc(`${lineId}_receiver_receipt`).get()).exists, false);
+        });
+
+    it("button mode with a photo queues no receipt", async () => {
+      await setMode("button");
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      await lineRef(lineId).update({photoPaths: [
+        `packageProofs/${BIZ}/${lineId}/dropoff.jpg`]});
+      fakeWhatsApp(OK);
+      await deliver(rowRef(lineId, "sender").id);
+      assert.equal(whatsappCalls[0].template.name,
+          "shipment_received_photo_2lang");
+      assert.equal((await receiptRows(lineId)).length, 0);
+    });
   });
 });
