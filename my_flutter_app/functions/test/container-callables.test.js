@@ -6016,6 +6016,59 @@ describe("Send receipt", () => {
         });
   });
 
+  // docs/PACKAGE_ONE_PRICE.md: one price for the whole package, per business.
+  describe("how the business prices a package", () => {
+    it("is a price per item until the owner chooses, and only the owner " +
+        "chooses", async () => {
+      const set = (mode, uid = OWNER) =>
+        functions.setPackagePriceMode.run({auth: {uid, token: {}},
+          data: {businessId: BIZ, mode}});
+      const stored = async () => (await db.collection("businesses").doc(BIZ)
+          .get()).get("packagePriceSettings");
+      assert.equal(functions.setPackagePriceMode.__endpoint
+          .callableTrigger !== undefined, true);
+      assert.equal(await stored(), undefined);
+      assert.deepEqual(await set("package"),
+          {success: true, mode: "package"});
+      assert.equal((await stored()).mode, "package");
+      assert.equal((await stored()).updatedByUid, OWNER);
+      assert.deepEqual(await set("piece"), {success: true, mode: "piece"});
+      assert.equal((await stored()).mode, "piece");
+      for (const bad of ["", "PACKAGE", "all", null, undefined, 1]) {
+        assert.equal(await reasonOf(set(bad)), "invalid_price_mode",
+            String(bad));
+      }
+      // Staff with the containers permission cannot; nor can another
+      // business's people.
+      assert.equal(await reasonOf(set("package", RECEIVER)),
+          "permission-denied");
+      assert.equal(await reasonOf(set("package", OTHER_BIZ_STAFF)),
+          "permission-denied");
+      assert.equal((await stored()).mode, "piece");
+      // The receipts setting beside it is not touched.
+      assert.equal((await db.collection("businesses").doc(BIZ).get())
+          .get("packageReceiptSettings.sendMode"), "auto");
+    });
+
+    it("saves a package typed with one price like any other", async () => {
+      // The form shares $300 among 2 barrels and a box; the server sees
+      // three priced pieces and a $300 line, as it always has.
+      await db.collection("businesses").doc(BIZ).update({
+        "packagePriceSettings.mode": "package"});
+      const {lineId} = await dropOff({priceCents: undefined, pieces: [
+        {kind: "barrel", description: "", priceCents: 10000},
+        {kind: "barrel", description: "", priceCents: 10000},
+        {kind: "box", description: "A TV", priceCents: 10000},
+      ]});
+      const line = (await lineRef(lineId).get()).data();
+      assert.equal(line.priceCents, 30000);
+      assert.deepEqual(line.pieces.map((piece) => piece.priceCents),
+          [10000, 10000, 10000]);
+      await db.collection("businesses").doc(BIZ).update({
+        packagePriceSettings: admin.firestore.FieldValue.delete()});
+    });
+  });
+
   describe("the receipt link", () => {
     it("renders the receipt now and returns a 30-day link to it", async () => {
       const {lineId} = await dropOff();

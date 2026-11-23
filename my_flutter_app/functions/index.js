@@ -48,6 +48,7 @@ const {
 } = require("./guest_tracking");
 const packageProof = require("./package_proof");
 const receiptSend = require("./package_receipt_send");
+const packagePriceMode = require("./package_price_mode");
 const {createPhoneAccounts, notSignedInYet} = require("./phone_accounts");
 const whatsappInbox = require("./whatsapp_inbox");
 const {
@@ -26836,6 +26837,45 @@ exports.setPackageReceiptMode = onCall(
         "updatedAt": FirestoreFieldValue.serverTimestamp(),
       });
       return {success: true, sendMode};
+    },
+);
+
+// How a business prices a package: a price on each row of pieces (`piece`,
+// the default) or one price for the whole package, shared equally among its
+// pieces by the form (`package`). Only the business owner (or a Laawol admin
+// on their behalf) changes it (docs/PACKAGE_ONE_PRICE.md). Saving a line is
+// unchanged: the form still sends each piece's price.
+exports.setPackagePriceMode = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, maxInstances: 1},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const user = await requireBusinessManager(uid, businessId);
+      if (user.role !== "businessOwner" && user.role !== "admin") {
+        throw new HttpsError("permission-denied",
+            "Only the business owner can change how packages are priced");
+      }
+      const mode = packagePriceMode.validPriceMode(data.mode);
+      if (!mode) {
+        throw new HttpsError("invalid-argument",
+            "Choose a price for each item or one price for the package.",
+            {reason: "invalid_price_mode"});
+      }
+      const businessRef =
+        admin.firestore().collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      await businessRef.update({
+        "packagePriceSettings.mode": mode,
+        "packagePriceSettings.updatedByUid": uid,
+        "packagePriceSettings.updatedAt":
+          FirestoreFieldValue.serverTimestamp(),
+        "updatedAt": FirestoreFieldValue.serverTimestamp(),
+      });
+      return {success: true, mode};
     },
 );
 

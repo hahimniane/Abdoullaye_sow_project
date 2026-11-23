@@ -268,6 +268,52 @@ describe("package prices come from the pieces", () => {
       });
 });
 
+// docs/PACKAGE_ONE_PRICE.md (owner, 2026-11-23): a business that types one
+// price for the whole package is billed as before, on each piece's equal
+// share - the deal is not changed.
+describe("a package typed with one price is billed on equal shares", () => {
+  const {packagePiecePrices} = require("../package_price_mode");
+  const deal = billing.normalizeDeal({
+    barrel: {centsEach: 200},
+    package: {mode: "percent", bps: 200, minCents: 100},
+  }).deal;
+  const line = (kinds, totalCents) => {
+    const prices = packagePiecePrices(totalCents, kinds.map(() => ""), null);
+    return {kind: "other", priceCents: totalCents,
+      pieces: kinds.map((kind, i) => ({kind, description: "x",
+        priceCents: prices[i]}))};
+  };
+  const billOf = (lines, barrels) => billing.computeBill({deal, usage: {
+    barrels, packages: billing.packagePricesOfLines(lines).length,
+    packagePrices: billing.packagePricesOfLines(lines)}});
+  const cents = (bill, key) =>
+    bill.lines.find((entry) => entry.key === key).cents;
+
+  it("2 barrels and a box for $300: $2.00 a barrel, 2% of the box's $100",
+      () => {
+        const lines = [line(["barrel", "barrel", "box"], 30000)];
+        assert.deepEqual(billing.packagePricesOfLines(lines), [10000]);
+        const bill = billOf(lines, 2);
+        assert.equal(cents(bill, "barrels"), 400);
+        assert.equal(cents(bill, "packages"), 200);
+      });
+
+  it("many small boxes each fall to the minimum, as they do today", () => {
+    // 10 boxes for $100 are $10 each: 2% is 20 cents, the minimum $1.00.
+    const lines = [line(Array.from({length: 10}, () => "box"), 10000)];
+    const bill = billOf(lines, 0);
+    assert.equal(cents(bill, "packages"), 1000);
+  });
+
+  it("an all-barrel package is still billed per barrel only", () => {
+    const lines = [line(["barrel", "barrel", "barrel"], 45000)];
+    assert.deepEqual(billing.packagePricesOfLines(lines), []);
+    const bill = billOf(lines, 3);
+    assert.equal(cents(bill, "barrels"), 600);
+    assert.equal(cents(bill, "packages"), 0);
+  });
+});
+
 describe("drift after a month is closed", () => {
   const {deal} = billing.normalizeDeal({package: {mode: "fixed",
     centsEach: 100}, barrel: {centsEach: 500}});

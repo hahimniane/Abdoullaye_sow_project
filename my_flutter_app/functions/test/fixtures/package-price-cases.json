@@ -1,0 +1,291 @@
+{
+ "about": "Shared cases for one price per package: functions/package_price_mode.js, admin_web/src/lib/package-price-mode.ts and lib/services/package_price_mode.dart must each produce exactly `expected` for packagePiecePrices(total, ids, stored). Generated from the JS module and reviewed by hand.",
+ "cases": [
+  {
+   "note": "a new package: three pieces share $300",
+   "total": 30000,
+   "ids": [
+    "",
+    "",
+    ""
+   ],
+   "stored": null,
+   "expected": [
+    10000,
+    10000,
+    10000
+   ]
+  },
+  {
+   "note": "odd cents go on the first pieces",
+   "total": 10000,
+   "ids": [
+    "",
+    "",
+    ""
+   ],
+   "stored": null,
+   "expected": [
+    3334,
+    3333,
+    3333
+   ]
+  },
+  {
+   "note": "no price typed: no piece has one",
+   "total": null,
+   "ids": [
+    "",
+    ""
+   ],
+   "stored": null,
+   "expected": [
+    null,
+    null
+   ]
+  },
+  {
+   "note": "saved again untouched: item prices stay",
+   "total": 30000,
+   "ids": [
+    "p1",
+    "p2",
+    "p3"
+   ],
+   "stored": [
+    {
+     "id": "p1",
+     "priceCents": 12000
+    },
+    {
+     "id": "p2",
+     "priceCents": 12000
+    },
+    {
+     "id": "p3",
+     "priceCents": 6000
+    }
+   ],
+   "expected": [
+    12000,
+    12000,
+    6000
+   ]
+  },
+  {
+   "note": "same pieces, a new price: shared again",
+   "total": 33000,
+   "ids": [
+    "p1",
+    "p2",
+    "p3"
+   ],
+   "stored": [
+    {
+     "id": "p1",
+     "priceCents": 12000
+    },
+    {
+     "id": "p2",
+     "priceCents": 12000
+    },
+    {
+     "id": "p3",
+     "priceCents": 6000
+    }
+   ],
+   "expected": [
+    11000,
+    11000,
+    11000
+   ]
+  },
+  {
+   "note": "a piece added, same price: shared among four",
+   "total": 30000,
+   "ids": [
+    "p1",
+    "p2",
+    "p3",
+    ""
+   ],
+   "stored": [
+    {
+     "id": "p1",
+     "priceCents": 12000
+    },
+    {
+     "id": "p2",
+     "priceCents": 12000
+    },
+    {
+     "id": "p3",
+     "priceCents": 6000
+    }
+   ],
+   "expected": [
+    7500,
+    7500,
+    7500,
+    7500
+   ]
+  },
+  {
+   "note": "a piece removed, same price: shared among two",
+   "total": 30000,
+   "ids": [
+    "p1",
+    "p3"
+   ],
+   "stored": [
+    {
+     "id": "p1",
+     "priceCents": 12000
+    },
+    {
+     "id": "p2",
+     "priceCents": 12000
+    },
+    {
+     "id": "p3",
+     "priceCents": 6000
+    }
+   ],
+   "expected": [
+    15000,
+    15000
+   ]
+  },
+  {
+   "note": "the same pieces in another order: shared again",
+   "total": 30000,
+   "ids": [
+    "p2",
+    "p1",
+    "p3"
+   ],
+   "stored": [
+    {
+     "id": "p1",
+     "priceCents": 12000
+    },
+    {
+     "id": "p2",
+     "priceCents": 12000
+    },
+    {
+     "id": "p3",
+     "priceCents": 6000
+    }
+   ],
+   "expected": [
+    10000,
+    10000,
+    10000
+   ]
+  },
+  {
+   "note": "a stored piece without a price: shared again",
+   "total": 30000,
+   "ids": [
+    "p1",
+    "p2"
+   ],
+   "stored": [
+    {
+     "id": "p1",
+     "priceCents": null
+    },
+    {
+     "id": "p2",
+     "priceCents": 30000
+    }
+   ],
+   "expected": [
+    15000,
+    15000
+   ]
+  },
+  {
+   "note": "fewer cents than pieces: the last piece gets zero",
+   "total": 2,
+   "ids": [
+    "",
+    "",
+    ""
+   ],
+   "stored": null,
+   "expected": [
+    1,
+    1,
+    0
+   ]
+  },
+  {
+   "note": "zero is a price: every piece gets zero",
+   "total": 0,
+   "ids": [
+    "p1",
+    "p2"
+   ],
+   "stored": [
+    {
+     "id": "p1",
+     "priceCents": 100
+    },
+    {
+     "id": "p2",
+     "priceCents": 200
+    }
+   ],
+   "expected": [
+    0,
+    0
+   ]
+  },
+  {
+   "note": "no pieces: nothing to price",
+   "total": 30000,
+   "ids": [],
+   "stored": null,
+   "expected": []
+  },
+  {
+   "note": "one piece carries the whole price",
+   "total": 4550,
+   "ids": [
+    ""
+   ],
+   "stored": null,
+   "expected": [
+    4550
+   ]
+  },
+  {
+   "note": "not whole cents: no piece has a price",
+   "total": 12.5,
+   "ids": [
+    "",
+    ""
+   ],
+   "stored": null,
+   "expected": [
+    null,
+    null
+   ]
+  },
+  {
+   "note": "negative: no piece has a price",
+   "total": -100,
+   "ids": [
+    "",
+    ""
+   ],
+   "stored": null,
+   "expected": [
+    null,
+    null
+   ]
+  }
+ ]
+}
