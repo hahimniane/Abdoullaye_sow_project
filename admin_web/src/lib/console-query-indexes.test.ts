@@ -185,6 +185,7 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useParkingLinkCars (last twelve months)", shapes: [bc("parkedCars", { pageSize: null, where: [["occupancyEndMs", ">=", 0]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useBusinessStaff", shapes: [bc("users", { pageSize: null })] },
   // Fleet (docs/FLEET.md): the seven collections, each whole and equality-only on businessId (no composite index).
+  { file: B("receipt-send-dialog.tsx"), kind: "query", what: "a package's WhatsApp rows (Send receipt status): two equalities", shapes: [raw("containerUpdates", [eq("businessId"), eq("lineId")])] },
   { file: B("fleet-profile.tsx"), kind: "query", what: "a driver's office edits (History)", shapes: [raw("lotLedgerAudit", [eq("businessId"), eq("entityId")], { field: "at", direction: "desc" })] },
   ...["fleetDrivers", "fleetCars", "fleetAssignments", "fleetBills", "fleetPayments", "fleetNotes", "fleetSubstitutes"].map((name): Site => ({
     file: B("fleet-data.ts"), kind: "useBusinessCollection", what: `useFleetData ${name}`, shapes: [bc(name, { pageSize: null })],

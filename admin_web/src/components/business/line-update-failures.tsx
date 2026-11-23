@@ -2,6 +2,7 @@ import { useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
+import { SendReceiptButton } from "@/components/business/receipt-send-dialog";
 import { functions } from "@/lib/firebase";
 import { text } from "@/lib/format";
 import { packageUpdateMarks, type PackageUpdateTick } from "@/lib/package-staff";
@@ -63,11 +64,13 @@ export function SendAgainButton({ businessId, lineId }: { businessId: string; li
  * What the line's last WhatsApp update did, compactly, on the Waiting list
  * and the containers: who it failed to reach (red, with WhatsApp's reason as
  * it wrote it, and "Send again") and who it reached ("Receiver ✓✓ Read").
- * Nothing for an update WhatsApp has not reported on yet.
+ * Nothing for an update WhatsApp has not reported on yet. Always ends with
+ * "Send receipt" (docs/PACKAGE_RECEIPT_SEND.md): the receipt to the sender.
  */
 export function LineUpdateFailures({ line }: { line: Record<string, unknown> }) {
   const marks = packageUpdateMarks(line.lastCustomerUpdate);
-  if (marks.length === 0) return null;
+  const receiptButton = <SendReceiptButton businessId={text(line.businessId, "")} lineId={text(line.id, "")} />;
+  if (marks.length === 0) return receiptButton;
   const failed = marks.some((mark) => !mark.tick);
   return (
     <>
@@ -82,6 +85,7 @@ export function LineUpdateFailures({ line }: { line: Record<string, unknown> }) 
         </small>
       ))}
       {failed && <SendAgainButton businessId={text(line.businessId, "")} lineId={text(line.id, "")} />}
+      {receiptButton}
     </>
   );
 }
