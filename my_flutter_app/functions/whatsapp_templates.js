@@ -78,6 +78,11 @@ const TEMPLATE = Object.freeze({
   // header: the same body as SHIPMENT_RECEIVED_2LANG. Only ever picked by
   // templateMessage's `receiptDocument` flag, never by an update.
   SHIPMENT_RECEIVED_DOC_2LANG: "shipment_received_doc_2lang",
+  // The package receipt on its own (the `receipt` update, Send receipt):
+  // "Here is your receipt from ... for your package ...", the receipt PDF
+  // as a DOCUMENT header. It says nothing about the package having been
+  // received: the sender already heard that (owner, 2026-11-23).
+  PACKAGE_RECEIPT_DOC_2LANG: "package_receipt_doc_2lang",
   // `received` with the first drop-off photo as an IMAGE header, for the
   // sender and the receiver alike: the same variables as
   // SHIPMENT_RECEIVED_2LANG. Only ever picked by templateMessage's
@@ -105,6 +110,7 @@ const BILINGUAL_TEMPLATES = Object.freeze([
   TEMPLATE.SHIPMENT_DELIVERED_2LANG,
   TEMPLATE.PACKAGE_CONFIRM_2LANG,
   TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG,
+  TEMPLATE.PACKAGE_RECEIPT_DOC_2LANG,
   TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG,
   TEMPLATE.SHIPMENT_DELIVERED_PHOTO_2LANG,
 ]);
@@ -260,6 +266,13 @@ const TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.BUSINESS, VARIABLE.WHAT_FR, VARIABLE.DESTINATION_FR,
     VARIABLE.TRACKING_CODE,
   ]),
+  // 1 name, 2 business, 3 tracking code, 4 business, 5 tracking code; the
+  // receipt PDF is the header.
+  [TEMPLATE.PACKAGE_RECEIPT_DOC_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.TRACKING_CODE,
+    VARIABLE.BUSINESS, VARIABLE.TRACKING_CODE,
+  ]),
   // The same variables as shipment_received_2lang; the photo is the header.
   [TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG]: Object.freeze([
     VARIABLE.NAME,
@@ -332,8 +345,8 @@ const TEMPLATE_BY_UPDATE = Object.freeze({
   arrived: TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
   delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
   // The sender's package receipt on its own (docs/PACKAGE_RECEIPT_SEND.md):
-  // the received body with the receipt PDF as the document header.
-  receipt: TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG,
+  // a receipt-only body with the receipt PDF as the document header.
+  receipt: TEMPLATE.PACKAGE_RECEIPT_DOC_2LANG,
 });
 
 // The fallback set. `at_port` is a legacy row written before the two
@@ -348,7 +361,7 @@ const LEGACY_TEMPLATE_BY_UPDATE = Object.freeze({
   delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
   confirm: TEMPLATE.PACKAGE_CONFIRM_2LANG,
   // Likewise bilingual-only: the receipt message has no legacy version.
-  receipt: TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG,
+  receipt: TEMPLATE.PACKAGE_RECEIPT_DOC_2LANG,
 });
 
 // What a template carries besides its body. Every template has the
@@ -362,6 +375,10 @@ const TEMPLATE_SHAPE = Object.freeze({
   // The package receipt PDF (a 30-day signed link plus a file name) and the
   // tracking button.
   [TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG]: Object.freeze({
+    header: "document", buttons: "url", documentName: "Receipt.pdf",
+  }),
+  // The same header and button, under the receipt-only body.
+  [TEMPLATE.PACKAGE_RECEIPT_DOC_2LANG]: Object.freeze({
     header: "document", buttons: "url", documentName: "Receipt.pdf",
   }),
   // The first drop-off photo (a 30-day signed link) and the tracking button.
@@ -690,10 +707,13 @@ function templateComponents(template, values, language) {
  * The whole /messages request body for one person and one update.
  *
  * @param {object} args {phone, update, language, values, templateSet?,
- *   photoHeader?, receiptDocument?}. `photoHeader: true` sends `received`
- *   as shipment_received_photo_2lang (the drop-off photo header, from the
- *   values' photoLink). `receiptDocument: true` sends the sender's
- *   `received` as shipment_received_doc_2lang (the receipt PDF header,
+ *   photoHeader?, receiptDocument?, receiptFallback?}. `receiptFallback:
+ *   true` sends the `receipt` update as shipment_received_doc_2lang (the
+ *   older "package received" body with the same PDF header), for when
+ *   package_receipt_doc_2lang cannot be used. `photoHeader: true` sends
+ *   `received` as shipment_received_photo_2lang (the drop-off photo
+ *   header, from the values' photoLink). `receiptDocument: true` sends
+ *   the sender's `received` as shipment_received_doc_2lang (the PDF header,
  *   from the values' documentLink / documentFilename). A message has one
  *   header: the photo goes before the receipt. Both apply to the bilingual
  *   set's `received` only - any other update, and the legacy set, ignore
@@ -714,6 +734,10 @@ function templateMessage(args) {
     } else if (args?.receiptDocument === true) {
       template = TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
     }
+  }
+  if (template === TEMPLATE.PACKAGE_RECEIPT_DOC_2LANG &&
+      args?.receiptFallback === true) {
+    template = TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
   }
   if (template === TEMPLATE.SHIPMENT_DELIVERED_2LANG &&
       args?.photoHeader === true) {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -91,4 +92,18 @@ test("reads the fields the server really writes (deliveryStatus, deliveryErrorCo
   assert.equal(ok.kind, "sent");
   assert.ok(ok.atMs > 0, "the time comes from sentAt");
   assert.equal(receiptErrorText({ details: { reason: "receipt_sms_failed" } }), RECEIPT_ERROR_MESSAGES.receipt_sms_failed);
+});
+
+// 2026-11-23, on a live package: the Send receipt dialog closed by itself when
+// the row's first "Delivered" tick arrived, because the button moved in the
+// tree (bare button with no ticks, a fragment once there were some) and React
+// remounted it. The row has one shape; the dialog's status is a live query.
+test("the Send receipt button keeps one place in the row, and its status is live", () => {
+  const row = readFileSync("src/components/business/line-update-failures.tsx", "utf8");
+  const component = row.slice(row.indexOf("export function LineUpdateFailures"));
+  assert.equal((component.match(/<SendReceiptButton\b/g) ?? []).length, 1);
+  assert.equal((component.match(/\breturn\b/g) ?? []).length, 1, "one return: no early exit that changes the tree");
+  const dialog = readFileSync("src/components/business/receipt-send-dialog.tsx", "utf8");
+  assert.match(dialog, /onSnapshot\(/);
+  assert.doesNotMatch(dialog, /getDocs\(/);
 });

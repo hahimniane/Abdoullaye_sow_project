@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { ExternalLink, Mail, MessageCircle, MessageSquare, QrCode, Receipt, X } from "lucide-react";
 
 import { db, functions } from "@/lib/firebase";
@@ -51,14 +51,13 @@ export function ReceiptSendDialog({ businessId, lineId, onClose }: { businessId:
   const [email, setEmail] = useState("");
   const lang = currentLanguage() === "fr" ? "fr" : "en";
 
-  const loadRows = useCallback(async () => {
-    try {
-      const snap = await getDocs(query(collection(db, "containerUpdates"), where("businessId", "==", businessId), where("lineId", "==", lineId)));
-      setRows(snap.docs.map((doc) => doc.data()));
-    } catch {
-      setRows([]);
-    }
-  }, [businessId, lineId]);
+  // Live: the status line follows the receipt as it is queued, sent and
+  // delivered (a one-time read left "Waiting…" on screen after the send).
+  useEffect(() => onSnapshot(
+    query(collection(db, "containerUpdates"), where("businessId", "==", businessId), where("lineId", "==", lineId)),
+    (snap) => setRows(snap.docs.map((doc) => doc.data())),
+    () => setRows([]),
+  ), [businessId, lineId]);
 
   useEffect(() => {
     let live = true;
@@ -67,9 +66,8 @@ export function ReceiptSendDialog({ businessId, lineId, onClose }: { businessId:
       .then((result) => { if (live) setLink(result); })
       .catch((error) => { if (live) setLinkError(receiptErrorText(error, RECEIPT_LINK_ERROR)); })
       .finally(() => { if (live) setLinkBusy(false); });
-    void loadRows();
     return () => { live = false; };
-  }, [businessId, lineId, loadRows]);
+  }, [businessId, lineId]);
 
   const sender = link?.sender ?? {};
   const senderPhone = text(sender.phone, "");
@@ -88,10 +86,8 @@ export function ReceiptSendDialog({ businessId, lineId, onClose }: { businessId:
     try {
       await callLine({ action: "receipt_send", businessId, lineId, channel });
       setSendDone(channel === "sms" ? "Text sent." : "Receipt sent on WhatsApp.");
-      void loadRows();
     } catch (error) {
       setSendError(receiptErrorText(error));
-      void loadRows();
     } finally {
       setSendBusy(false);
     }
@@ -206,7 +202,8 @@ export function ReceiptSendDialog({ businessId, lineId, onClose }: { businessId:
           {linkBusy && method !== "sms" && method !== "qr" && <p className="lst-hint">Getting the receipt link…</p>}
           {linkError && <div className="lst-form-error" role="alert">{linkError}</div>}
           {sendError && <div className="lst-form-error" role="alert">{sendError}</div>}
-          {sendDone && <p className="rcp-state ok" role="status">{sendDone}</p>}
+          {/* The live status line above says it once it knows; this covers the moment before. */}
+          {sendDone && state.kind === "none" && <p className="rcp-state ok" role="status">{sendDone}</p>}
         </div>
         <footer className="lst-modal-foot">
           <button className="lst-btn ghost" onClick={onClose} type="button">Close</button>

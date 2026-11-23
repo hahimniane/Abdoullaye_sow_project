@@ -69,9 +69,10 @@ export function SendAgainButton({ businessId, lineId }: { businessId: string; li
  */
 export function LineUpdateFailures({ line }: { line: Record<string, unknown> }) {
   const marks = packageUpdateMarks(line.lastCustomerUpdate);
-  const receiptButton = <SendReceiptButton businessId={text(line.businessId, "")} lineId={text(line.id, "")} />;
-  if (marks.length === 0) return receiptButton;
   const failed = marks.some((mark) => !mark.tick);
+  // One shape whatever the marks are: the Send receipt button keeps its place
+  // in the tree, so its open dialog survives the row refreshing under it (the
+  // first "Delivered" tick used to close it mid-send, 2026-11-23).
   return (
     <>
       {marks.map((mark) => mark.tick ? (
@@ -85,7 +86,7 @@ export function LineUpdateFailures({ line }: { line: Record<string, unknown> }) 
         </small>
       ))}
       {failed && <SendAgainButton businessId={text(line.businessId, "")} lineId={text(line.id, "")} />}
-      {receiptButton}
+      <SendReceiptButton businessId={text(line.businessId, "")} lineId={text(line.id, "")} />
     </>
   );
 }

@@ -20,8 +20,10 @@ Owner, 2026-11-23. Builds on the package receipt PDF
 4. "Received by / Reçu par" is removed from the **package** receipt.
    (Parking payment receipts keep it: there it says who took the cash.)
 5. Ways to send, WhatsApp first and the default:
-   - **WhatsApp**: the approved template `shipment_received_doc_2lang`
-     (document header = the receipt PDF).
+   - **WhatsApp**: the receipt-only template `package_receipt_doc_2lang`
+     (document header = the receipt PDF; the text is about the receipt
+     alone, since the sender already heard "we received your package").
+     Under `shipment_received_doc_2lang` when that one is not usable.
    - **Text message (SMS)**: sent by the server through Twilio **only when
      Twilio is really set up** (it is not on 2026-11-23: the saved keys are
      placeholders). Until then the screen offers **Text from this phone**,

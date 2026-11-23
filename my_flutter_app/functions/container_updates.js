@@ -32,6 +32,7 @@ const {
 } = require("./container_manifest");
 const {ALL_COUNTRIES} = require("./country_catalog");
 const {
+  TEMPLATE,
   TEMPLATE_SET,
   templateMessage,
   whatsappTemplateSet,
@@ -621,6 +622,7 @@ function whatsappUpdateMessage(args) {
     templateSet: args.templateSet,
     photoHeader: withPhoto,
     receiptDocument: withReceipt,
+    receiptFallback: isReceiptRow && args.receiptFallback === true,
     values: {
       documentLink: withReceipt ? receiptLink : "",
       documentFilename: withReceipt ?
@@ -818,6 +820,31 @@ const TEMPLATE_WAIT_MAX_MS = 14 * 24 * 60 * 60 * 1000;
 const RECEIPT_FALLBACK_CODES = Object.freeze([
   ...TEMPLATE_NOT_READY_CODES, 132015, 132016, 131052, 131053,
 ]);
+
+// Meta's answers that mean the receipt-only template
+// (package_receipt_doc_2lang) cannot be used right now: not found / still
+// in review, paused or disabled. The PDF itself is fine, so the receipt
+// goes at once under the older "package received" body instead. (131052 /
+// 131053, the header's file, would fail there too: not in this list.)
+const RECEIPT_TEMPLATE_FALLBACK_CODES = Object.freeze([
+  ...TEMPLATE_NOT_READY_CODES, 132015, 132016,
+]);
+
+/**
+ * Whether a refused Send receipt message should go out again under the
+ * older receipt template (shipment_received_doc_2lang).
+ *
+ * @param {string} template The template that was just sent.
+ * @param {object} result The send's answer {ok, errorCode}.
+ * @return {boolean} True to send it again under the older template now.
+ */
+function receiptTemplateFallbackDecision(template, result) {
+  if (template !== TEMPLATE.PACKAGE_RECEIPT_DOC_2LANG || result?.ok) {
+    return false;
+  }
+  return RECEIPT_TEMPLATE_FALLBACK_CODES
+      .includes(Number(result?.errorCode || 0));
+}
 
 /**
  * Whether a refused receipt message should go out again as the plain
@@ -1245,6 +1272,8 @@ module.exports = {
   receiptDocumentFilename,
   receiptFallbackDecision,
   RECEIPT_FALLBACK_CODES,
+  RECEIPT_TEMPLATE_FALLBACK_CODES,
+  receiptTemplateFallbackDecision,
   containerUpdateMessageId,
   trackingLink,
   pickupDestinationIds,

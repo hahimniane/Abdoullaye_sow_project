@@ -486,6 +486,7 @@ const {
   receiptDocumentWanted,
   receiptDocumentFilename,
   receiptFallbackDecision,
+  receiptTemplateFallbackDecision,
 } = require("./container_updates");
 const {
   PICKUP_MESSAGES,
@@ -27047,6 +27048,22 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         sent = await sendWhatsAppMessage(message);
         receiptState = wantsReceipt ?
           (receipt ? "attached" : "unavailable") : "";
+        if (isReceiptRow &&
+            receiptTemplateFallbackDecision(message.template?.name, sent)) {
+          // The receipt-only template is not usable (in review, paused):
+          // the same PDF goes now under the older "package received" body.
+          logger.info(
+              "Receipt-only template not usable; sending the older one", {
+                messageId: rowRef.id, errorCode: sent.errorCode || 0,
+                error: sent.error});
+          const older = whatsappUpdateMessage({...messageArgs,
+            photoHeader: false, receiptDocument: receipt,
+            receiptFallback: true});
+          if (older) {
+            sent = await sendWhatsAppMessage(older);
+            receiptState = "attached_older_template";
+          }
+        }
         const withReceiptTemplate = !isReceiptRow &&
           message.template?.name ===
           WHATSAPP_TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;

@@ -61,7 +61,8 @@ const ALL_TEMPLATES = [...BILINGUAL_TEMPLATES, ...LEGACY_TEMPLATES];
 // The receipt and the photo templates have a header, so they are tested on
 // their own (below).
 const SHAPED_TEMPLATES = ["package_confirm_2lang",
-  "shipment_received_doc_2lang", "shipment_received_photo_2lang",
+  "shipment_received_doc_2lang", "package_receipt_doc_2lang",
+  "shipment_received_photo_2lang",
   "shipment_delivered_photo_2lang"];
 const URL_BUTTON_TEMPLATES = ALL_TEMPLATES.filter((template) =>
   !SHAPED_TEMPLATES.includes(template));
@@ -69,7 +70,7 @@ const URL_BUTTON_TEMPLATES = ALL_TEMPLATES.filter((template) =>
 describe("which template each update sends", () => {
   it("names the bilingual and the legacy templates exactly", () => {
     assert.deepEqual([...BILINGUAL_TEMPLATES].sort(), [
-      "package_confirm_2lang",
+      "package_confirm_2lang", "package_receipt_doc_2lang",
       "shipment_delivered_2lang", "shipment_delivered_photo_2lang",
       "shipment_departed_2lang",
       "shipment_ready_pickup_2lang", "shipment_received_2lang",
@@ -107,7 +108,7 @@ describe("which template each update sends", () => {
       shipped: "shipment_departed_2lang",
       arrived: "shipment_ready_pickup_2lang",
       delivered: "shipment_delivered_2lang",
-      receipt: "shipment_received_doc_2lang",
+      receipt: "package_receipt_doc_2lang",
     });
   });
   // Meta rejects a template that carries a "code to show" (it reads as an
@@ -813,10 +814,9 @@ describe("the package receipt template", () => {
     assert.equal(send().template.name, "shipment_received_2lang");
     assert.equal(send({receiptDocument: false}).template.name,
         "shipment_received_2lang");
-    // Only the receipt update maps to it, and no other update takes it.
-    assert.deepEqual(Object.entries(TEMPLATE_BY_UPDATE)
-        .filter(([, name]) => name === "shipment_received_doc_2lang")
-        .map(([update]) => update), ["receipt"]);
+    // No update maps to it: it rides on `received`, by the flag.
+    assert.ok(!Object.values(TEMPLATE_BY_UPDATE)
+        .includes("shipment_received_doc_2lang"));
     assert.equal(send({update: "shipped", receiptDocument: true})
         .template.name, "shipment_departed_2lang");
     assert.equal(send({update: "confirm", receiptDocument: true})
@@ -826,18 +826,47 @@ describe("the package receipt template", () => {
         .template.name, "package_received");
   });
 
-  it("is the receipt update's template in either set, with the PDF header",
+  // Send receipt (owner, 2026-11-23): the sender already heard "we received
+  // your package", so the receipt message is about the receipt alone.
+  it("sends the receipt update as the receipt-only template, in either set",
       () => {
+        assert.deepEqual(TEMPLATE_VARIABLES.package_receipt_doc_2lang,
+            ["name", "business", "trackingCode", "business",
+              "trackingCode"]);
+        assert.deepEqual(TEMPLATE_SHAPE.package_receipt_doc_2lang,
+            {header: "document", buttons: "url",
+              documentName: "Receipt.pdf"});
         for (const templateSet of ["bilingual", "legacy"]) {
           const body = send({update: "receipt", templateSet});
-          assert.equal(body.template.name, "shipment_received_doc_2lang");
+          assert.equal(body.template.name, "package_receipt_doc_2lang");
+          assert.deepEqual(body.template.language, {code: "en"});
           const [header, text, button] = body.template.components;
-          assert.equal(header.parameters[0].type, "document");
-          assert.equal(header.parameters[0].document.link, LINK);
-          assert.equal(text.parameters.length, 8);
+          assert.deepEqual(header, {type: "header", parameters: [
+            {type: "document", document: {link: LINK,
+              filename: "Receipt CL-K7M4P2.pdf"}}]});
+          // Nothing about what was shipped or where: only who, from whom,
+          // and which package.
+          assert.deepEqual(text.parameters.map((p) => p.text), [
+            VALUES.name, VALUES.business, "CL-K7M4P2",
+            VALUES.business, "CL-K7M4P2"]);
           assert.equal(button.sub_type, "url");
+          assert.deepEqual(button.parameters,
+              [{type: "text", text: "CL-K7M4P2"}]);
         }
       });
+
+  it("falls back to the older receipt template only when asked", () => {
+    const older = send({update: "receipt", receiptFallback: true});
+    assert.equal(older.template.name, "shipment_received_doc_2lang");
+    assert.equal(older.template.components[0].parameters[0].document.link,
+        LINK);
+    assert.equal(older.template.components[1].parameters.length, 8);
+    // The flag is the receipt update's alone.
+    assert.equal(send({receiptFallback: true}).template.name,
+        "shipment_received_2lang");
+    assert.equal(send({update: "shipped", receiptFallback: true})
+        .template.name, "shipment_departed_2lang");
+  });
 
   it("names the file when it is not given one", () => {
     const body = send({receiptDocument: true,

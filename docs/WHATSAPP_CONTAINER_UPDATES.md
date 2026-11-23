@@ -10,6 +10,7 @@ a French block):
 | --- | --- | --- |
 | `received` | `shipment_received_2lang` | The package is registered: dropped off to wait for a container (`addWaitingPackage`) or added straight onto one (`addContainerLine`). Assigning a waiting package to a box, or taking it off one, sends nothing. |
 | `received` (sender, with receipt) | `shipment_received_doc_2lang` | The same moment, for the **sender** only: `shipment_received_2lang`'s body plus the package receipt PDF (below). Falls back to `shipment_received_2lang` when the template is not usable yet. |
+| `receipt` (sender, Send receipt) | `package_receipt_doc_2lang` | Staff press *Send receipt*, or (a business on automatic receipts, with a drop-off photo) right after the confirmation. A receipt-only message with the PDF: it does not say the package was received again. Goes under `shipment_received_doc_2lang` when this template is not usable. |
 | `received` (with the photo) | `shipment_received_photo_2lang` | The same moment, for the **sender and the receiver**, when the package has a drop-off photo: `shipment_received_2lang`'s body plus the first photo (below). It goes before the receipt. Falls back to the two rows above when the template is not usable yet. |
 | `shipped` | `shipment_departed_2lang` | Staff mark the container **Shipped**, or the carrier feed reports it on the vessel — whichever comes first. |
 | `arrived` | `shipment_ready_pickup_2lang` | Staff mark the container **Ready for pickup**. Only staff: the carrier's "discharged / available at the port" is recorded on the timeline and sends nothing, because a box at the port cannot be collected yet. |
@@ -44,13 +45,23 @@ confirmation is the plain `shipment_received_2lang` and staff press *Send
 receipt*) or `auto` (everything below as written). In `auto`, when the
 drop-off photo heads the confirmation, the receipt goes right after it as a
 separate `receipt` row (`{lineId}_receipt_auto`, `trigger: "auto"`, once per
-package). A `receipt` row (`update: "receipt"`, sender only,
-`shipment_received_doc_2lang`, also created by the *Send receipt* button with
-`trigger: "button"`) is not shipment news: never a timeline moment, never the
-line's `lastCustomerUpdate`, no rank. It never falls back to a plain message:
-if the PDF cannot be drawn the row fails with "The receipt could not be
-made", and a not-yet-approved template makes it `waiting_for_template` like
-any other row. The PDF no longer has a "Received by" row.
+package). A `receipt` row (`update: "receipt"`, sender only, also created by
+the *Send receipt* button with `trigger: "button"`) is not shipment news:
+never a timeline moment, never the line's `lastCustomerUpdate`, no rank. It
+never falls back to a plain message: if the PDF cannot be drawn the row fails
+with "The receipt could not be made". The PDF no longer has a "Received by"
+row.
+
+**2026-11-23, later (owner: "why are we sending redundant messages"):** a
+`receipt` row goes as **`package_receipt_doc_2lang`**, a receipt-only body
+("Here is your receipt from ... for your package ..."), because the sender
+already heard "we received your package" in the confirmation. When Meta
+answers that this template cannot be used (132001 not found / in review,
+132015 paused, 132016 disabled:
+`container_updates.receiptTemplateFallbackDecision`) the same PDF goes at
+once under the older `shipment_received_doc_2lang`, and the row records
+`receiptDocument: "attached_older_template"`. `shipment_received_doc_2lang`
+stays the template of the automatic confirmation-with-receipt.
 
 The **sender's** `received` message carries a receipt PDF:
 `shipment_received_doc_2lang`, the same body as `shipment_received_2lang`
@@ -668,6 +679,35 @@ Sample values: `Fatou`, `Dala Shipping`, `3 barrels`, `Guinea`,
 The request body (`whatsapp_templates.templateMessage` with
 `receiptDocument: true`): a `header` component `{type: "document",
 document: {link, filename}}`, the `body` with eight texts, the URL button.
+
+### `package_receipt_doc_2lang`
+
+The package receipt on its own (the `receipt` row: *Send receipt*, and the
+automatic receipt that follows a photo confirmation). A header: **DOCUMENT**,
+the receipt PDF exactly as in `shipment_received_doc_2lang` above (30-day
+signed link, file name `Receipt CL-XXXXXX.pdf`). One URL button like the
+other tracking messages. Variables: {{1}} name, {{2}} business, {{3}}
+tracking code, {{4}} business, {{5}} tracking code.
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+Here is your receipt from {{2}} for your package {{3}}. It shows the price, what you have paid and what is left to pay.
+
+—————
+*FRANÇAIS*
+Voici votre reçu de {{4}} pour votre colis {{5}}. Il indique le prix, ce que vous avez payé et ce qu'il reste à payer.
+
+Tap the button below to follow your package.
+Appuyez sur le bouton ci-dessous pour suivre votre colis.
+```
+
+Sample values: `Fatou`, `Dala Shipping`, `CL-K7M4P2`, `Dala Shipping`,
+`CL-K7M4P2`. Button: *Visit website*, `Track · Suivre`, dynamic
+`https://customer.laawoldigital.com/t/{{1}}`. Created with
+`~/laawol-deploy-logs/create_package_receipt_template.py` (dry run by
+default; `--apply` submits; language `en`, category **Utility**).
 
 ### `shipment_received_photo_2lang`
 

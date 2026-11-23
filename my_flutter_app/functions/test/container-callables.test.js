@@ -6095,7 +6095,10 @@ describe("Send receipt", () => {
           assert.equal(whatsappCalls.length, 1);
           const [body] = whatsappCalls;
           assert.equal(body.to, "16465550100");
-          assert.equal(body.template.name, "shipment_received_doc_2lang");
+          // About the receipt alone: the sender already heard "received".
+          assert.equal(body.template.name, "package_receipt_doc_2lang");
+          assert.equal(body.template.components
+              .find((part) => part.type === "body").parameters.length, 5);
           const line = (await lineRef(lineId).get()).data();
           assert.equal(headerOf(body).parameters[0].document.filename,
               `Receipt ${line.trackingCode}.pdf`);
@@ -6107,6 +6110,26 @@ describe("Send receipt", () => {
           // Not shipment news: the line's summary is not about it.
           assert.notEqual(line.lastCustomerUpdate?.update, "receipt");
         });
+
+    it("goes under the older receipt template when the new one is not " +
+        "usable", async () => {
+      const NOT_READY = {status: 404, body: {error: {code: 132001,
+        message: "(#132001) Template name does not exist"}}};
+      await setMode("button");
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      const out = await send(lineId, "whatsapp");
+      fakeWhatsApp(NOT_READY, OK);
+      await deliver(out.messageId);
+      assert.deepEqual(whatsappCalls.map((body) => body.template.name),
+          ["package_receipt_doc_2lang", "shipment_received_doc_2lang"]);
+      // The same PDF under both.
+      assert.equal(headerOf(whatsappCalls[1]).parameters[0].document.link,
+          headerOf(whatsappCalls[0]).parameters[0].document.link);
+      const row = (await receiptRows(lineId))[0].data();
+      assert.equal(row.status, "sent");
+      assert.equal(row.receiptDocument, "attached_older_template");
+    });
 
     it("refuses a second send within a minute, even two at once", async () => {
       connectWhatsApp();
@@ -6209,8 +6232,10 @@ describe("Send receipt", () => {
       fakeWhatsApp({status: 404, body: {error: {code: 132001,
         message: "Template name does not exist"}}});
       await deliver(messageId);
-      // Waiting for Meta, and no plain message went in its place.
-      assert.equal(whatsappCalls.length, 1);
+      // Waiting for Meta: the receipt-only template, then the older receipt
+      // one, and no plain message in their place.
+      assert.deepEqual(whatsappCalls.map((body) => body.template.name),
+          ["package_receipt_doc_2lang", "shipment_received_doc_2lang"]);
       assert.equal((await db.collection("containerUpdates").doc(messageId)
           .get()).get("status"), "waiting_for_template");
       // Delivered but reported undeliverable (131026: not on WhatsApp).
@@ -6378,7 +6403,7 @@ describe("Send receipt", () => {
           fakeWhatsApp(OK);
           await deliver(rows[0].id);
           assert.equal(whatsappCalls[0].template.name,
-              "shipment_received_doc_2lang");
+              "package_receipt_doc_2lang");
           // The receiver hears the photo message and never a receipt.
           fakeWhatsApp(OK);
           await deliver(rowRef(lineId, "receiver").id);

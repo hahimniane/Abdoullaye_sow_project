@@ -1474,13 +1474,49 @@ describe("the receipt update", () => {
         "131026"), null);
   });
 
-  it("sends the sender the receipt template with the PDF header", () => {
+  it("sends the sender the receipt-only template with the PDF header", () => {
     const body = message();
-    assert.equal(body.template.name, "shipment_received_doc_2lang");
+    assert.equal(body.template.name, "package_receipt_doc_2lang");
     const header = body.template.components[0];
     assert.equal(header.parameters[0].document.link, LINK);
     assert.equal(header.parameters[0].document.filename,
         "Receipt CL-K7M4P2.pdf");
+    // Who, from whom, which package (twice: English and French).
+    assert.deepEqual(body.template.components[1].parameters
+        .map((p) => p.text), ["Fatou Diallo", "Dala Shipping", "CL-K7M4P2",
+      "Dala Shipping", "CL-K7M4P2"]);
+  });
+
+  it("can go under the older receipt template, with the same PDF", () => {
+    const body = message({receiptFallback: true});
+    assert.equal(body.template.name, "shipment_received_doc_2lang");
+    assert.equal(body.template.components[0].parameters[0].document.link,
+        LINK);
+    // Only a receipt row can ask for it.
+    assert.equal(message({update: "received", receiptFallback: true,
+      receiptDocument: null}).template.name, "shipment_received_2lang");
+  });
+
+  it("falls back when the receipt-only template is not usable", () => {
+    const {
+      receiptTemplateFallbackDecision: decide,
+      RECEIPT_TEMPLATE_FALLBACK_CODES,
+    } = require("../container_updates");
+    assert.deepEqual([...RECEIPT_TEMPLATE_FALLBACK_CODES],
+        [132001, 132015, 132016]);
+    const NEW = "package_receipt_doc_2lang";
+    for (const errorCode of [132001, 132015, 132016, "132001"]) {
+      assert.equal(decide(NEW, {ok: false, errorCode}), true);
+    }
+    // Sent fine, another kind of failure (the PDF could not be fetched, a
+    // number not on WhatsApp), or already the older template: no second try.
+    assert.equal(decide(NEW, {ok: true, errorCode: 0}), false);
+    assert.equal(decide(NEW, {ok: false, errorCode: 131052}), false);
+    assert.equal(decide(NEW, {ok: false, errorCode: 131026}), false);
+    assert.equal(decide(NEW, {ok: false}), false);
+    assert.equal(decide("shipment_received_doc_2lang",
+        {ok: false, errorCode: 132001}), false);
+    assert.equal(decide(undefined, {ok: false, errorCode: 132001}), false);
   });
 
   it("is no message without its PDF, and never the receiver's", () => {
