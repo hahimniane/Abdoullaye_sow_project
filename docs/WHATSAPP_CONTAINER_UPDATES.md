@@ -35,7 +35,22 @@ is marked `failed` and says so. There is no legacy version: with
 `shipment_delivered_2lang`. `delivered` ranks after `arrived` on the line's
 `lastCustomerUpdate`.
 
-### Package receipt for the sender (2026-11-07)
+### Package receipt for the sender (2026-11-07; button / auto 2026-11-23)
+
+**2026-11-23 (docs/PACKAGE_RECEIPT_SEND.md):** the receipt no longer rides on
+every sender confirmation. Each business has
+`packageReceiptSettings.sendMode`: `button` (the default when missing; the
+confirmation is the plain `shipment_received_2lang` and staff press *Send
+receipt*) or `auto` (everything below as written). In `auto`, when the
+drop-off photo heads the confirmation, the receipt goes right after it as a
+separate `receipt` row (`{lineId}_receipt_auto`, `trigger: "auto"`, once per
+package). A `receipt` row (`update: "receipt"`, sender only,
+`shipment_received_doc_2lang`, also created by the *Send receipt* button with
+`trigger: "button"`) is not shipment news: never a timeline moment, never the
+line's `lastCustomerUpdate`, no rank. It never falls back to a plain message:
+if the PDF cannot be drawn the row fails with "The receipt could not be
+made", and a not-yet-approved template makes it `waiting_for_template` like
+any other row. The PDF no longer has a "Received by" row.
 
 The **sender's** `received` message carries a receipt PDF:
 `shipment_received_doc_2lang`, the same body as `shipment_received_2lang`

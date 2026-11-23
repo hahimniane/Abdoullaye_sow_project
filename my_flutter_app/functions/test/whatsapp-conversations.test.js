@@ -485,6 +485,24 @@ describe("package updates", () => {
   });
 });
 
+describe("a package receipt row's delivery report", () => {
+  it("records Meta's failure and error code on the row, and leaves the shipment news alone", async () => {
+    const summary = {update: "shipped", atMs: 1000,
+      results: [{role: "sender", status: "sent"}, {role: "receiver", status: "sent"}]};
+    await db.collection("containerLines").doc("line-r").set({businessId: BIZ, lastCustomerUpdate: summary});
+    await db.collection("containerUpdates").doc("r-1").set({businessId: BIZ, phone: P1, lineId: "line-r",
+      whatsappMessageId: "wamid.receipt.1", status: "sent", update: "receipt", role: "sender", trigger: "button"});
+    await postWebhook({statuses: [{id: "wamid.receipt.1", status: "failed", recipient_id: P1.slice(1), timestamp: "2",
+      errors: [{code: 131026, title: "Message undeliverable"}]}]});
+    const row = (await db.collection("containerUpdates").doc("r-1").get()).data();
+    assert.equal(row.deliveryStatus, "failed");
+    assert.equal(row.deliveryErrorCode, 131026);
+    assert.equal(row.deliveryError, "Message undeliverable");
+    const line = (await db.collection("containerLines").doc("line-r").get()).data();
+    assert.deepEqual(line.lastCustomerUpdate, summary);
+  });
+});
+
 describe("the sender's confirmation and photos with a code (docs/AIR_PACKAGES.md)", () => {
   const LINE = "line-confirm";
   const CODE = "CL-K7M4P2";

@@ -47,6 +47,7 @@ const {
   shippedContainerOf,
 } = require("./guest_tracking");
 const packageProof = require("./package_proof");
+const receiptSend = require("./package_receipt_send");
 const {createPhoneAccounts, notSignedInYet} = require("./phone_accounts");
 const whatsappInbox = require("./whatsapp_inbox");
 const {
@@ -18052,6 +18053,80 @@ async function completeBusinessParkingEntryPayment(target) {
  * @return {!Promise<boolean>} True when a send was actually queued.
  */
 /**
+ * The Twilio account the secrets name, and whether it is really set up
+ * (an `AC` + 32 hex account SID, a token and a from number; the live
+ * project holds placeholders until the owner connects an account).
+ *
+ * @return {{sid: string, token: string, from: string, ready: boolean}}
+ */
+function twilioSettings() {
+  const sid = String(safeSecretValue(twilioAccountSid)).trim();
+  const token = String(safeSecretValue(twilioAuthToken)).trim();
+  const from = String(safeSecretValue(twilioFromNumber)).trim();
+  return {sid, token, from,
+    ready: receiptSend.smsConfigured({sid, token, from})};
+}
+
+/**
+ * One text message through Twilio.
+ *
+ * Never throws: the answer says what happened. Unconfigured credentials
+ * (empty or placeholder values) mean texting is simply off.
+ *
+ * @param {{to: *, body: string}} input Phone as typed and the message.
+ * @return {!Promise<{ok: boolean, skipped: boolean, sid: string,
+ *   error: string}>} `skipped` when nothing was attempted (no usable
+ *   number, or Twilio not set up).
+ */
+async function sendTwilioSms({to, body}) {
+  const digits = String(to || "").replace(/[^\d+]/g, "");
+  const result = {ok: false, skipped: true, sid: "", error: ""};
+  if (digits.replace(/\D/g, "").length < 8) {
+    return {...result, error: "no_number"};
+  }
+  const twilio = twilioSettings();
+  if (!twilio.ready) {
+    logger.info("SMS skipped: Twilio not configured");
+    return {...result, error: "not_configured"};
+  }
+  try {
+    const params = new URLSearchParams({
+      To: digits.startsWith("+") ? digits : `+1${digits}`,
+      From: twilio.from,
+      Body: body,
+    });
+    const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${twilio.sid}/Messages.json`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": "Basic " +
+              Buffer.from(`${twilio.sid}:${twilio.token}`).toString("base64"),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: params.toString(),
+        },
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      logger.warn("SMS rejected", {
+        status: response.status,
+        detail: detail.slice(0, 300),
+      });
+      return {...result, skipped: false,
+        error: `Twilio answered ${response.status}`};
+    }
+    const answer = await response.json().catch(() => ({}));
+    return {ok: true, skipped: false, sid: String(answer?.sid || ""),
+      error: ""};
+  } catch (error) {
+    logger.warn("SMS failed", {detail: error.message});
+    return {...result, skipped: false,
+      error: String(error?.message || error).slice(0, 200)};
+  }
+}
+
+/**
  * Texts a walk-up parking customer via Twilio.
  *
  * Same contract as the email helper: never throws into the payment path,
@@ -18062,55 +18137,7 @@ async function completeBusinessParkingEntryPayment(target) {
  * @return {!Promise<boolean>} True when Twilio accepted the message.
  */
 async function smsWalkUpParkingCustomer({to, body}) {
-  const digits = String(to || "").replace(/[^\d+]/g, "");
-  if (digits.replace(/\D/g, "").length < 8) return false;
-  let sid = "";
-  let token = "";
-  let from = "";
-  try {
-    sid = String(twilioAccountSid.value() || "").trim();
-    token = String(twilioAuthToken.value() || "").trim();
-    from = String(twilioFromNumber.value() || "").trim();
-  } catch (error) {
-    // Secret not bound to this function - treat as unconfigured.
-    logger.info("Walk-up parking SMS skipped: secrets unavailable");
-    return false;
-  }
-  if (!sid.startsWith("AC") || !token || !from) {
-    logger.info("Walk-up parking SMS skipped: Twilio not configured");
-    return false;
-  }
-  try {
-    const params = new URLSearchParams({
-      To: digits.startsWith("+") ? digits : `+1${digits}`,
-      From: from,
-      Body: body,
-    });
-    const response = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": "Basic " +
-              Buffer.from(`${sid}:${token}`).toString("base64"),
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: params.toString(),
-        },
-    );
-    if (!response.ok) {
-      const detail = await response.text();
-      logger.warn("Walk-up parking SMS rejected", {
-        status: response.status,
-        detail: detail.slice(0, 300),
-      });
-      return false;
-    }
-    return true;
-  } catch (error) {
-    logger.warn("Walk-up parking SMS failed", {detail: error.message});
-    return false;
-  }
+  return (await sendTwilioSms({to, body})).ok;
 }
 
 /**
@@ -23616,17 +23643,29 @@ exports.updateContainerLine = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      // A delivery queues the delivered message (queuePackageDelivered).
-      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+      // A delivery queues the delivered message (queuePackageDelivered);
+      // Send receipt texts through Twilio.
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId,
+        twilioAccountSid, twilioAuthToken, twilioFromNumber],
     },
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
+      // Send receipt (docs/PACKAGE_RECEIPT_SEND.md): the receipt PDF as a
+      // link, or sent to the sender on WhatsApp or by text.
+      if (data.action === "receipt_link") {
+        return packageReceiptLinkAction(admin.firestore(), {uid, businessId,
+          lineId: data.lineId});
+      }
+      if (data.action === "receipt_send") {
+        return sendPackageReceipt(admin.firestore(), {uid, businessId,
+          lineId: data.lineId, channel: String(data.channel || "")});
+      }
       // "Send again" on a message WhatsApp could not deliver.
       if (data.action === "resend_update") {
         return resendPackageUpdate(admin.firestore(), {uid, businessId,
-          lineId: data.lineId});
+          lineId: data.lineId, update: String(data.update || "")});
       }
       if (data.action !== undefined && data.action !== null &&
           data.action !== "") {
@@ -26006,7 +26045,8 @@ async function resendToCorrectedNumbers(db, {lineRef, before, after}) {
  * @param {object} args {uid, businessId, lineId}.
  * @return {Promise<object>} {success, lineId, update, queued, alreadySent}.
  */
-async function resendPackageUpdate(db, {uid, businessId, lineId}) {
+async function resendPackageUpdate(db, {uid, businessId, lineId,
+  update: wanted}) {
   await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
   const id = String(lineId || "").trim();
   if (!id || id.includes("/")) throw containerRefusal("line_not_found");
@@ -26020,6 +26060,11 @@ async function resendPackageUpdate(db, {uid, businessId, lineId}) {
     throw new HttpsError("failed-precondition",
         "WhatsApp is not connected yet, so nothing can be sent.",
         {reason: "whatsapp_not_configured"});
+  }
+  // "Send again" on the sender's receipt (a message WhatsApp could not
+  // deliver): the same row is queued again, never a second row.
+  if (wanted === CONTAINER_UPDATE.RECEIPT) {
+    return resendPackageReceipt(db, {uid, lineRef, line, businessId});
   }
   const update = String(line.lastCustomerUpdate?.update || "");
   if (!update) {
@@ -26037,6 +26082,60 @@ async function resendPackageUpdate(db, {uid, businessId, lineId}) {
   });
   return {success: true, lineId: id, update, queued: tally.queued,
     alreadySent: tally.alreadySent};
+}
+
+/**
+ * "Send again" on a package's WhatsApp receipt: the newest `receipt` row
+ * that went by WhatsApp is queued again when it failed, waited for WhatsApp,
+ * or went to a number since corrected (requeueDecision, `retryFailed`); one
+ * that was delivered is never sent twice.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, lineRef, line, businessId}.
+ * @return {Promise<object>} {success, lineId, update, queued, alreadySent}.
+ */
+async function resendPackageReceipt(db, {uid, lineRef, line, businessId}) {
+  const business = await db.collection("businesses").doc(businessId).get();
+  const phone = receiptSend.senderPhoneOf(line, business.data()?.country);
+  if (!phone) throw receiptRefusal("receipt_no_sender_phone");
+  const result = {success: true, lineId: lineRef.id,
+    update: CONTAINER_UPDATE.RECEIPT, queued: 0, alreadySent: 0};
+  const rows = await db.collection("containerUpdates")
+      .where("lineId", "==", lineRef.id)
+      .where("update", "==", CONTAINER_UPDATE.RECEIPT).get();
+  const newest = rows.docs
+      .filter((doc) => doc.data()?.channel !== "sms")
+      .sort((a, b) => Number(b.data()?.createdAt?.toMillis?.() || 0) -
+        Number(a.data()?.createdAt?.toMillis?.() || 0))[0];
+  if (!newest) throw receiptRefusal("receipt_line_gone");
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(newest.ref);
+    const row = fresh.data() || {};
+    const decision = requeueDecision(row, Date.now(), {phone,
+      retryFailed: true});
+    if (decision !== "requeue") {
+      if (decision === "already_sent") result.alreadySent = 1;
+      return;
+    }
+    const samePhone = String(row.phone || "").replace(/\D/g, "") ===
+      phone.replace(/\D/g, "");
+    tx.update(newest.ref, {
+      phone, name: String(line.customerName || row.name || ""),
+      status: CONTAINER_UPDATE_STATUS.QUEUED, attempts: 0, leaseUntilMs: 0,
+      error: "", requeuedByStaffId: uid,
+      requeuedAt: FirestoreFieldValue.serverTimestamp(),
+      whatsappMessageId: FirestoreFieldValue.delete(),
+      sentAt: FirestoreFieldValue.delete(),
+      deliveryStatus: FirestoreFieldValue.delete(),
+      deliveryStatusAtMs: FirestoreFieldValue.delete(),
+      deliveryError: FirestoreFieldValue.delete(),
+      deliveryErrorCode: FirestoreFieldValue.delete(),
+      ...(!samePhone && row.phone ? {previousPhone: String(row.phone)} : {}),
+      ...(samePhone ? {handResends: FirestoreFieldValue.increment(1)} : {}),
+    });
+    result.queued = 1;
+  });
+  return result;
 }
 
 /**
@@ -26447,6 +26546,9 @@ function packageReceiptStoragePath(businessId, lineId) {
  */
 async function buildPackageReceiptDocument(db, args) {
   const {lineRef, line, business, businessId, container, group} = args;
+  // Meta fetches the PDF from the function itself; a person opening the link
+  // in a browser (receipt_link) is served by the shorter laawoldigital.com/d.
+  const base = args.base || whatsappPhotoBase();
   const nowMs = args.nowMs || Date.now();
   const zone = String(business?.packageRequestSettings?.timeZone || "")
       .trim() || "America/New_York";
@@ -26458,7 +26560,6 @@ async function buildPackageReceiptDocument(db, args) {
         contentsFr: describeContainerLine(line, "fr", group),
         destinationEn: containerDestinationName(line, container, "en"),
         destinationFr: containerDestinationName(line, container, "fr"),
-        receivedByName: await staffNameForReceipt(db, line.addedByStaffId),
         timeZone: zone,
       }));
   const filename = receiptDocumentFilename(line);
@@ -26471,11 +26572,271 @@ async function buildPackageReceiptDocument(db, args) {
   return {
     filename,
     link: packageProof.packageReceiptLink({
-      base: whatsappPhotoBase(), token, lineId: lineRef.id,
+      base, token, lineId: lineRef.id,
       expiresMs: nowMs + packageProof.PHOTO_LINK_MS,
     }),
   };
 }
+
+/**
+ * Where a person opens a receipt link (a QR, a text, an email, the browser):
+ * the short laawoldigital.com/d, which redirects to parkingDocument. Meta's
+ * own fetch uses whatsappPhotoBase instead (it may not follow a redirect).
+ * The signature covers the token, the line and the expiry, not the base.
+ *
+ * @return {string} The /d endpoint.
+ */
+function humanDocumentBase() {
+  return String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
+    "https://laawoldigital.com/d";
+}
+
+/**
+ * A refusal of "Send receipt": `details.reason` says which, the message is
+ * English (the screens say it in both languages).
+ *
+ * @param {string} reason A key of receiptSend.RECEIPT_REFUSAL.
+ * @return {HttpsError} The error to throw.
+ */
+function receiptRefusal(reason) {
+  const code = reason === "receipt_line_gone" ? "not-found" :
+    (reason === "receipt_channel_invalid" ? "invalid-argument" :
+      (reason === "receipt_sms_failed" ? "unavailable" :
+        "failed-precondition"));
+  return new HttpsError(code,
+      receiptSend.RECEIPT_REFUSAL[reason] || reason, {reason});
+}
+
+/**
+ * The package, its business and container, as a receipt is drawn from them.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The caller's business.
+ * @param {string} lineId The package (containerLines id).
+ * @return {Promise<object>} {lineRef, line, business, container, group}.
+ */
+async function loadPackageReceiptContext(db, businessId, lineId) {
+  const id = String(lineId || "").trim();
+  if (!id || id.includes("/")) throw receiptRefusal("receipt_line_gone");
+  const lineRef = db.collection("containerLines").doc(id);
+  const lineDoc = await lineRef.get();
+  const line = lineDoc.exists ? lineDoc.data() || {} : null;
+  if (!line || String(line.businessId || "") !== businessId ||
+      line.voided === true) {
+    throw receiptRefusal("receipt_line_gone");
+  }
+  const containerId = String(line.containerId || "");
+  const [businessDoc, containerDoc] = await Promise.all([
+    db.collection("businesses").doc(businessId).get(),
+    containerId ? db.collection("containers").doc(containerId).get() : null,
+  ]);
+  return {
+    lineRef, line,
+    business: businessDoc.exists ? businessDoc.data() || {} : {},
+    container: containerDoc?.exists ? containerDoc.data() || {} : null,
+    group: lineWasSplit(line) ?
+      await containerLineGroup(db, lineRef.id, line) : null,
+  };
+}
+
+/**
+ * Renders the package's receipt from the line as it is now, keeps it, and
+ * gives back a 30-day link a person can open (human base).
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} context loadPackageReceiptContext's answer.
+ * @return {Promise<{link: string, filename: string, expiresAtMs: number}>}
+ */
+async function renderPackageReceiptLink(db, businessId, context) {
+  const doc = await buildPackageReceiptDocument(db, {
+    lineRef: context.lineRef, line: context.line,
+    business: context.business, container: context.container,
+    group: context.group, businessId,
+    businessName: context.business.name, base: humanDocumentBase(),
+  });
+  const expires = Number(new URL(doc.link).searchParams.get("e")) || 0;
+  return {link: doc.link, filename: doc.filename, expiresAtMs: expires};
+}
+
+/**
+ * updateContainerLine `receipt_link`: the receipt PDF as it is now and a
+ * 30-day link to it, plus whether texting is set up and who the sender is.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, lineId}.
+ * @return {Promise<object>} {success, link, filename, expiresAtMs, smsReady,
+ *   sender}.
+ */
+async function packageReceiptLinkAction(db, {uid, businessId, lineId}) {
+  await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+  const context = await loadPackageReceiptContext(db, businessId, lineId);
+  const made = await renderPackageReceiptLink(db, businessId, context);
+  return {success: true, ...made, smsReady: twilioSettings().ready,
+    sender: receiptSend.senderOf(context.line)};
+}
+
+/**
+ * updateContainerLine `receipt_send`: the receipt to the sender, on
+ * WhatsApp (a `containerUpdates` row the existing sender sends) or by text
+ * (sent now through Twilio, logged as a `containerUpdates` row with
+ * `channel: "sms"` that the WhatsApp sender never picks up).
+ *
+ * The one-minute guard is taken in the same transaction that writes the
+ * WhatsApp row (the line's `lastReceiptSend.{channel}`), so two taps at once
+ * cannot both pass.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, lineId, channel}.
+ * @return {Promise<{success: boolean, channel: string, messageId: string}>}
+ */
+async function sendPackageReceipt(db, {uid, businessId, lineId, channel}) {
+  await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+  if (!receiptSend.CHANNELS.includes(channel)) {
+    throw receiptRefusal("receipt_channel_invalid");
+  }
+  const context = await loadPackageReceiptContext(db, businessId, lineId);
+  const {lineRef, line, business} = context;
+  const phone = receiptSend.senderPhoneOf(line, business.country);
+  if (!phone) throw receiptRefusal("receipt_no_sender_phone");
+  const sms = channel === receiptSend.CHANNEL.SMS;
+  if (sms && !twilioSettings().ready) {
+    throw receiptRefusal("receipt_sms_not_set_up");
+  }
+  if (!sms && !containerWhatsAppConfigured()) {
+    throw receiptRefusal("receipt_whatsapp_off");
+  }
+  const nowMs = Date.now();
+  const rowRef = db.collection("containerUpdates").doc();
+  const fields = receiptSend.receiptRowFields({
+    businessId, containerId: line.containerId, lineId: lineRef.id,
+    trackingCode: line.trackingCode,
+    businessName: String(business.name || ""), name: line.customerName,
+    phone, channel, trigger: "button", requestedByUid: uid,
+  });
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(lineRef);
+    const current = fresh.exists ? fresh.data() || {} : null;
+    if (!current || current.voided === true) {
+      throw receiptRefusal("receipt_line_gone");
+    }
+    if (receiptSend.receiptTooSoon(
+        current.lastReceiptSend?.[channel]?.atMs, nowMs)) {
+      throw receiptRefusal("receipt_too_soon");
+    }
+    tx.update(lineRef, {[`lastReceiptSend.${channel}`]: {atMs: nowMs,
+      byUid: uid}});
+    if (!sms) {
+      // Becoming `queued` is what makes deliverContainerCustomerUpdate send
+      // it: the claim, the retries, the waiting-for-template sweep, the
+      // webhook's delivery status and "Send again" all apply as they do for
+      // every other message.
+      tx.create(rowRef, {...fields, status: CONTAINER_UPDATE_STATUS.QUEUED,
+        attempts: 0, createdAt: FirestoreFieldValue.serverTimestamp()});
+    }
+  });
+  if (!sms) return {success: true, channel, messageId: rowRef.id};
+  // Text: the guard is released when nothing went, so a retry is not held
+  // back for a minute by a failure.
+  const release = () => lineRef.update(
+      {[`lastReceiptSend.${channel}.atMs`]: 0}).catch(() => null);
+  let made;
+  try {
+    made = await renderPackageReceiptLink(db, businessId, context);
+  } catch (error) {
+    await release();
+    throw error;
+  }
+  const body = receiptSend.receiptSmsBody({
+    businessName: business.name, code: line.trackingCode, link: made.link});
+  const texted = await sendTwilioSms({to: phone, body});
+  await rowRef.set({
+    ...fields,
+    status: texted.ok ? CONTAINER_UPDATE_STATUS.SENT :
+      CONTAINER_UPDATE_STATUS.FAILED,
+    attempts: 1,
+    ...(texted.ok ? {sentAt: FirestoreFieldValue.serverTimestamp(),
+      twilioSid: texted.sid} : {error: texted.error}),
+    createdAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  if (!texted.ok) {
+    await release();
+    throw receiptRefusal(texted.error === "not_configured" ?
+      "receipt_sms_not_set_up" : "receipt_sms_failed");
+  }
+  return {success: true, channel, messageId: rowRef.id};
+}
+
+/**
+ * The automatic receipt for a package whose confirmation went out headed by
+ * the drop-off photo: one `receipt` row for the sender, with a fixed id so a
+ * retry or a re-sent confirmation never queues a second. Never throws: the
+ * confirmation already went.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {row: the sender's confirmation row, lineId, line}.
+ * @return {Promise<void>}
+ */
+async function queueAutoReceiptRow(db, {row, lineId, line}) {
+  try {
+    await db.collection("containerUpdates")
+        .doc(receiptSend.autoReceiptRowId(lineId))
+        .create({
+          ...receiptSend.receiptRowFields({
+            businessId: row.businessId, containerId: row.containerId,
+            lineId, trackingCode: row.trackingCode || line.trackingCode,
+            businessName: row.businessName, name: row.name,
+            phone: row.phone, trigger: "auto",
+          }),
+          status: CONTAINER_UPDATE_STATUS.QUEUED, attempts: 0,
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+        });
+  } catch (error) {
+    // 6 = already exists: the receipt was queued by an earlier attempt.
+    if (error?.code === 6 || /already exists/i.test(String(error?.message))) {
+      return;
+    }
+    logger.warn("Could not queue the automatic package receipt",
+        {lineId, error: String(error?.message || error).slice(0, 300)});
+  }
+}
+
+// How a business's package receipts go: with the confirmation on their own
+// (`auto`) or when staff press Send receipt (`button`, the default). Only the
+// business owner (or a Laawol admin on their behalf) changes it
+// (docs/PACKAGE_RECEIPT_SEND.md).
+exports.setPackageReceiptMode = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, maxInstances: 1},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const user = await requireBusinessManager(uid, businessId);
+      if (user.role !== "businessOwner" && user.role !== "admin") {
+        throw new HttpsError("permission-denied",
+            "Only the business owner can change how receipts are sent");
+      }
+      const sendMode = receiptSend.validSendMode(data.sendMode);
+      if (!sendMode) {
+        throw new HttpsError("invalid-argument",
+            "Choose automatic or button.", {reason: "invalid_send_mode"});
+      }
+      const businessRef =
+        admin.firestore().collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      await businessRef.update({
+        "packageReceiptSettings.sendMode": sendMode,
+        "packageReceiptSettings.updatedByUid": uid,
+        "packageReceiptSettings.updatedAt":
+          FirestoreFieldValue.serverTimestamp(),
+        "updatedAt": FirestoreFieldValue.serverTimestamp(),
+      });
+      return {success: true, sendMode};
+    },
+);
 
 exports.deliverContainerCustomerUpdate = onDocumentWritten(
     {
@@ -26633,21 +26994,45 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
       // gets one). A receipt that cannot be drawn or kept never holds the
       // message back: it goes out as the plain template.
       let receiptState = "";
+      const isReceiptRow = row.update === CONTAINER_UPDATE.RECEIPT;
+      if (isReceiptRow && String(row.role || "") !== "sender") {
+        // The receipt has the price and the balance on it: the sender only.
+        await recordContainerUpdateAttempt(db, rowRef, row, {
+          status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+          error: "A receipt only goes to the sender."});
+        return;
+      }
       if (!sent) {
-        const wantsReceipt = receiptDocumentWanted(
-            {update: row.update, role: row.role});
+        // The receipt rides on the sender's confirmation only for a
+        // business whose receipts go on their own (`auto`); the default
+        // (`button`) sends the plain confirmation and waits for a person
+        // to press Send receipt. A receipt row is the receipt itself.
+        const wantsReceipt = isReceiptRow ||
+          (receiptDocumentWanted({update: row.update, role: row.role}) &&
+            receiptSend.sendModeOf(business) === receiptSend.SEND_MODE.AUTO);
         let receipt = null;
+        let receiptError = "";
         if (wantsReceipt) {
           receipt = await buildPackageReceiptDocument(db, {
             lineRef: lineDoc.ref, line, business, container, group,
             businessId: String(row.businessId || line.businessId || ""),
             businessName: row.businessName || business.name,
           }).catch((error) => {
-            logger.warn("Package receipt not built; the plain message goes", {
-              lineId: lineDoc.id, error: String(error?.message || error)
-                  .slice(0, 300)});
+            receiptError = String(error?.message || error).slice(0, 200);
+            logger.warn(isReceiptRow ?
+              "Package receipt not built; the receipt message fails" :
+              "Package receipt not built; the plain message goes", {
+              lineId: lineDoc.id, error: receiptError});
             return null;
           });
+        }
+        if (isReceiptRow && !receipt) {
+          // Never a plain message in the receipt's place: the receipt is
+          // the point. The row says why, and "Send again" can retry.
+          await recordContainerUpdateAttempt(db, rowRef, row, {
+            status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+            error: `The receipt could not be made: ${receiptError}`});
+          return;
         }
         const message = whatsappUpdateMessage(
             {...messageArgs, photoHeader: false, receiptDocument: receipt});
@@ -26662,7 +27047,8 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         sent = await sendWhatsAppMessage(message);
         receiptState = wantsReceipt ?
           (receipt ? "attached" : "unavailable") : "";
-        const withReceiptTemplate = message.template?.name ===
+        const withReceiptTemplate = !isReceiptRow &&
+          message.template?.name ===
           WHATSAPP_TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
         if (receiptFallbackDecision(withReceiptTemplate, sent)) {
           // The receipt template is not approved yet (or paused, or Meta
@@ -26698,6 +27084,15 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         ...(status === CONTAINER_UPDATE_STATUS.SENT ?
           {sentAt: FirestoreFieldValue.serverTimestamp()} : {}),
       });
+      // Automatic receipts: the drop-off photo headed the confirmation (a
+      // message has one header), so the receipt goes right after it as a
+      // message of its own, once per package (a fixed row id).
+      if (status === CONTAINER_UPDATE_STATUS.SENT &&
+          receiptSend.autoReceiptRowWanted({
+            sendMode: receiptSend.sendModeOf(business), update: row.update,
+            role: row.role, photoState})) {
+        await queueAutoReceiptRow(db, {row, lineId: lineDoc.id, line});
+      }
       if (status === CONTAINER_UPDATE_STATUS.RETRYING) {
         throw new Error(`WhatsApp update ${rowRef.id} will be retried: ` +
           sent.error);

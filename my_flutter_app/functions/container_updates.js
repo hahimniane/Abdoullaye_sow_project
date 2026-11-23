@@ -65,8 +65,17 @@ const CONTAINER_UPDATE = Object.freeze({
   // Destination staff handed the package over (container_delivery.js). Per
   // line, like `received`: never a moment on a container's timeline.
   DELIVERED: "delivered",
+  // The package receipt PDF to the SENDER (docs/PACKAGE_RECEIPT_SEND.md):
+  // sent by a staff button, or on its own for a business in `auto` mode
+  // whose confirmation is headed by the drop-off photo. A message, not a
+  // shipment status: it is never a moment on a timeline, never the line's
+  // lastCustomerUpdate, never a rank (see CONTAINER_UPDATES).
+  RECEIPT: "receipt",
 });
-const CONTAINER_UPDATES = Object.freeze(Object.values(CONTAINER_UPDATE));
+// The shipment moments a customer hears (a timeline, a line's summary):
+// every update but the receipt, which is a document, not news.
+const CONTAINER_UPDATES = Object.freeze(Object.values(CONTAINER_UPDATE)
+    .filter((update) => update !== CONTAINER_UPDATE.RECEIPT));
 
 // What the carrier feed says -> the update a customer hears. Only the moves
 // worth a message are here; anything else is recorded on the timeline and
@@ -595,9 +604,16 @@ function whatsappUpdateMessage(args) {
   const withPhoto = args.photoHeader !== false && Boolean(photo) &&
     photoHeaderWanted({update: args.update, templateSet: args.templateSet});
   const receiptLink = text(args.receiptDocument?.link, 1000);
+  const isReceiptRow = text(args.update, 20) === CONTAINER_UPDATE.RECEIPT;
+  // A receipt row is the receipt: without its PDF there is no message (a
+  // plain "package received" is not what staff asked for), and it never
+  // goes to the receiver (it has the price and the balance on it).
+  if (isReceiptRow && (!receiptLink || text(args.role, 20) !== "sender")) {
+    return null;
+  }
   const withReceipt = !withPhoto && Boolean(receiptLink) &&
-    receiptDocumentWanted({
-      update: args.update, role: args.role, templateSet: args.templateSet});
+    (isReceiptRow || receiptDocumentWanted({
+      update: args.update, role: args.role, templateSet: args.templateSet}));
   return templateMessage({
     phone: text(args.phone, 40),
     update: args.update,
@@ -885,6 +901,8 @@ function summaryUpdate(update) {
  * @return {boolean} True when this write should send.
  */
 function shouldSendQueuedRow(before, after) {
+  // A text message's log row (channel "sms") is never a WhatsApp send.
+  if (text(after?.channel, 20) === "sms") return false;
   return text(after?.status, 40) === UPDATE_STATUS.QUEUED &&
     text(before?.status, 40) !== UPDATE_STATUS.QUEUED;
 }
@@ -1116,6 +1134,8 @@ function latestCustomerUpdate(events, templateSet = whatsappTemplateSet()) {
  * @return {object|null} The new value, or null to leave it.
  */
 function mergeLastCustomerUpdate(previous, rowUpdate, entries, atMs) {
+  // A receipt is not shipment news: it never becomes the line's summary.
+  if (text(rowUpdate, 20) === CONTAINER_UPDATE.RECEIPT) return null;
   const update = summaryUpdate(rowUpdate);
   const incoming = (Array.isArray(entries) ? entries : [])
       .filter((entry) => entry && text(entry.role, 20));
@@ -1154,6 +1174,7 @@ function mergeLastCustomerUpdate(previous, rowUpdate, entries, atMs) {
  */
 function withDeliveryTick(previous, update, role, delivery, reason = "") {
   if (!previous || typeof previous !== "object") return null;
+  if (text(update, 20) === CONTAINER_UPDATE.RECEIPT) return null;
   if (text(previous.update, 20) !== summaryUpdate(update)) return null;
   const results = Array.isArray(previous.results) ? previous.results : [];
   const who = text(role, 20);

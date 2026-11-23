@@ -107,6 +107,7 @@ describe("which template each update sends", () => {
       shipped: "shipment_departed_2lang",
       arrived: "shipment_ready_pickup_2lang",
       delivered: "shipment_delivered_2lang",
+      receipt: "shipment_received_doc_2lang",
     });
   });
   // Meta rejects a template that carries a "code to show" (it reads as an
@@ -812,9 +813,10 @@ describe("the package receipt template", () => {
     assert.equal(send().template.name, "shipment_received_2lang");
     assert.equal(send({receiptDocument: false}).template.name,
         "shipment_received_2lang");
-    // No update maps to it, and no other update takes it.
-    assert.ok(!Object.values(TEMPLATE_BY_UPDATE)
-        .includes("shipment_received_doc_2lang"));
+    // Only the receipt update maps to it, and no other update takes it.
+    assert.deepEqual(Object.entries(TEMPLATE_BY_UPDATE)
+        .filter(([, name]) => name === "shipment_received_doc_2lang")
+        .map(([update]) => update), ["receipt"]);
     assert.equal(send({update: "shipped", receiptDocument: true})
         .template.name, "shipment_departed_2lang");
     assert.equal(send({update: "confirm", receiptDocument: true})
@@ -823,6 +825,19 @@ describe("the package receipt template", () => {
     assert.equal(send({receiptDocument: true, templateSet: "legacy"})
         .template.name, "package_received");
   });
+
+  it("is the receipt update's template in either set, with the PDF header",
+      () => {
+        for (const templateSet of ["bilingual", "legacy"]) {
+          const body = send({update: "receipt", templateSet});
+          assert.equal(body.template.name, "shipment_received_doc_2lang");
+          const [header, text, button] = body.template.components;
+          assert.equal(header.parameters[0].type, "document");
+          assert.equal(header.parameters[0].document.link, LINK);
+          assert.equal(text.parameters.length, 8);
+          assert.equal(button.sub_type, "url");
+        }
+      });
 
   it("names the file when it is not given one", () => {
     const body = send({receiptDocument: true,

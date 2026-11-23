@@ -96,3 +96,51 @@ its status are shown ("Receipt sent on WhatsApp Nov 23, 2:10 AM",
 "Package receipts: Send with the confirmation automatically / Staff press
 Send receipt" (owner/admin only). English and French everywhere. US dates,
 12-hour times.
+
+## As built (server, 2026-11-23)
+
+Decisions the builder made; the contract above is unchanged unless a line
+says DEVIATION.
+
+- **Pure logic** in `functions/package_receipt_send.js` (mode, refusals,
+  one-minute guard, `smsConfigured`, SMS body, row fields).
+- **Link base.** `receipt_link` returns the short human link
+  `PARKING_DOCUMENT_BASE_URL || https://laawoldigital.com/d` (the /d
+  endpoint 302s to `parkingDocument`, a browser follows it). Meta's own
+  fetch (WhatsApp header) still uses the function URL. The signature covers
+  token + line + expiry, not the host, so both open the same PDF.
+- **Guard.** `lastReceiptSend.{whatsapp|sms}: {atMs, byUid}` on the
+  `containerLines` doc, taken in the same transaction that writes the
+  WhatsApp row (race-safe). A text that fails to send releases it.
+- **WhatsApp row.** `containerUpdates/{autoId}`: `update: "receipt"`,
+  `role: "sender"`, `trigger: "button"`, `requestedByUid`, `phone` (the
+  sender's number, a US business's local number as +1), `name`,
+  `trackingCode`, `status: "queued"`. The existing trigger sends it, and the
+  webhook writes `deliveryStatus` / `deliveryError` / `deliveryErrorCode`
+  (131026 = not on WhatsApp) on it like any row. The line's
+  `lastCustomerUpdate` is never touched by it.
+- **Text log.** A `containerUpdates` row too, with `channel: "sms"`,
+  `update: "receipt"`, `trigger: "button"`, `requestedByUid`,
+  `status: "sent" | "failed"`, `twilioSid`, `sentAt` (or `error`). The
+  WhatsApp sender ignores any row with `channel: "sms"`. Screens show "Sent
+  by text at ..." from the newest such row (`sentAt`).
+- **Send again.** `updateContainerLine {action: "resend_update", lineId,
+  update: "receipt"}` queues the newest WhatsApp receipt row again when it
+  failed, was reported undeliverable, or went to a number since corrected;
+  `{success, lineId, update: "receipt", queued, alreadySent}`. The plain
+  `resend_update` (no `update`) is unchanged and is about the shipment news.
+  Refusals as above (`receipt_no_sender_phone`; `receipt_line_gone` when
+  there is no WhatsApp receipt row yet).
+- **Extra refusals (additions):** `receipt_channel_invalid` (channel is
+  neither `whatsapp` nor `sms`, `invalid-argument`) and `receipt_sms_failed`
+  (Twilio refused or was unreachable, `unavailable`). Refusal codes:
+  `receipt_line_gone` is `not-found`, the rest `failed-precondition`.
+- **Order of refusals:** permission, channel, line gone, no sender phone,
+  channel not ready (`receipt_sms_not_set_up` / `receipt_whatsapp_off`),
+  too soon.
+- **Mode callable** `setPackageReceiptMode`: owner or Laawol admin (the same
+  check as `setPackageRequestSettings`); other values are refused
+  `invalid-argument` with `details.reason: "invalid_send_mode"`. Writes
+  `packageReceiptSettings: {sendMode, updatedByUid, updatedAt}`; read it
+  from the business document (the console and app already read it).
+- No History (audit) line is written for a receipt send.

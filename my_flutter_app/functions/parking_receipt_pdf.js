@@ -356,7 +356,9 @@ function bothLanguages(english, french) {
  *
  * @param {object} args {business, line: a containerLines row, contentsEn,
  *   contentsFr (what the line is, per language), destinationEn,
- *   destinationFr, receivedByName, timeZone?}.
+ *   destinationFr, timeZone?}. There is no "Received by" row: the package
+ *   receipt names the business, not the staff member (owner 2026-11-23);
+ *   the parking payment receipts keep theirs, where it says who took cash.
  * @return {object} The model renderReceiptPdf draws.
  */
 function packageReceiptModel(args) {
@@ -380,7 +382,6 @@ function packageReceiptModel(args) {
       SHIP_MODE_LABEL[text(line.shipMode, 10).toLowerCase()] || ""],
     ["Tracking code / Code de suivi", code],
     ["Received on / Reçu le", usDateTime(atMs, zone)],
-    ["Received by / Reçu par", text(args?.receivedByName, 120)],
   ];
   const paidInFull = standing.status === PAYMENT_STATUS.PAID;
   const onArrival = standing.status === PAYMENT_STATUS.PAY_ON_ARRIVAL;
