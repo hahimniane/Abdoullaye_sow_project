@@ -8,6 +8,7 @@ import '../services/line_pieces.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../services/invoice_ledger.dart' show invoiceCentsToInput;
 import '../services/package_price_list.dart' show counterPriceCents, unitOf;
+import '../services/package_price_mode.dart';
 import '../services/piece_rows.dart';
 import '../services/price_list_fill.dart';
 import '../services/waiting_packages.dart' show trimNumber;
@@ -196,19 +197,49 @@ class PiecesEditorController extends ChangeNotifier {
   ///
   /// [priceSnapshots] by piece id: a piece whose snapshot weighs gets a
   /// weight field that fills its price (a request's pieces at Received).
+  ///
+  /// [priceMode] is how the business prices a package
+  /// (docs/PACKAGE_ONE_PRICE.md): [packagePriceModePiece] is the form as it
+  /// always was; [packagePriceModePackage] has no price on a row, one "Price
+  /// for everything" instead, shared among the pieces
+  /// (`packagePiecePrices`). In that mode rows are grouped by shape alone and
+  /// [priceSnapshots] are not used. [isEdit] says [initial] is a saved
+  /// package: its pieces are what an untouched save keeps and what the one
+  /// price opens on (their sum). Otherwise it opens on [packagePriceCents]
+  /// (a received request's estimate total), blank when null.
   PiecesEditorController({
     Iterable<LinePiece> initial = const [],
     String kind = 'barrel',
     this.limit = maxPieces,
     int? pickupFeeCents,
     Map<String, Map<String, dynamic>> priceSnapshots = const {},
+    this.priceMode = packagePriceModePiece,
+    bool isEdit = false,
+    int? packagePriceCents,
   }) : hasPickupFee = pickupFeeCents != null,
        pickupFee = TextEditingController(
          text: pickupFeeCents == null
              ? ''
              : invoiceCentsToInput(pickupFeeCents),
+       ),
+       _stored =
+           priceMode == packagePriceModePackage &&
+               isEdit &&
+               initial.any((p) => !p.isCar)
+           ? List.unmodifiable(initial.where((p) => !p.isCar))
+           : null,
+       packagePrice = TextEditingController(
+         text: priceMode != packagePriceModePackage
+             ? ''
+             : _centsText(
+                 isEdit
+                     ? packagePricePrefill(initial.where((p) => !p.isCar))
+                     : packagePriceCents,
+               ),
        ) {
     pickupFee.addListener(notifyListeners);
+    packagePrice.addListener(notifyListeners);
+    final onePrice = isPackageMode;
     final start = initial.where((p) => !p.isCar).toList();
     if (start.isEmpty) {
       _rows.add(_row(kind: kind));
@@ -217,7 +248,10 @@ class PiecesEditorController extends ChangeNotifier {
       // many`); a piece weighed at Received keeps its own row and field.
       final groups = groupPieceRows(
         start,
-        keepAlone: (piece) => priceSnapshotWeighs(priceSnapshots[piece.id]),
+        keepAlone: onePrice
+            ? null
+            : (piece) => priceSnapshotWeighs(priceSnapshots[piece.id]),
+        ignorePrices: onePrice,
       );
       for (final group in groups) {
         final piece = group.pieces.first;
@@ -236,13 +270,53 @@ class PiecesEditorController extends ChangeNotifier {
             price: group.priceCents == null
                 ? ''
                 : invoiceCentsToInput(group.priceCents!),
-            snapshot: priceSnapshots[piece.id],
-            weight: _startWeight(priceSnapshots[piece.id]),
+            snapshot: onePrice ? null : priceSnapshots[piece.id],
+            weight: onePrice ? '' : _startWeight(priceSnapshots[piece.id]),
           ),
         );
       }
     }
   }
+
+  static String _centsText(int? cents) =>
+      cents == null ? '' : invoiceCentsToInput(cents);
+
+  /// How the business prices a package ([packagePriceModePiece] or
+  /// [packagePriceModePackage]).
+  final String priceMode;
+
+  /// One price for the whole package: no price on a row.
+  bool get isPackageMode => priceMode == packagePriceModePackage;
+
+  /// The one price for everything, in US dollars as typed; only used in
+  /// package mode.
+  final TextEditingController packagePrice;
+
+  /// The saved package's pieces, when editing in package mode: an untouched
+  /// save keeps their prices (`packagePiecePrices`), and the note under the
+  /// price says how many were added or removed since.
+  final List<LinePiece>? _stored;
+
+  /// How many pieces the saved package had; 0 for a new one.
+  int get savedCount => _stored?.length ?? 0;
+
+  /// The one price typed, in whole cents; null while blank or unreadable.
+  int? get onePriceCents => readPackagePriceField(packagePrice.text).cents;
+
+  /// What is wrong with the one price, as codes (`piece_price_invalid`, and
+  /// for a customer's package `package_price_required`).
+  List<String> priceProblems({bool requirePrice = false}) => isPackageMode
+      ? packagePriceProblems(packagePrice.text, requirePrice: requirePrice)
+      : const [];
+
+  /// The pieces' ids in the form's order, "" for a new one.
+  List<String> get pieceIds => [
+    for (final row in _rows)
+      for (var i = 0; i < row.count; i++)
+        i == 0
+            ? row.id
+            : (i - 1 < row.moreIds.length ? row.moreIds[i - 1] : ''),
+  ];
 
   final List<PieceDraftRow> _rows = [];
 
@@ -385,14 +459,26 @@ class PiecesEditorController extends ChangeNotifier {
 
   /// The pieces as the request carries them before they are cleaned: every
   /// row's pieces, in order.
-  List<Map<String, Object?>> get draftPieces => [
-    for (final row in _rows) ...row.toDrafts(),
-  ];
+  ///
+  /// In package mode every piece carries its share of the one price
+  /// (`packagePieceDrafts`).
+  List<Map<String, Object?>> get draftPieces {
+    final drafts = [for (final row in _rows) ...row.toDrafts()];
+    return isPackageMode
+        ? packagePieceDrafts(
+            drafts,
+            priceText: packagePrice.text,
+            stored: _stored,
+          )
+        : drafts;
+  }
 
   /// The line total: the priced pieces plus the pickup fee when the line
-  /// has one (`lineTotalCents`), null while no piece is priced.
-  int? get totalCents =>
-      lineTotalCents(normalizePieces(draftPieces), pickupFeeCents);
+  /// has one (`lineTotalCents`), null while no piece is priced. In package
+  /// mode: the one price plus the fee.
+  int? get totalCents => isPackageMode
+      ? packageTotalCents(packagePrice.text, pickupFeeCents)
+      : lineTotalCents(normalizePieces(draftPieces), pickupFeeCents);
 
   /// One piece's own problems (not the list's: "too many", "none").
   /// [requirePrice] (a customer's package: docs/PACKAGE_PRICE_REQUIRED.md)
@@ -400,6 +486,18 @@ class PiecesEditorController extends ChangeNotifier {
   List<String> errorsFor(int index, {bool requirePrice = false}) {
     if (index < 0 || index >= _rows.length) return const [];
     final draft = _rows[index].toDraft();
+    // One price for the package: a row has no price of its own, so none of
+    // the price problems belong to it ([priceProblems] says them).
+    if (isPackageMode) {
+      return pieceErrors([draft])
+          .where(
+            (c) =>
+                c != 'pieces_required' &&
+                c != 'pieces_too_many' &&
+                c != 'piece_price_invalid',
+          )
+          .toList();
+    }
     return [
       ...pieceErrors([
         draft,
@@ -463,6 +561,7 @@ class PiecesEditorController extends ChangeNotifier {
     _rows
       ..clear()
       ..add(_row(kind: kind, description: description));
+    if (packagePrice.text.isNotEmpty) packagePrice.text = '';
     notifyListeners();
   }
 
@@ -472,6 +571,7 @@ class PiecesEditorController extends ChangeNotifier {
       row._dispose();
     }
     pickupFee.dispose();
+    packagePrice.dispose();
     super.dispose();
   }
 }
@@ -558,7 +658,10 @@ class PiecesEditor extends StatelessWidget {
                   removable: rows.length > 1 && enabled,
                   enabled: enabled,
                   requirePrice: requirePrices,
-                  onFromList: priceFillAvailable(priceRoute)
+                  packageMode: controller.isPackageMode,
+                  onFromList:
+                      !controller.isPackageMode &&
+                          priceFillAvailable(priceRoute)
                       ? () async {
                           final fill = await showPriceFillSheet(
                             context,
@@ -596,6 +699,20 @@ class PiecesEditor extends StatelessWidget {
                 controller.add();
               },
             ),
+            if (controller.isPackageMode) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _PackagePriceBlock(
+                controller: controller,
+                requirePrice: requirePrices,
+                enabled: enabled,
+                problem: showErrors
+                    ? controller
+                          .priceProblems(requirePrice: requirePrices)
+                          .map(describe)
+                          .firstOrNull
+                    : null,
+              ),
+            ],
             if (controller.hasPickupFee) ...[
               const SizedBox(height: AppSpacing.sm),
               Align(
@@ -641,6 +758,116 @@ class PiecesEditor extends StatelessWidget {
   }
 }
 
+/// The one price for everything, in package mode
+/// (docs/PACKAGE_ONE_PRICE.md): the strongest thing in the editor. Its label
+/// and the count of pieces it covers, the amount, and - on an edit whose
+/// number of pieces changed - a note asking whether the price still holds.
+class _PackagePriceBlock extends StatelessWidget {
+  const _PackagePriceBlock({
+    required this.controller,
+    required this.requirePrice,
+    required this.enabled,
+    required this.problem,
+  });
+
+  final PiecesEditorController controller;
+  final bool requirePrice;
+  final bool enabled;
+
+  /// What is wrong with the price, already in words; null for nothing.
+  final String? problem;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final language = Localizations.localeOf(context).languageCode;
+    final count = controller.count;
+    final cents = controller.onePriceCents;
+    final change = packagePieceCountChange(controller.savedCount, count);
+    String? note;
+    if (cents != null && change.added > 0) {
+      note = l10n.ppmNoteAdded(
+        change.added,
+        formatLotCents(cents, language: language),
+        count,
+      );
+    } else if (cents != null && change.removed > 0) {
+      note = l10n.ppmNoteRemoved(
+        change.removed,
+        formatLotCents(cents, language: language),
+        count,
+      );
+    }
+    return Container(
+      key: const Key('pieces-package-price-block'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.mist,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(
+          color: problem != null ? AppColors.errorRed : AppColors.cobalt,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            requirePrice ? '${l10n.ppmPriceLabel} *' : l10n.ppmPriceLabel,
+            key: const Key('pieces-package-price-label'),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.cobaltDeep,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            l10n.ppmCountLine(count),
+            key: const Key('pieces-package-count'),
+            style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Semantics(
+            label: l10n.ppmPriceLabel,
+            child: TextField(
+              key: const Key('pieces-package-price'),
+              controller: controller.packagePrice,
+              enabled: enabled,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+              decoration: InputDecoration(
+                prefixText: r'$ ',
+                hintText: '0.00',
+                filled: true,
+                fillColor: AppColors.paper,
+                errorText: problem,
+                errorMaxLines: 2,
+              ),
+            ),
+          ),
+          if (note != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                note,
+                key: const Key('pieces-package-note'),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.warn,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PieceCard extends StatelessWidget {
   const _PieceCard({
     required this.index,
@@ -653,6 +880,7 @@ class _PieceCard extends StatelessWidget {
     required this.enabled,
     required this.errors,
     required this.requirePrice,
+    required this.packageMode,
     required this.onFromList,
     required this.onKind,
     required this.onRemove,
@@ -678,6 +906,10 @@ class _PieceCard extends StatelessWidget {
 
   /// The price field is marked required (a customer's package).
   final bool requirePrice;
+
+  /// One price for the whole package: the row has no price field and no
+  /// "Each piece / All together" switch (docs/PACKAGE_ONE_PRICE.md).
+  final bool packageMode;
   final ValueChanged<String> onKind;
   final VoidCallback onRemove;
   final VoidCallback onOpenSize;
@@ -815,25 +1047,27 @@ class _PieceCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              SizedBox(
-                width: 104,
-                child: TextField(
-                  key: Key('piece-price-$index'),
-                  controller: row.price,
-                  enabled: enabled,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: requirePrice
-                        ? '${l10n.pcsPrice} *'
-                        : l10n.pcsPrice,
-                    prefixText: r'$ ',
-                    isDense: true,
+              if (!packageMode) ...[
+                const SizedBox(width: AppSpacing.sm),
+                SizedBox(
+                  width: 104,
+                  child: TextField(
+                    key: Key('piece-price-$index'),
+                    controller: row.price,
+                    enabled: enabled,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: requirePrice
+                          ? '${l10n.pcsPrice} *'
+                          : l10n.pcsPrice,
+                      prefixText: r'$ ',
+                      isDense: true,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
           if (onFromList != null)
@@ -940,7 +1174,7 @@ class _PieceCard extends StatelessWidget {
               ],
             ),
           ],
-          if (count > 1) ...[
+          if (count > 1 && !packageMode) ...[
             const SizedBox(height: AppSpacing.sm),
             Semantics(
               label: l10n.pcsPriceFor,

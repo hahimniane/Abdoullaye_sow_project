@@ -13786,5 +13786,17 @@
   "prcModeAuto": "Envoyer automatiquement avec la confirmation",
   "prcSettingsOwnerOnly": "Seuls le propriétaire ou un administrateur peuvent changer ceci.",
   "prcSettingsFailed": "Enregistrement impossible. Réessayez.",
-  "prcSettingsLoadFailed": "Impossible de charger ce réglage."
+  "prcSettingsLoadFailed": "Impossible de charger ce réglage.",
+  "ppmPriceLabel": "Prix pour le tout ($)",
+  "@ppmPriceLabel": {"description": "Label of the one price field in the pieces editor when the business prices a whole package with one price."},
+  "ppmCountLine": "{count, plural, =1{1 pièce, un seul prix} other{{count} pièces, un seul prix}}",
+  "@ppmCountLine": {"placeholders": {"count": {"type": "int"}}},
+  "ppmNoteAdded": "Vous avez ajouté {added, plural, =1{1 pièce} other{{added} pièces}}. Toujours {price} pour les {total} ? Sinon, modifiez-le ici.",
+  "@ppmNoteAdded": {"placeholders": {"added": {"type": "int"}, "price": {"type": "String"}, "total": {"type": "int"}}},
+  "ppmNoteRemoved": "Vous avez retiré {removed, plural, =1{1 pièce} other{{removed} pièces}}. Toujours {price} pour {left, plural, =1{celle qui reste} other{les {left} restantes}} ? Sinon, modifiez-le ici.",
+  "@ppmNoteRemoved": {"placeholders": {"removed": {"type": "int"}, "price": {"type": "String"}, "left": {"type": "int"}}},
+  "ppmSettingsTitle": "Prix d'un colis",
+  "ppmModePiece": "Un prix par article",
+  "ppmModePackage": "Un seul prix pour tout le colis",
+  "ppmSettingsNote": "Avec un seul prix, le personnel saisit un seul montant pour tout ce que le client dépose. Il est réparti également entre les pièces."
 }

@@ -743,13 +743,13 @@ class _PackageReceiptModeCardState extends State<PackageReceiptModeCard> {
               style: const TextStyle(fontSize: 13, color: AppColors.errorRed),
             )
           else ...[
-            _ModeTile(
+            PackageModeTile(
               tileKey: 'receipt-mode-button',
               label: l10n.prcModeButton,
               selected: mode == receiptModeButton,
               onTap: enabled ? () => _choose(receiptModeButton) : null,
             ),
-            _ModeTile(
+            PackageModeTile(
               tileKey: 'receipt-mode-auto',
               label: l10n.prcModeAuto,
               selected: mode == receiptModeAuto,
@@ -780,8 +780,10 @@ class _PackageReceiptModeCardState extends State<PackageReceiptModeCard> {
   }
 }
 
-class _ModeTile extends StatelessWidget {
-  const _ModeTile({
+/// One choice of a setting card: a radio row (also the package price card's).
+class PackageModeTile extends StatelessWidget {
+  const PackageModeTile({
+    super.key,
     required this.tileKey,
     required this.label,
     required this.selected,

@@ -76,9 +76,15 @@ bool _sharedEvenly(List<int?> prices) {
 ///
 /// [keepAlone] holds a piece out of any run: one priced by its weight at
 /// Received keeps its own row and its own weight field.
+///
+/// [ignorePrices] groups by shape alone (kind, description, size): the form
+/// of a business that prices a package with one price
+/// (docs/PACKAGE_ONE_PRICE.md), where a piece's own price is not on a row.
+/// The groups then carry no price and are priced each.
 List<PieceRowGroup> groupPieceRows(
   Iterable<LinePiece> pieces, {
   bool Function(LinePiece piece)? keepAlone,
+  bool ignorePrices = false,
 }) {
   final runs = <List<LinePiece>>[];
   for (final piece in pieces) {
@@ -91,12 +97,26 @@ List<PieceRowGroup> groupPieceRows(
         last.first.kind == piece.kind &&
         last.first.description == piece.description &&
         _sameSize(last.first.sizeIn, piece.sizeIn) &&
-        _sharedEvenly([for (final p in last) p.priceCents, piece.priceCents]);
+        (ignorePrices ||
+            _sharedEvenly([
+              for (final p in last) p.priceCents,
+              piece.priceCents,
+            ]));
     if (joins) {
       last.add(piece);
     } else {
       runs.add([piece]);
     }
+  }
+  if (ignorePrices) {
+    return [
+      for (final run in runs)
+        PieceRowGroup(
+          pieces: List.unmodifiable(run),
+          priceFor: priceForEach,
+          priceCents: null,
+        ),
+    ];
   }
   return [
     for (final run in runs)

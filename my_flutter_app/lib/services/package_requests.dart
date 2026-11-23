@@ -24,6 +24,8 @@ import 'eastern_clock.dart';
 import 'line_pieces.dart' as lp;
 import 'lot_ledger.dart' show formatLotCents;
 import 'package_codes.dart' show packageLinkHost;
+import 'package_price_mode.dart'
+    show packagePriceModeOf, packagePriceModePiece;
 import 'package_price_list.dart'
     show DepartureResult, boxSizeIds, priceCategoryOf, priceModes;
 
@@ -2476,6 +2478,7 @@ class PackageProofSettings {
     this.senderConfirm = false,
     this.pickupCode = false,
     this.shipsByAir = false,
+    this.packagePriceMode = packagePriceModePiece,
   });
 
   /// From the stored map (`packageProofSettings`) or the callable's echo.
@@ -2492,7 +2495,10 @@ class PackageProofSettings {
   factory PackageProofSettings.fromBusiness(Map<String, dynamic> business) =>
       PackageProofSettings.fromMap(
         business['packageProofSettings'],
-      ).copyWith(shipsByAir: business['shipsByAir'] == true);
+      ).copyWith(
+        shipsByAir: business['shipsByAir'] == true,
+        packagePriceMode: packagePriceModeOf(business),
+      );
 
   /// Photos required at drop-off (counter packages only).
   final bool photosRequired;
@@ -2508,6 +2514,13 @@ class PackageProofSettings {
   /// offer "Ships by: Sea · Air". Not a switch: never in [toMap].
   final bool shipsByAir;
 
+  /// `businesses/{id}.packagePriceSettings.mode` (docs/PACKAGE_ONE_PRICE.md):
+  /// how the package forms price a package, [packagePriceModePiece] or
+  /// [packagePriceModePackage]. Read with the other switches so every form
+  /// that already has them knows it; not one of the proof switches, so never
+  /// in [toMap] and never part of [anyOn].
+  final String packagePriceMode;
+
   bool get anyOn => photosRequired || senderConfirm || pickupCode;
 
   /// The `proof` key of `setPackageRequestSettings`: every switch named.
@@ -2522,11 +2535,13 @@ class PackageProofSettings {
     bool? senderConfirm,
     bool? pickupCode,
     bool? shipsByAir,
+    String? packagePriceMode,
   }) => PackageProofSettings(
     photosRequired: photosRequired ?? this.photosRequired,
     senderConfirm: senderConfirm ?? this.senderConfirm,
     pickupCode: pickupCode ?? this.pickupCode,
     shipsByAir: shipsByAir ?? this.shipsByAir,
+    packagePriceMode: packagePriceMode ?? this.packagePriceMode,
   );
 
   @override
@@ -2535,11 +2550,17 @@ class PackageProofSettings {
       other.photosRequired == photosRequired &&
       other.senderConfirm == senderConfirm &&
       other.pickupCode == pickupCode &&
-      other.shipsByAir == shipsByAir;
+      other.shipsByAir == shipsByAir &&
+      other.packagePriceMode == packagePriceMode;
 
   @override
-  int get hashCode =>
-      Object.hash(photosRequired, senderConfirm, pickupCode, shipsByAir);
+  int get hashCode => Object.hash(
+    photosRequired,
+    senderConfirm,
+    pickupCode,
+    shipsByAir,
+    packagePriceMode,
+  );
 }
 
 /// A request code as the counter types or scans it (docs/AIR_PACKAGES.md

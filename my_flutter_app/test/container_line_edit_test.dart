@@ -4,6 +4,8 @@ import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/containers_screen.dart';
 import 'package:my_flutter_app/screens/package_result_screen.dart';
 import 'package:my_flutter_app/services/container_manifest.dart';
+import 'package:my_flutter_app/services/package_requests.dart'
+    show PackageProofSettings;
 import 'package:my_flutter_app/theme/app_theme.dart';
 
 /// Editing a line already on a container: the same add-line form, opened
@@ -59,6 +61,34 @@ String _field(WidgetTester tester, String key) =>
     tester.widget<TextField>(find.byKey(Key(key))).controller!.text;
 
 void main() {
+  // One price for the whole package (docs/PACKAGE_ONE_PRICE.md): the same
+  // form, read through the business's setting.
+  testWidgets('one price: a saved line opens on the sum of its pieces',
+      (tester) async {
+    final line = _line('l1', {
+      'pieces': [
+        {'id': 'p1', 'kind': 'barrel', 'priceCents': 12000},
+        {'id': 'p2', 'kind': 'barrel', 'priceCents': 6000},
+      ],
+    });
+    await _pump(
+      tester,
+      containerLineFormSheetForTesting(
+        container: _box(containerStatusLoading),
+        existing: line,
+        proofSettings: const PackageProofSettings(
+          packagePriceMode: 'package',
+        ),
+      ),
+    );
+    // The two barrels are one row, whatever their prices; no row price.
+    expect(find.byKey(const Key('piece-price-0')), findsNothing);
+    expect(find.byKey(const Key('piece-kind-1-barrel')), findsNothing);
+    expect(_field(tester, 'pieces-package-price'), '180');
+    expect(find.text('2 pieces, one price'), findsOneWidget);
+    expect(find.byKey(const Key('pieces-package-note')), findsNothing);
+  });
+
   testWidgets('a loading line offers Edit; a shipped one does not',
       (tester) async {
     final line = _line('l1', const {});

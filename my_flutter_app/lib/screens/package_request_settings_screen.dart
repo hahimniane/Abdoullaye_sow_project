@@ -17,6 +17,8 @@ import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/package_request_widgets.dart';
 import '../services/package_receipt.dart';
+import '../services/package_price_mode_source.dart';
+import '../widgets/package_price_mode_card.dart';
 import '../widgets/package_receipt_widgets.dart';
 import '../widgets/pay_now_payouts_panel.dart';
 
@@ -34,6 +36,7 @@ class PackageRequestSettingsScreen extends StatefulWidget {
     this.locations,
     this.onShare,
     this.receiptModes,
+    this.priceModes,
     this.payouts = const PayNowPayoutsService(),
   });
 
@@ -51,6 +54,10 @@ class PackageRequestSettingsScreen extends StatefulWidget {
   /// How package receipts go out (docs/PACKAGE_RECEIPT_SEND.md); the card
   /// is hidden when null.
   final PackageReceiptModeSource? receiptModes;
+
+  /// How a package is priced (docs/PACKAGE_ONE_PRICE.md): the card beside
+  /// the receipts one; hidden when null.
+  final PackagePriceModeSource? priceModes;
 
   /// Shares the link; the system sheet when null.
   final Future<void> Function(String link)? onShare;
@@ -504,6 +511,12 @@ class _PackageRequestSettingsScreenState
             source: widget.receiptModes!,
           ),
         ],
+        if (widget.priceModes != null)
+          PackagePriceModeCard(
+            businessId: widget.businessId,
+            canEdit: widget.canEdit,
+            source: widget.priceModes!,
+          ),
         RequestSectionTitle(l10n.prqHoursTitle),
         Text(
           l10n.prqHoursHint,

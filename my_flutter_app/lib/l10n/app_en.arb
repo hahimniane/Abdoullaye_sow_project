@@ -13796,5 +13796,17 @@
   "prcModeAuto": "Send it automatically with the confirmation",
   "prcSettingsOwnerOnly": "Only the owner or an admin can change this.",
   "prcSettingsFailed": "Could not save. Try again.",
-  "prcSettingsLoadFailed": "Could not load this setting."
+  "prcSettingsLoadFailed": "Could not load this setting.",
+  "ppmPriceLabel": "Price for everything ($)",
+  "@ppmPriceLabel": {"description": "Label of the one price field in the pieces editor when the business prices a whole package with one price."},
+  "ppmCountLine": "{count, plural, =1{1 piece, one price} other{{count} pieces, one price}}",
+  "@ppmCountLine": {"placeholders": {"count": {"type": "int"}}},
+  "ppmNoteAdded": "You added {added, plural, =1{1 piece} other{{added} pieces}}. Still {price} for all {total}? Change it here if not.",
+  "@ppmNoteAdded": {"placeholders": {"added": {"type": "int"}, "price": {"type": "String"}, "total": {"type": "int"}}},
+  "ppmNoteRemoved": "You removed {removed, plural, =1{1 piece} other{{removed} pieces}}. Still {price} for the {left} left? Change it here if not.",
+  "@ppmNoteRemoved": {"placeholders": {"removed": {"type": "int"}, "price": {"type": "String"}, "left": {"type": "int"}}},
+  "ppmSettingsTitle": "Package price",
+  "ppmModePiece": "A price for each item",
+  "ppmModePackage": "One price for the whole package",
+  "ppmSettingsNote": "With one price, staff type a single amount for everything the customer drops off. It is shared equally among the pieces."
 }

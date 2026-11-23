@@ -39863,6 +39863,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not load this setting.'**
   String get prcSettingsLoadFailed;
+
+  /// Label of the one price field in the pieces editor when the business prices a whole package with one price.
+  ///
+  /// In en, this message translates to:
+  /// **'Price for everything (\$)'**
+  String get ppmPriceLabel;
+
+  /// No description provided for @ppmCountLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece, one price} other{{count} pieces, one price}}'**
+  String ppmCountLine(int count);
+
+  /// No description provided for @ppmNoteAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'You added {added, plural, =1{1 piece} other{{added} pieces}}. Still {price} for all {total}? Change it here if not.'**
+  String ppmNoteAdded(int added, String price, int total);
+
+  /// No description provided for @ppmNoteRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'You removed {removed, plural, =1{1 piece} other{{removed} pieces}}. Still {price} for the {left} left? Change it here if not.'**
+  String ppmNoteRemoved(int removed, String price, int left);
+
+  /// No description provided for @ppmSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Package price'**
+  String get ppmSettingsTitle;
+
+  /// No description provided for @ppmModePiece.
+  ///
+  /// In en, this message translates to:
+  /// **'A price for each item'**
+  String get ppmModePiece;
+
+  /// No description provided for @ppmModePackage.
+  ///
+  /// In en, this message translates to:
+  /// **'One price for the whole package'**
+  String get ppmModePackage;
+
+  /// No description provided for @ppmSettingsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'With one price, staff type a single amount for everything the customer drops off. It is shared equally among the pieces.'**
+  String get ppmSettingsNote;
 }
 
 class _AppLocalizationsDelegate

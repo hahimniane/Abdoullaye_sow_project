@@ -4482,6 +4482,10 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     // (never in the piece prices); any other line has none to show.
     _pieceEditor = PiecesEditorController(
       initial: line == null || line.isCar ? const [] : line.allPieces,
+      // One price for the whole package, when the business prices that way
+      // (docs/PACKAGE_ONE_PRICE.md); an edit opens on the saved pieces.
+      priceMode: widget.proofSettings.packagePriceMode,
+      isEdit: line != null && !line.isCar,
       kind: _startPieceKind,
       pickupFeeCents: line != null && line.hasPickupFee
           ? line.pickupFeeCents
@@ -4589,6 +4593,20 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         : (widget.container?.destinationCountryId ?? '');
     if (country.isEmpty) return null;
     return _units.list?.route(country, _lineShipMode)?.raw;
+  }
+
+  /// The package-price refusal under the pieces. With one price for the
+  /// whole package the editor says it at the price field itself, from the
+  /// price typed, so only a refusal the form could not see (the server's)
+  /// is said here.
+  String? _packagePriceRefusal(String? Function(String code) errorFor) {
+    if (!_pieceEditor.isPackageMode) return errorFor('package_price_required');
+    final saysItself = _pieceEditor
+        .priceProblems(requirePrice: _owner == containerOwnerCustomer)
+        .isNotEmpty;
+    if (saysItself) return null;
+    return errorFor('package_price_required') ??
+        errorFor('piece_price_required');
   }
 
   /// A piece was filled from the price list. On an air package with an empty
@@ -5624,7 +5642,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               onPriceFilled: _onPriceFilled,
               error: errorFor('pieces_required') ??
                   errorFor('pieces_too_many') ??
-                  errorFor('package_price_required') ??
+                  _packagePriceRefusal(errorFor) ??
                   errorFor('price_below_paid'),
             ),
           ],

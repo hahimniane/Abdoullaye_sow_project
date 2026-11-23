@@ -270,6 +270,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       service: service,
       staff: widget.staff,
       shipsByAir: widget.proofSettings.shipsByAir,
+      priceMode: widget.proofSettings.packagePriceMode,
     );
     if (received == null || !mounted) return;
     showSuccessSnackBar(

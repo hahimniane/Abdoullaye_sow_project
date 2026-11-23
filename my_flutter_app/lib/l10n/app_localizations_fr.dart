@@ -23965,4 +23965,59 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get prcSettingsLoadFailed => 'Impossible de charger ce réglage.';
+
+  @override
+  String get ppmPriceLabel => 'Prix pour le tout (\$)';
+
+  @override
+  String ppmCountLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces, un seul prix',
+      one: '1 pièce, un seul prix',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ppmNoteAdded(int added, String price, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      added,
+      locale: localeName,
+      other: '$added pièces',
+      one: '1 pièce',
+    );
+    return 'Vous avez ajouté $_temp0. Toujours $price pour les $total ? Sinon, modifiez-le ici.';
+  }
+
+  @override
+  String ppmNoteRemoved(int removed, String price, int left) {
+    String _temp0 = intl.Intl.pluralLogic(
+      removed,
+      locale: localeName,
+      other: '$removed pièces',
+      one: '1 pièce',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      left,
+      locale: localeName,
+      other: 'les $left restantes',
+      one: 'celle qui reste',
+    );
+    return 'Vous avez retiré $_temp0. Toujours $price pour $_temp1 ? Sinon, modifiez-le ici.';
+  }
+
+  @override
+  String get ppmSettingsTitle => 'Prix d\'un colis';
+
+  @override
+  String get ppmModePiece => 'Un prix par article';
+
+  @override
+  String get ppmModePackage => 'Un seul prix pour tout le colis';
+
+  @override
+  String get ppmSettingsNote =>
+      'Avec un seul prix, le personnel saisit un seul montant pour tout ce que le client dépose. Il est réparti également entre les pièces.';
 }

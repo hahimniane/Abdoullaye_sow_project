@@ -482,6 +482,7 @@ void main() {
       Locale locale = const Locale('en'),
       double width = 430,
       bool shipsByAir = false,
+      String priceMode = 'piece',
     }) async {
       final fake = FakePackageRequests();
       final results = <RequestReceived?>[];
@@ -499,6 +500,7 @@ void main() {
                   service: fake,
                   staff: staff,
                   shipsByAir: shipsByAir,
+                  priceMode: priceMode,
                 ),
               ),
               child: const Text('open'),
@@ -548,6 +550,49 @@ void main() {
         'receivedByStaffId': 's1',
       });
       expect(opened.results.single?.trackingCode, 'CL-K7M4P2');
+    });
+
+    // One price for the whole package (docs/PACKAGE_ONE_PRICE.md).
+    testWidgets('one price: opens on the estimate total and shares it',
+        (tester) async {
+      final opened = await open(
+        tester,
+        _req('d', 'confirmed', {'estimate': _estimate(1, 16500)}),
+        priceMode: 'package',
+      );
+      expect(find.byKey(const Key('piece-price-0')), findsNothing);
+      expect(find.byKey(const Key('piece-price-1')), findsNothing);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('pieces-package-price')))
+            .controller!
+            .text,
+        '165',
+      );
+      expect(totalShown(tester), r'$165.00');
+      await _type(tester, 'pieces-package-price', '100');
+      expect(totalShown(tester), r'$100.00');
+      await _tap(tester, 'receive-save');
+      final body = opened.fake.of('receivePackageRequest').single;
+      expect([for (final p in body['pieces'] as List) (p as Map)['priceCents']],
+          [5000, 5000]);
+    });
+
+    testWidgets('one price: blank is refused at the price field',
+        (tester) async {
+      final opened = await open(
+        tester,
+        _req('d', 'confirmed'),
+        priceMode: 'package',
+      );
+      await _tap(tester, 'receive-save');
+      expect(opened.fake.of('receivePackageRequest'), isEmpty);
+      expect(find.byKey(const Key('receive-price-required')), findsNothing);
+      // Said once, at the price field (not also under the pieces).
+      expect(find.text('Enter the package\'s price: more than \$0.'),
+          findsOneWidget);
+      expect(find.byKey(const Key('pieces-package-price-block')),
+          findsOneWidget);
     });
 
     // "Ships by: Sea · Air" (docs/AIR_PACKAGES.md §7).

@@ -23594,4 +23594,53 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get prcSettingsLoadFailed => 'Could not load this setting.';
+
+  @override
+  String get ppmPriceLabel => 'Price for everything (\$)';
+
+  @override
+  String ppmCountLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces, one price',
+      one: '1 piece, one price',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ppmNoteAdded(int added, String price, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      added,
+      locale: localeName,
+      other: '$added pieces',
+      one: '1 piece',
+    );
+    return 'You added $_temp0. Still $price for all $total? Change it here if not.';
+  }
+
+  @override
+  String ppmNoteRemoved(int removed, String price, int left) {
+    String _temp0 = intl.Intl.pluralLogic(
+      removed,
+      locale: localeName,
+      other: '$removed pieces',
+      one: '1 piece',
+    );
+    return 'You removed $_temp0. Still $price for the $left left? Change it here if not.';
+  }
+
+  @override
+  String get ppmSettingsTitle => 'Package price';
+
+  @override
+  String get ppmModePiece => 'A price for each item';
+
+  @override
+  String get ppmModePackage => 'One price for the whole package';
+
+  @override
+  String get ppmSettingsNote =>
+      'With one price, staff type a single amount for everything the customer drops off. It is shared equally among the pieces.';
 }

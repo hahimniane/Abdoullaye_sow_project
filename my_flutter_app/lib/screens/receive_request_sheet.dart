@@ -9,6 +9,7 @@ import '../services/container_manifest.dart'
     show containerShipModeAir, containerShipModeSea;
 import '../services/package_proof.dart'
     show PackageProofDraft, validateProofFields;
+import '../services/package_price_mode.dart';
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
 import '../services/waiting_packages.dart'
@@ -39,6 +40,7 @@ Future<RequestReceived?> showReceiveRequestSheet(
   required PackageRequestService service,
   List<LotStaff> staff = const [],
   bool shipsByAir = false,
+  String priceMode = packagePriceModePiece,
   BusinessWeightUnit? weightUnit,
 }) => showLotSheet<RequestReceived>(
   context,
@@ -48,6 +50,7 @@ Future<RequestReceived?> showReceiveRequestSheet(
     service: service,
     staff: staff,
     shipsByAir: shipsByAir,
+    priceMode: priceMode,
     weightUnit: weightUnit,
   ),
 );
@@ -69,7 +72,13 @@ class ReceiveRequestSheet extends StatefulWidget {
     this.proofController,
     this.weightUnit,
     this.shipsByAir = false,
+    this.priceMode = packagePriceModePiece,
   });
+
+  /// How the business prices a package (docs/PACKAGE_ONE_PRICE.md): with
+  /// [packagePriceModePackage] the pieces share one price, prefilled from the
+  /// request's estimate total.
+  final String priceMode;
 
   /// The business's weight unit; the sheet makes (and owns) its own unless a
   /// test gave one (docs/SHIPPING_SIMPLE_HOME.md K4).
@@ -104,6 +113,13 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
     pickupFeeCents: widget.request.isCollect
         ? receivePrefillPickupFeeCents(widget.request)
         : null,
+    priceMode: widget.priceMode,
+    // One price for everything opens on the estimate's total (the pieces'
+    // estimates added up, never the pickup fee) when every piece has one.
+    packagePriceCents: packagePriceFromEstimates([
+      for (final piece in widget.request.pieces)
+        widget.request.priceOf(piece),
+    ]),
     // A piece the business's list prices by weight asks for its weighed
     // pounds and fills its price from the list (docs/PACKAGE_PRICE_LIST.md).
     priceSnapshots: {
@@ -368,8 +384,10 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
           ),
           const SizedBox(height: AppSpacing.sm),
           PiecesTotalLine(controller: _pieces),
-          if (check.reasons.contains('price_required') ||
-              check.reasons.contains('package_price_required'))
+          // One price for the whole package says its problem at its own field.
+          if (!_pieces.isPackageMode &&
+              (check.reasons.contains('price_required') ||
+                  check.reasons.contains('package_price_required')))
             Text(
               check.reasons.contains('price_required')
                   ? l10n.pcsErrPriceRequired
