@@ -4777,6 +4777,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "The receipt was just sent this way. Wait a minute before sending it again.": "Le reçu vient d’être envoyé de cette façon. Attendez une minute avant de le renvoyer.",
   "This package was removed, so there is no receipt to send.": "Ce colis a été supprimé, il n’y a donc pas de reçu à envoyer.",
   "WhatsApp is not connected yet. Send the receipt by text or email, or show the QR.": "WhatsApp n’est pas encore connecté. Envoyez le reçu par texto ou par e-mail, ou montrez le QR.",
+  "The text could not be sent. Try again, or use Text from this phone.": "Le texto n’a pas pu être envoyé. Réessayez, ou utilisez Texto depuis ce téléphone.",
   "Could not send the receipt. Try again.": "Impossible d’envoyer le reçu. Réessayez.",
   "Could not get the receipt link. Try again.": "Impossible d’obtenir le lien du reçu. Réessayez.",
   "name@example.com": "nom@exemple.com",

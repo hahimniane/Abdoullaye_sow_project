@@ -44,6 +44,8 @@ export const RECEIPT_ERROR_MESSAGES: Record<string, string> = {
   receipt_too_soon: "The receipt was just sent this way. Wait a minute before sending it again.",
   receipt_line_gone: "This package was removed, so there is no receipt to send.",
   receipt_whatsapp_off: "WhatsApp is not connected yet. Send the receipt by text or email, or show the QR.",
+  receipt_sms_failed: "The text could not be sent. Try again, or use Text from this phone.",
+  receipt_channel_invalid: "Could not send the receipt. Try again.",
 };
 export const RECEIPT_GENERIC_ERROR = "Could not send the receipt. Try again.";
 export const RECEIPT_LINK_ERROR = "Could not get the receipt link. Try again.";
@@ -119,7 +121,7 @@ function millisOf(value: unknown): number {
 }
 
 function rowMillis(row: Row): number {
-  return millisOf(row.sentAtMs) || millisOf(row.atMs) || millisOf(row.updatedAt) || millisOf(row.createdAt);
+  return millisOf(row.sentAt) || millisOf(row.sentAtMs) || millisOf(row.atMs) || millisOf(row.updatedAt) || millisOf(row.createdAt);
 }
 
 /** US date, 12-hour time in both languages: "Nov 23, 2026, 2:10 AM" (owner rule: month-first). */
@@ -137,12 +139,13 @@ function isReceiptRow(row: Row): boolean {
 
 function failedRow(row: Row): boolean {
   const status = clean(row.status, 40);
-  const delivery = clean(row.delivery, 40);
+  // The webhook writes Meta's verdict as deliveryStatus / deliveryErrorCode.
+  const delivery = clean(row.deliveryStatus ?? row.delivery, 40);
   return status === "failed" || delivery === "failed";
 }
 
 function notOnWhatsApp(row: Row): boolean {
-  const codes = [row.errorCode, row.failureCode, row.code, row.reason].map((v) => Number(clean(v, 20)));
+  const codes = [row.deliveryErrorCode, row.errorCode, row.failureCode, row.code, row.reason].map((v) => Number(clean(v, 20)));
   return codes.some((code) => NOT_ON_WHATSAPP_CODES.includes(code)) || /131026/.test(clean(row.reason, 200) + clean(row.failure, 200) + clean(row.error, 200));
 }
 
@@ -176,7 +179,8 @@ export function receiptSendState(rows: readonly unknown[], lang: ReceiptLang = "
     };
   }
   const status = clean(row.status, 40);
-  if (status === "sent" || clean(row.delivery, 40) === "delivered" || clean(row.delivery, 40) === "read") {
+  const delivery = clean(row.deliveryStatus ?? row.delivery, 40);
+  if (status === "sent" || delivery === "delivered" || delivery === "read") {
     const how = channel === "sms" ? (fr ? "par texto" : "by text") : (fr ? "sur WhatsApp" : "on WhatsApp");
     return {
       kind: "sent", channel, atMs,

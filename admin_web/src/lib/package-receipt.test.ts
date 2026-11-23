@@ -74,3 +74,21 @@ test("French status uses the same month-first moment", () => {
   const state = receiptSendState([{ update: "receipt", role: "sender", status: "sent", atMs: Date.UTC(2026, 10, 23, 12, 0) }], "fr");
   assert.match(state.text, /^Reçu envoyé sur WhatsApp le /);
 });
+
+test("reads the fields the server really writes (deliveryStatus, deliveryErrorCode, sentAt)", () => {
+  // The WhatsApp row is "sent" to Meta first; the webhook then says Meta could not deliver.
+  const notOn = receiptSendState([
+    { update: "receipt", role: "sender", status: "sent", deliveryStatus: "failed", deliveryErrorCode: 131026, sentAt: { seconds: 1795000000 } },
+  ]);
+  assert.equal(notOn.kind, "not_on_whatsapp");
+  const other = receiptSendState([
+    { update: "receipt", role: "sender", status: "sent", deliveryStatus: "failed", deliveryErrorCode: 131047, sentAt: { seconds: 1795000000 } },
+  ]);
+  assert.equal(other.kind, "failed");
+  const ok = receiptSendState([
+    { update: "receipt", role: "sender", status: "sent", deliveryStatus: "delivered", sentAt: { seconds: 1795000000 } },
+  ]);
+  assert.equal(ok.kind, "sent");
+  assert.ok(ok.atMs > 0, "the time comes from sentAt");
+  assert.equal(receiptErrorText({ details: { reason: "receipt_sms_failed" } }), RECEIPT_ERROR_MESSAGES.receipt_sms_failed);
+});
