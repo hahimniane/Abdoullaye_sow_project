@@ -39593,6 +39593,276 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The app\'s home opens on this.'**
   String get nhmMainWorkHelp;
+
+  /// No description provided for @prcSendReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Send receipt'**
+  String get prcSendReceipt;
+
+  /// No description provided for @prcSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the receipt'**
+  String get prcSheetTitle;
+
+  /// No description provided for @prcSenderLine.
+  ///
+  /// In en, this message translates to:
+  /// **'To the sender: {who}'**
+  String prcSenderLine(String who);
+
+  /// No description provided for @prcSenderOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'The receipt goes to the sender only.'**
+  String get prcSenderOnly;
+
+  /// No description provided for @prcWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get prcWhatsApp;
+
+  /// No description provided for @prcWhatsAppNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended. Sent from the business number.'**
+  String get prcWhatsAppNote;
+
+  /// No description provided for @prcText.
+  ///
+  /// In en, this message translates to:
+  /// **'Text message'**
+  String get prcText;
+
+  /// No description provided for @prcTextNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Text the receipt link to the sender.'**
+  String get prcTextNote;
+
+  /// No description provided for @prcEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get prcEmail;
+
+  /// No description provided for @prcEmailNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens your mail app with the link filled in.'**
+  String get prcEmailNote;
+
+  /// No description provided for @prcQr.
+  ///
+  /// In en, this message translates to:
+  /// **'Show QR code'**
+  String get prcQr;
+
+  /// No description provided for @prcQrNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer scans it with their phone camera.'**
+  String get prcQrNote;
+
+  /// No description provided for @prcShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get prcShare;
+
+  /// No description provided for @prcShareNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Share the receipt link from this phone.'**
+  String get prcShareNote;
+
+  /// No description provided for @prcWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Working…'**
+  String get prcWorking;
+
+  /// No description provided for @prcSentWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt sent on WhatsApp.'**
+  String get prcSentWhatsApp;
+
+  /// No description provided for @prcSentText.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt sent by text.'**
+  String get prcSentText;
+
+  /// No description provided for @prcChannelWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get prcChannelWhatsApp;
+
+  /// No description provided for @prcChannelText.
+  ///
+  /// In en, this message translates to:
+  /// **'text'**
+  String get prcChannelText;
+
+  /// No description provided for @prcStatusSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt sent on {channel} {when}'**
+  String prcStatusSent(String channel, String when);
+
+  /// No description provided for @prcStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt on its way by {channel}…'**
+  String prcStatusPending(String channel);
+
+  /// No description provided for @prcStatusNotOnWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'This number is not on WhatsApp. Send the receipt by text or email, or show the QR.'**
+  String get prcStatusNotOnWhatsApp;
+
+  /// No description provided for @prcStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The receipt could not be sent by {channel}.'**
+  String prcStatusFailed(String channel);
+
+  /// No description provided for @prcRefNoPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'This package has no sender phone number. Add one, or send the receipt by email or QR.'**
+  String get prcRefNoPhone;
+
+  /// No description provided for @prcRefSmsOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Texting from the business is not set up yet. Use Text message from this phone.'**
+  String get prcRefSmsOff;
+
+  /// No description provided for @prcRefTooSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Just sent. Wait a minute before sending it again.'**
+  String get prcRefTooSoon;
+
+  /// No description provided for @prcRefGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This package was removed.'**
+  String get prcRefGone;
+
+  /// No description provided for @prcRefWhatsAppOff.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp is not connected for this business.'**
+  String get prcRefWhatsAppOff;
+
+  /// No description provided for @prcRefOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the receipt. Check the connection and try again.'**
+  String get prcRefOther;
+
+  /// No description provided for @prcCouldNotOpenText.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the Messages app on this phone.'**
+  String get prcCouldNotOpenText;
+
+  /// No description provided for @prcCouldNotOpenMail.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open a mail app on this phone.'**
+  String get prcCouldNotOpenMail;
+
+  /// No description provided for @prcEmailAskTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer’s email'**
+  String get prcEmailAskTitle;
+
+  /// No description provided for @prcEmailAskHint.
+  ///
+  /// In en, this message translates to:
+  /// **'name@example.com'**
+  String get prcEmailAskHint;
+
+  /// No description provided for @prcEmailInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get prcEmailInvalid;
+
+  /// No description provided for @prcContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get prcContinue;
+
+  /// No description provided for @prcQrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt QR code'**
+  String get prcQrTitle;
+
+  /// No description provided for @prcQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the customer to scan it with their phone camera to open the receipt.'**
+  String get prcQrHint;
+
+  /// No description provided for @prcQrLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code that opens the package receipt'**
+  String get prcQrLabel;
+
+  /// No description provided for @prcSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Package receipts'**
+  String get prcSettingsTitle;
+
+  /// No description provided for @prcSettingsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The “package received” confirmation always goes out by itself. This chooses whether the receipt goes with it.'**
+  String get prcSettingsNote;
+
+  /// No description provided for @prcModeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff press Send receipt'**
+  String get prcModeButton;
+
+  /// No description provided for @prcModeAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Send it automatically with the confirmation'**
+  String get prcModeAuto;
+
+  /// No description provided for @prcSettingsOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner or an admin can change this.'**
+  String get prcSettingsOwnerOnly;
+
+  /// No description provided for @prcSettingsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save. Try again.'**
+  String get prcSettingsFailed;
+
+  /// No description provided for @prcSettingsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this setting.'**
+  String get prcSettingsLoadFailed;
 }
 
 class _AppLocalizationsDelegate

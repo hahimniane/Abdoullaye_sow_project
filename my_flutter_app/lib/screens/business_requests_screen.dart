@@ -7,6 +7,7 @@ import '../models/destination_country.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/package_coming_today.dart';
+import '../services/package_receipt.dart';
 import '../services/package_request_feed.dart';
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
@@ -255,6 +256,7 @@ class _BusinessRequestsScreenState extends State<BusinessRequestsScreen> {
           businessId: widget.businessId,
           service: _service,
           canEdit: _canManage,
+          receiptModes: const FirebasePackageReceiptModeSource(),
         ),
       ),
     );

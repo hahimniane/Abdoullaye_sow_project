@@ -13710,5 +13710,81 @@
   "nhmMainWorkHelp": "L'accueil de l'application s'ouvre sur cette activité.",
   "@nhmMainWorkHelp": {
     "description": "One line under the Main work label on Business profile."
-  }
+  },
+  "prcSendReceipt": "Envoyer le reçu",
+  "prcSheetTitle": "Envoyer le reçu",
+  "prcSenderLine": "À l’expéditeur : {who}",
+  "@prcSenderLine": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "prcSenderOnly": "Le reçu va seulement à l’expéditeur.",
+  "prcWhatsApp": "WhatsApp",
+  "prcWhatsAppNote": "Recommandé. Envoyé depuis le numéro de l’entreprise.",
+  "prcText": "Message texte",
+  "prcTextNote": "Envoyer le lien du reçu par SMS à l’expéditeur.",
+  "prcEmail": "E-mail",
+  "prcEmailNote": "Ouvre votre app de messagerie avec le lien.",
+  "prcQr": "Afficher le code QR",
+  "prcQrNote": "Le client le scanne avec l’appareil photo de son téléphone.",
+  "prcShare": "Partager",
+  "prcShareNote": "Partager le lien du reçu depuis ce téléphone.",
+  "prcWorking": "En cours…",
+  "prcSentWhatsApp": "Reçu envoyé sur WhatsApp.",
+  "prcSentText": "Reçu envoyé par SMS.",
+  "prcChannelWhatsApp": "WhatsApp",
+  "prcChannelText": "SMS",
+  "prcStatusSent": "Reçu envoyé par {channel} le {when}",
+  "@prcStatusSent": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "prcStatusPending": "Reçu en cours d’envoi par {channel}…",
+  "@prcStatusPending": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "prcStatusNotOnWhatsApp": "Ce numéro n’est pas sur WhatsApp. Envoyez le reçu par SMS ou e-mail, ou montrez le code QR.",
+  "prcStatusFailed": "Le reçu n’a pas pu être envoyé par {channel}.",
+  "@prcStatusFailed": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "prcRefNoPhone": "Ce colis n’a pas de numéro d’expéditeur. Ajoutez-en un, ou envoyez le reçu par e-mail ou code QR.",
+  "prcRefSmsOff": "L’envoi de SMS par l’entreprise n’est pas encore configuré. Utilisez le SMS depuis ce téléphone.",
+  "prcRefTooSoon": "Déjà envoyé. Attendez une minute avant de le renvoyer.",
+  "prcRefGone": "Ce colis a été retiré.",
+  "prcRefWhatsAppOff": "WhatsApp n’est pas connecté pour cette entreprise.",
+  "prcRefOther": "Impossible d’envoyer le reçu. Vérifiez la connexion et réessayez.",
+  "prcCouldNotOpenText": "Impossible d’ouvrir l’app Messages sur ce téléphone.",
+  "prcCouldNotOpenMail": "Impossible d’ouvrir une app de messagerie sur ce téléphone.",
+  "prcEmailAskTitle": "E-mail du client",
+  "prcEmailAskHint": "nom@exemple.com",
+  "prcEmailInvalid": "Saisissez une adresse e-mail valide.",
+  "prcContinue": "Continuer",
+  "prcQrTitle": "Code QR du reçu",
+  "prcQrHint": "Demandez au client de le scanner avec l’appareil photo de son téléphone pour ouvrir le reçu.",
+  "prcQrLabel": "Code QR qui ouvre le reçu du colis",
+  "prcSettingsTitle": "Reçus de colis",
+  "prcSettingsNote": "La confirmation « colis reçu » part toujours seule. Ce choix décide si le reçu part avec.",
+  "prcModeButton": "Le personnel appuie sur Envoyer le reçu",
+  "prcModeAuto": "Envoyer automatiquement avec la confirmation",
+  "prcSettingsOwnerOnly": "Seuls le propriétaire ou un administrateur peuvent changer ceci.",
+  "prcSettingsFailed": "Enregistrement impossible. Réessayez.",
+  "prcSettingsLoadFailed": "Impossible de charger ce réglage."
 }

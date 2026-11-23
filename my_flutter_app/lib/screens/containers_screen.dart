@@ -77,6 +77,7 @@ import 'vin_scanner_screen.dart';
 import 'waiting_packages_screen.dart';
 import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
 import '../widgets/ship_mode_choice.dart';
+import '../widgets/package_receipt_widgets.dart';
 import '../widgets/whatsapp_widgets.dart'
     show PackageUpdateTicks, openWhatsAppForLine;
 import 'zelle_check_sheet.dart' show zelleViewerIsOwner;
@@ -3497,6 +3498,7 @@ class _LineCard extends StatelessWidget {
                     ),
                   // How far the last update got on WhatsApp (decision 15).
                   PackageUpdateTicks(line: line, indent: 20),
+                  ReceiptSendButton(line: line, indent: 12),
                   // Drop-off photo · sender OK · delivered (AIR_PACKAGES §1.11).
                   PackageProofTicks(ticks: line.proofTicks, indent: 20),
                   SenderProblemBanner(
