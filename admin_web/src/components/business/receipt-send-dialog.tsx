@@ -145,7 +145,8 @@ export function ReceiptSendDialog({ businessId, lineId, onClose }: { businessId:
               {link?.smsReady ? (
                 <>
                   <p className="lst-hint">Laawol sends the text with the receipt link.</p>
-                  <p className="lst-hint">Ask the customer first: “Would you like your receipt sent to this number by text message?” Send it only if they say yes.</p>
+                  <p className="lst-hint">Ask the customer first, and send it only if they say yes:</p>
+                  <p className="lst-hint">“We can text your package receipt to this number: one message each time you ask for a receipt. Message and data rates may apply. Reply HELP for help or STOP to stop at any time. Our terms and privacy policy are at laawoldigital.com/sms-en.html. Would you like your receipt by text message, yes or no?”</p>
                   <button className="lst-add" data-loading={sendBusy} disabled={sendBusy || noPhone} onClick={() => void send("sms")} type="button">
                     {sendBusy ? "Sending…" : "Send text message"}
                   </button>
