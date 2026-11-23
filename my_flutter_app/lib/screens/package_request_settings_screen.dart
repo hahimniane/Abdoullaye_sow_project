@@ -16,6 +16,8 @@ import '../theme/app_spacing.dart';
 import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/package_request_widgets.dart';
+import '../services/package_receipt.dart';
+import '../widgets/package_receipt_widgets.dart';
 import '../widgets/pay_now_payouts_panel.dart';
 
 /// The owner's package-request settings (§3): accept requests or not, the
@@ -31,6 +33,7 @@ class PackageRequestSettingsScreen extends StatefulWidget {
     this.service,
     this.locations,
     this.onShare,
+    this.receiptModes,
     this.payouts = const PayNowPayoutsService(),
   });
 
@@ -44,6 +47,10 @@ class PackageRequestSettingsScreen extends StatefulWidget {
 
   /// The business's active locations; `officeLocations` when null.
   final Stream<List<OfficeLocation>> Function(String businessId)? locations;
+
+  /// How package receipts go out (docs/PACKAGE_RECEIPT_SEND.md); the card
+  /// is hidden when null.
+  final PackageReceiptModeSource? receiptModes;
 
   /// Shares the link; the system sheet when null.
   final Future<void> Function(String link)? onShare;
@@ -489,6 +496,14 @@ class _PackageRequestSettingsScreenState
             ],
           ),
         ),
+        if (widget.receiptModes != null) ...[
+          RequestSectionTitle(l10n.prcSettingsTitle),
+          PackageReceiptModeCard(
+            businessId: widget.businessId,
+            canEdit: widget.canEdit,
+            source: widget.receiptModes!,
+          ),
+        ],
         RequestSectionTitle(l10n.prqHoursTitle),
         Text(
           l10n.prqHoursHint,

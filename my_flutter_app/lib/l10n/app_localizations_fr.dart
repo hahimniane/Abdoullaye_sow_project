@@ -23809,4 +23809,160 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get nhmMainWorkHelp =>
       'L\'accueil de l\'application s\'ouvre sur cette activité.';
+
+  @override
+  String get prcSendReceipt => 'Envoyer le reçu';
+
+  @override
+  String get prcSheetTitle => 'Envoyer le reçu';
+
+  @override
+  String prcSenderLine(String who) {
+    return 'À l’expéditeur : $who';
+  }
+
+  @override
+  String get prcSenderOnly => 'Le reçu va seulement à l’expéditeur.';
+
+  @override
+  String get prcWhatsApp => 'WhatsApp';
+
+  @override
+  String get prcWhatsAppNote =>
+      'Recommandé. Envoyé depuis le numéro de l’entreprise.';
+
+  @override
+  String get prcText => 'Message texte';
+
+  @override
+  String get prcTextNote => 'Envoyer le lien du reçu par SMS à l’expéditeur.';
+
+  @override
+  String get prcEmail => 'E-mail';
+
+  @override
+  String get prcEmailNote => 'Ouvre votre app de messagerie avec le lien.';
+
+  @override
+  String get prcQr => 'Afficher le code QR';
+
+  @override
+  String get prcQrNote =>
+      'Le client le scanne avec l’appareil photo de son téléphone.';
+
+  @override
+  String get prcShare => 'Partager';
+
+  @override
+  String get prcShareNote => 'Partager le lien du reçu depuis ce téléphone.';
+
+  @override
+  String get prcWorking => 'En cours…';
+
+  @override
+  String get prcSentWhatsApp => 'Reçu envoyé sur WhatsApp.';
+
+  @override
+  String get prcSentText => 'Reçu envoyé par SMS.';
+
+  @override
+  String get prcChannelWhatsApp => 'WhatsApp';
+
+  @override
+  String get prcChannelText => 'SMS';
+
+  @override
+  String prcStatusSent(String channel, String when) {
+    return 'Reçu envoyé par $channel le $when';
+  }
+
+  @override
+  String prcStatusPending(String channel) {
+    return 'Reçu en cours d’envoi par $channel…';
+  }
+
+  @override
+  String get prcStatusNotOnWhatsApp =>
+      'Ce numéro n’est pas sur WhatsApp. Envoyez le reçu par SMS ou e-mail, ou montrez le code QR.';
+
+  @override
+  String prcStatusFailed(String channel) {
+    return 'Le reçu n’a pas pu être envoyé par $channel.';
+  }
+
+  @override
+  String get prcRefNoPhone =>
+      'Ce colis n’a pas de numéro d’expéditeur. Ajoutez-en un, ou envoyez le reçu par e-mail ou code QR.';
+
+  @override
+  String get prcRefSmsOff =>
+      'L’envoi de SMS par l’entreprise n’est pas encore configuré. Utilisez le SMS depuis ce téléphone.';
+
+  @override
+  String get prcRefTooSoon =>
+      'Déjà envoyé. Attendez une minute avant de le renvoyer.';
+
+  @override
+  String get prcRefGone => 'Ce colis a été retiré.';
+
+  @override
+  String get prcRefWhatsAppOff =>
+      'WhatsApp n’est pas connecté pour cette entreprise.';
+
+  @override
+  String get prcRefOther =>
+      'Impossible d’envoyer le reçu. Vérifiez la connexion et réessayez.';
+
+  @override
+  String get prcCouldNotOpenText =>
+      'Impossible d’ouvrir l’app Messages sur ce téléphone.';
+
+  @override
+  String get prcCouldNotOpenMail =>
+      'Impossible d’ouvrir une app de messagerie sur ce téléphone.';
+
+  @override
+  String get prcEmailAskTitle => 'E-mail du client';
+
+  @override
+  String get prcEmailAskHint => 'nom@exemple.com';
+
+  @override
+  String get prcEmailInvalid => 'Saisissez une adresse e-mail valide.';
+
+  @override
+  String get prcContinue => 'Continuer';
+
+  @override
+  String get prcQrTitle => 'Code QR du reçu';
+
+  @override
+  String get prcQrHint =>
+      'Demandez au client de le scanner avec l’appareil photo de son téléphone pour ouvrir le reçu.';
+
+  @override
+  String get prcQrLabel => 'Code QR qui ouvre le reçu du colis';
+
+  @override
+  String get prcSettingsTitle => 'Reçus de colis';
+
+  @override
+  String get prcSettingsNote =>
+      'La confirmation « colis reçu » part toujours seule. Ce choix décide si le reçu part avec.';
+
+  @override
+  String get prcModeButton => 'Le personnel appuie sur Envoyer le reçu';
+
+  @override
+  String get prcModeAuto => 'Envoyer automatiquement avec la confirmation';
+
+  @override
+  String get prcSettingsOwnerOnly =>
+      'Seuls le propriétaire ou un administrateur peuvent changer ceci.';
+
+  @override
+  String get prcSettingsFailed => 'Enregistrement impossible. Réessayez.';
+
+  @override
+  String get prcSettingsLoadFailed => 'Impossible de charger ce réglage.';
 }

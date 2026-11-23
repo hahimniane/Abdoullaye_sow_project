@@ -13720,5 +13720,81 @@
   "nhmMainWorkHelp": "The app's home opens on this.",
   "@nhmMainWorkHelp": {
     "description": "One line under the Main work label on Business profile."
-  }
+  },
+  "prcSendReceipt": "Send receipt",
+  "prcSheetTitle": "Send the receipt",
+  "prcSenderLine": "To the sender: {who}",
+  "@prcSenderLine": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "prcSenderOnly": "The receipt goes to the sender only.",
+  "prcWhatsApp": "WhatsApp",
+  "prcWhatsAppNote": "Recommended. Sent from the business number.",
+  "prcText": "Text message",
+  "prcTextNote": "Text the receipt link to the sender.",
+  "prcEmail": "Email",
+  "prcEmailNote": "Opens your mail app with the link filled in.",
+  "prcQr": "Show QR code",
+  "prcQrNote": "The customer scans it with their phone camera.",
+  "prcShare": "Share",
+  "prcShareNote": "Share the receipt link from this phone.",
+  "prcWorking": "Working…",
+  "prcSentWhatsApp": "Receipt sent on WhatsApp.",
+  "prcSentText": "Receipt sent by text.",
+  "prcChannelWhatsApp": "WhatsApp",
+  "prcChannelText": "text",
+  "prcStatusSent": "Receipt sent on {channel} {when}",
+  "@prcStatusSent": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "prcStatusPending": "Receipt on its way by {channel}…",
+  "@prcStatusPending": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "prcStatusNotOnWhatsApp": "This number is not on WhatsApp. Send the receipt by text or email, or show the QR.",
+  "prcStatusFailed": "The receipt could not be sent by {channel}.",
+  "@prcStatusFailed": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "prcRefNoPhone": "This package has no sender phone number. Add one, or send the receipt by email or QR.",
+  "prcRefSmsOff": "Texting from the business is not set up yet. Use Text message from this phone.",
+  "prcRefTooSoon": "Just sent. Wait a minute before sending it again.",
+  "prcRefGone": "This package was removed.",
+  "prcRefWhatsAppOff": "WhatsApp is not connected for this business.",
+  "prcRefOther": "Could not send the receipt. Check the connection and try again.",
+  "prcCouldNotOpenText": "Could not open the Messages app on this phone.",
+  "prcCouldNotOpenMail": "Could not open a mail app on this phone.",
+  "prcEmailAskTitle": "Customer’s email",
+  "prcEmailAskHint": "name@example.com",
+  "prcEmailInvalid": "Enter a valid email address.",
+  "prcContinue": "Continue",
+  "prcQrTitle": "Receipt QR code",
+  "prcQrHint": "Ask the customer to scan it with their phone camera to open the receipt.",
+  "prcQrLabel": "QR code that opens the package receipt",
+  "prcSettingsTitle": "Package receipts",
+  "prcSettingsNote": "The “package received” confirmation always goes out by itself. This chooses whether the receipt goes with it.",
+  "prcModeButton": "Staff press Send receipt",
+  "prcModeAuto": "Send it automatically with the confirmation",
+  "prcSettingsOwnerOnly": "Only the owner or an admin can change this.",
+  "prcSettingsFailed": "Could not save. Try again.",
+  "prcSettingsLoadFailed": "Could not load this setting."
 }

@@ -23441,4 +23441,157 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nhmMainWorkHelp => 'The app\'s home opens on this.';
+
+  @override
+  String get prcSendReceipt => 'Send receipt';
+
+  @override
+  String get prcSheetTitle => 'Send the receipt';
+
+  @override
+  String prcSenderLine(String who) {
+    return 'To the sender: $who';
+  }
+
+  @override
+  String get prcSenderOnly => 'The receipt goes to the sender only.';
+
+  @override
+  String get prcWhatsApp => 'WhatsApp';
+
+  @override
+  String get prcWhatsAppNote => 'Recommended. Sent from the business number.';
+
+  @override
+  String get prcText => 'Text message';
+
+  @override
+  String get prcTextNote => 'Text the receipt link to the sender.';
+
+  @override
+  String get prcEmail => 'Email';
+
+  @override
+  String get prcEmailNote => 'Opens your mail app with the link filled in.';
+
+  @override
+  String get prcQr => 'Show QR code';
+
+  @override
+  String get prcQrNote => 'The customer scans it with their phone camera.';
+
+  @override
+  String get prcShare => 'Share';
+
+  @override
+  String get prcShareNote => 'Share the receipt link from this phone.';
+
+  @override
+  String get prcWorking => 'Working…';
+
+  @override
+  String get prcSentWhatsApp => 'Receipt sent on WhatsApp.';
+
+  @override
+  String get prcSentText => 'Receipt sent by text.';
+
+  @override
+  String get prcChannelWhatsApp => 'WhatsApp';
+
+  @override
+  String get prcChannelText => 'text';
+
+  @override
+  String prcStatusSent(String channel, String when) {
+    return 'Receipt sent on $channel $when';
+  }
+
+  @override
+  String prcStatusPending(String channel) {
+    return 'Receipt on its way by $channel…';
+  }
+
+  @override
+  String get prcStatusNotOnWhatsApp =>
+      'This number is not on WhatsApp. Send the receipt by text or email, or show the QR.';
+
+  @override
+  String prcStatusFailed(String channel) {
+    return 'The receipt could not be sent by $channel.';
+  }
+
+  @override
+  String get prcRefNoPhone =>
+      'This package has no sender phone number. Add one, or send the receipt by email or QR.';
+
+  @override
+  String get prcRefSmsOff =>
+      'Texting from the business is not set up yet. Use Text message from this phone.';
+
+  @override
+  String get prcRefTooSoon =>
+      'Just sent. Wait a minute before sending it again.';
+
+  @override
+  String get prcRefGone => 'This package was removed.';
+
+  @override
+  String get prcRefWhatsAppOff =>
+      'WhatsApp is not connected for this business.';
+
+  @override
+  String get prcRefOther =>
+      'Could not send the receipt. Check the connection and try again.';
+
+  @override
+  String get prcCouldNotOpenText =>
+      'Could not open the Messages app on this phone.';
+
+  @override
+  String get prcCouldNotOpenMail => 'Could not open a mail app on this phone.';
+
+  @override
+  String get prcEmailAskTitle => 'Customer’s email';
+
+  @override
+  String get prcEmailAskHint => 'name@example.com';
+
+  @override
+  String get prcEmailInvalid => 'Enter a valid email address.';
+
+  @override
+  String get prcContinue => 'Continue';
+
+  @override
+  String get prcQrTitle => 'Receipt QR code';
+
+  @override
+  String get prcQrHint =>
+      'Ask the customer to scan it with their phone camera to open the receipt.';
+
+  @override
+  String get prcQrLabel => 'QR code that opens the package receipt';
+
+  @override
+  String get prcSettingsTitle => 'Package receipts';
+
+  @override
+  String get prcSettingsNote =>
+      'The “package received” confirmation always goes out by itself. This chooses whether the receipt goes with it.';
+
+  @override
+  String get prcModeButton => 'Staff press Send receipt';
+
+  @override
+  String get prcModeAuto => 'Send it automatically with the confirmation';
+
+  @override
+  String get prcSettingsOwnerOnly =>
+      'Only the owner or an admin can change this.';
+
+  @override
+  String get prcSettingsFailed => 'Could not save. Try again.';
+
+  @override
+  String get prcSettingsLoadFailed => 'Could not load this setting.';
 }

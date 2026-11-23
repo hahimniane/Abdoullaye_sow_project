@@ -40,6 +40,7 @@ import 'send_packages_sheet.dart';
 import '../services/send_packages.dart';
 import '../widgets/request_code_lookup_sheet.dart';
 import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
+import '../widgets/package_receipt_widgets.dart';
 import '../widgets/whatsapp_widgets.dart'
     show PackageUpdateTicks, openWhatsAppForLine;
 import '../widgets/proof_ticks.dart';
@@ -1341,6 +1342,7 @@ class WaitingPackageCard extends StatelessWidget {
                     ),
                   // How far the last update got on WhatsApp (decision 15).
                   PackageUpdateTicks(line: line),
+                  ReceiptSendButton(line: line),
                   // Drop-off photo · sender OK · delivered (AIR_PACKAGES §1.11).
                   PackageProofTicks(ticks: line.proofTicks),
                   SenderProblemBanner(
