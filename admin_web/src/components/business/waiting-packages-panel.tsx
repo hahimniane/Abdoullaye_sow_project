@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
 import { Banknote, Pencil, Plus, Printer, RefreshCw, Tag, X } from "lucide-react";
 
@@ -25,7 +25,8 @@ import {
   withSenderIsReceiver,
 } from "@/lib/container-manifest";
 import { lineCounts, linePickupFeeCents, type LineGroupSummary } from "@/lib/line-pieces";
-import { newPieceDraft, savePrintLabelsText } from "@/lib/piece-drafts";
+import { newPieceDraft, savePrintLabelsText, storedPiecesTotalCents } from "@/lib/piece-drafts";
+import { PRICE_MODE, type PriceMode } from "@/lib/package-price-mode";
 import { shippingCopy } from "@/lib/air-only";
 import { destinationCountryName } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
@@ -165,6 +166,12 @@ type WaitingPackagesPanelProps = {
    */
   shipsByAir?: boolean;
   /**
+   * How the business prices a package (`packagePriceSettings.mode`,
+   * docs/PACKAGE_ONE_PRICE.md): `piece` (a price on each row, the default) or
+   * `package` (one price for the whole package).
+   */
+  priceMode?: PriceMode;
+  /**
    * The business flies and never had a sea container
    * (docs/SHIPPING_SIMPLE_HOME.md W): the list is "Packages here", the form
    * starts on Air with a box, and asks neither "Ships by" nor "A car".
@@ -204,6 +211,7 @@ export function WaitingPackagesPanel({
   groups,
   proofSettings = PROOF_SETTINGS_OFF,
   shipsByAir = false,
+  priceMode = PRICE_MODE.PIECE,
   airOnly = false,
   onFlash,
   enabled,
@@ -224,7 +232,15 @@ export function WaitingPackagesPanel({
   const [shipMode, setShipMode] = useState<PackageShipMode>("sea");
   const [modal, setModal] = useState<Modal>("");
   const [busy, setBusy] = useState(false);
-  const [draft, setDraft] = useState<WaitingPackageDraft>(() => emptyWaitingPackageDraft(defaultDestination));
+  const [formDraft, setFormDraft] = useState<WaitingPackageDraft>(() => emptyWaitingPackageDraft(defaultDestination));
+  // The draft always carries the business's price mode, so every pure helper
+  // (validate, payload, total, the money switch) reads one price or many the same way.
+  const draft = useMemo(() => ({ ...formDraft, priceMode }), [formDraft, priceMode]);
+  const setDraft = useCallback(
+    (update: WaitingPackageDraft | ((d: WaitingPackageDraft) => WaitingPackageDraft)) =>
+      setFormDraft((d) => ({ ...(typeof update === "function" ? update({ ...d, priceMode }) : update), priceMode })),
+    [priceMode],
+  );
   const [editingId, setEditingId] = useState("");
   // The package's proof: photos, what is inside, weight and declared value.
   const [proof, setProof] = useState<ProofDraft>(() => emptyProofDraft());
@@ -339,7 +355,7 @@ export function WaitingPackagesPanel({
   }
 
   function openEdit(row: Row) {
-    const next = waitingPackageDraftFromRow(row);
+    const next = waitingPackageDraftFromRow(row, priceMode);
     setDraft(next);
     setProof(proofDraftFromLine(row));
     setShipMode(packageShipModeOf(row.shipMode));
@@ -675,10 +691,14 @@ export function WaitingPackagesPanel({
                   onChange={(pieces) => setDraft((d) => ({ ...d, pieces }))}
                   // Editing a saved package: a changed count means new labels.
                   storedCount={editingRow ? lineCounts(editingRow).pieceCount : undefined}
+                  storedPriceCents={editingRow ? storedPiecesTotalCents(draft.storedPieces) : undefined}
                   showErrors={triedSave}
                   disabled={busy}
                   lang={lang}
                   priceRequired
+                  priceMode={priceMode}
+                  onePrice={draft.onePrice ?? ""}
+                  onOnePriceChange={(onePrice) => setDraft((d) => ({ ...d, onePrice }))}
                   pickupFee={draft.pickupFee ?? undefined}
                   onPickupFeeChange={(pickupFee) => setDraft((d) => ({ ...d, pickupFee }))}
                 />

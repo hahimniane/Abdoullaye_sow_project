@@ -149,7 +149,8 @@ import {
   groupForLine,
   runPackageCall,
 } from "@/lib/waiting-packages";
-import { newPieceDraft } from "@/lib/piece-drafts";
+import { newPieceDraft, storedPiecesTotalCents } from "@/lib/piece-drafts";
+import { packagePriceModeOf } from "@/lib/package-price-mode";
 import { lineCounts } from "@/lib/line-pieces";
 import { shippingCopy } from "@/lib/air-only";
 import { PiecesEditor } from "@/components/business/pieces-editor";
@@ -439,7 +440,17 @@ export function ContainersPanel({
 
   const [containerDraft, setContainerDraft] = useState<ContainerDraft>(emptyContainerDraft);
   const [editingContainerId, setEditingContainerId] = useState("");
-  const [lineDraft, setLineDraft] = useState<ContainerLineDraft>(emptyContainerLineDraft);
+  // How the business prices a package: a price on each row, or one price
+  // (docs/PACKAGE_ONE_PRICE.md). The draft always carries it, so every pure
+  // helper (validate, payload, edit request) reads the same way.
+  const priceMode = packagePriceModeOf(business);
+  const [formLineDraft, setFormLineDraft] = useState<ContainerLineDraft>(emptyContainerLineDraft);
+  const lineDraft = useMemo(() => ({ ...formLineDraft, priceMode }), [formLineDraft, priceMode]);
+  const setLineDraft = useCallback(
+    (update: ContainerLineDraft | ((d: ContainerLineDraft) => ContainerLineDraft)) =>
+      setFormLineDraft((d) => ({ ...(typeof update === "function" ? update({ ...d, priceMode }) : update), priceMode })),
+    [priceMode],
+  );
   // The line the form is editing; "" when it is adding a new one. The same
   // form and draft serve both.
   const [editingLineId, setEditingLineId] = useState("");
@@ -961,7 +972,7 @@ export function ContainersPanel({
   // while the container loads: after that the list is the record of what
   // went, and only the contacts change (Edit contacts).
   function openEditLine(row: FirestoreRow) {
-    const draft = containerLineDraftFromRow(row);
+    const draft = containerLineDraftFromRow(row, priceMode);
     setLineDraft(draft);
     setLineProof(proofDraftFromLine(row));
     setEditingLineId(String(row.id));
@@ -1617,6 +1628,7 @@ export function ContainersPanel({
               staffOptions={staffOptions}
               onFlash={setFlash}
               enabled={enabled}
+              priceMode={priceMode}
               shipsByAir={shipsByAir}
               canRefund={canRefundPayNow}
               timeZone={text((business as Row | null)?.packageRequestSettings && ((business as Row).packageRequestSettings as Row).timeZone, "") || undefined}
@@ -1636,6 +1648,7 @@ export function ContainersPanel({
           staffOptions={staffOptions}
           groups={lineGroups}
           proofSettings={proofSettings}
+          priceMode={priceMode}
           shipsByAir={shipsByAir}
           onFlash={setFlash}
           enabled={enabled}
@@ -1915,10 +1928,14 @@ export function ContainersPanel({
                   onChange={(pieces) => setLineDraft((d) => ({ ...d, pieces }))}
                   // Editing a saved line: a changed count means new labels.
                   storedCount={editingLineRow ? lineCounts(editingLineRow).pieceCount : undefined}
+                  storedPriceCents={editingLineRow ? storedPiecesTotalCents(lineDraft.storedPieces) : undefined}
                   showErrors={lineTried}
                   disabled={busy}
                   lang={lang}
                   priceRequired={lineDraft.ownerKind === "customer"}
+                  priceMode={priceMode}
+                  onePrice={lineDraft.onePrice ?? ""}
+                  onOnePriceChange={(onePrice) => setLineDraft((d) => ({ ...d, onePrice }))}
                   pickupFee={lineDraft.pickupFee ?? undefined}
                   onPickupFeeChange={(pickupFee) => setLineDraft((d) => ({ ...d, pickupFee }))}
                 />

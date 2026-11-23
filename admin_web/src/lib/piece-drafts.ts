@@ -28,6 +28,7 @@ import {
   type PieceSize,
 } from "./line-pieces.ts";
 import { readMoneyInput } from "./money-input.ts";
+import { PRICE_MODE, packagePiecePrices, type PriceMode, type StoredPiecePrice } from "./package-price-mode.ts";
 
 type Lang = "en" | "fr";
 
@@ -135,7 +136,10 @@ export function pieceDraftPricedTogether(draft: Pick<PieceDraft, "count" | "pric
  * (and the labels' numbers) never changes. A car has no pieces to edit: one
  * blank barrel.
  */
-export function pieceDraftsFromLine(line: unknown): PieceDraft[] {
+export function pieceDraftsFromLine(line: unknown, options: { priceMode?: PriceMode } = {}): PieceDraft[] {
+  // One price for the whole package (docs/PACKAGE_ONE_PRICE.md): rows are
+  // grouped by shape only; the prices play no part and none is put on a row.
+  const shapeOnly = options.priceMode === PRICE_MODE.PACKAGE;
   const row = line && typeof line === "object" ? (line as Record<string, unknown>) : {};
   if (text(row.kind, 20) === "car") return [newPieceDraft()];
   type Run = { draft: PieceDraft; shape: string; prices: Array<number | null> };
@@ -165,13 +169,14 @@ export function pieceDraftsFromLine(line: unknown): PieceDraft[] {
     };
     const shape = JSON.stringify([draft.kind, draft.description, draft.lengthIn, draft.widthIn, draft.heightIn]);
     const last = runs[runs.length - 1];
-    if (last && last.shape === shape && shared([...last.prices, piece.priceCents])) {
+    if (last && last.shape === shape && (shapeOnly || shared([...last.prices, piece.priceCents]))) {
       last.prices.push(piece.priceCents);
       last.draft.moreIds.push(piece.id);
     } else {
       runs.push({ draft, shape, prices: [piece.priceCents] });
     }
   }
+  if (shapeOnly) return runs.map(({ draft, prices }) => ({ ...draft, count: String(prices.length) }));
   return runs.map(({ draft, prices }) => {
     const first = prices[0];
     const same = prices.every((cents) => cents === first);
@@ -212,7 +217,7 @@ export function readPiecePrice(value: unknown): number | null {
 
 type ReadPiece = { payload: PiecePayload; problems: PieceErrorCode[] };
 
-function readPiece(draft: PieceDraft): ReadPiece {
+function readPiece(draft: PieceDraft, ignorePrice = false): ReadPiece {
   const problems: PieceErrorCode[] = [];
   const sides = [parseInches(draft.lengthIn), parseInches(draft.widthIn), parseInches(draft.heightIn)];
   let sizeIn: PieceSize | null = null;
@@ -223,7 +228,8 @@ function readPiece(draft: PieceDraft): ReadPiece {
       problems.push("piece_size_invalid");
     }
   }
-  const cents = readPiecePrice(draft.price);
+  // One price for the whole package: a row has no price of its own.
+  const cents = ignorePrice ? null : readPiecePrice(draft.price);
   if (cents !== null && Number.isNaN(cents)) problems.push("piece_price_invalid");
   const payload: PiecePayload = {
     id: text(draft.id, 40),
@@ -247,12 +253,12 @@ function readPiece(draft: PieceDraft): ReadPiece {
  * ones (`distributeCents`, the server's rule), so they add up to exactly
  * what was typed; another row's pieces never take part.
  */
-export function piecesPayload(drafts: readonly PieceDraft[]): PiecePayload[] {
+export function piecesPayload(drafts: readonly PieceDraft[], pricing?: PiecePricing): PiecePayload[] {
   const out: PiecePayload[] = [];
   for (const draft of drafts) {
-    const base = readPiece(draft).payload;
+    const base = readPiece(draft, !!pricing).payload;
     const count = pieceDraftCount(draft);
-    const shares = pieceDraftPricedTogether(draft) ? distributeCents(base.priceCents, count) : null;
+    const shares = !pricing && pieceDraftPricedTogether(draft) ? distributeCents(base.priceCents, count) : null;
     for (let i = 0; i < count; i += 1) {
       out.push({
         ...base,
@@ -262,7 +268,65 @@ export function piecesPayload(drafts: readonly PieceDraft[]): PiecePayload[] {
       });
     }
   }
-  return out;
+  if (!pricing) return out;
+  // One price for the whole package: shared among the pieces by the one rule
+  // (`packagePiecePrices`), every piece still carries its own price.
+  const shares = packagePiecePrices(onePriceCents(pricing), out.map((piece) => piece.id), pricing.stored);
+  return out.map((piece, i) => ({ ...piece, priceCents: shares[i] ?? null }));
+}
+
+/**
+ * Pricing a package with one price (docs/PACKAGE_ONE_PRICE.md): the price
+ * typed (US dollars as typed, the pickup fee never part of it) and, when the
+ * form edits a saved package, its pieces as saved. Passed beside the drafts;
+ * absent means today's price on each row.
+ */
+export type PiecePricing = {
+  onePrice: string;
+  stored: readonly StoredPiecePrice[] | null;
+};
+
+/** What a form draft carries to say how its package is priced. */
+export type PricingFields = {
+  priceMode?: PriceMode;
+  onePrice?: string;
+  storedPieces?: readonly StoredPiecePrice[] | null;
+};
+
+/** The draft's one-price pricing, or undefined when the business prices each item. */
+export function packagePricingOf(draft: PricingFields | null | undefined): PiecePricing | undefined {
+  if (!draft || draft.priceMode !== PRICE_MODE.PACKAGE) return undefined;
+  return { onePrice: String(draft.onePrice ?? ""), stored: draft.storedPieces ?? null };
+}
+
+/** The one price as whole cents: null when blank, unreadable or negative. Zero is a price. */
+export function onePriceCents(pricing: Pick<PiecePricing, "onePrice">): number | null {
+  const cents = readPiecePrice(pricing.onePrice);
+  return cents === null || Number.isNaN(cents) ? null : cents;
+}
+
+/** A saved line's pieces as the one rule reads them. */
+export function storedPiecePrices(line: unknown): StoredPiecePrice[] {
+  return linePieces(line).map((piece) => ({ id: piece.id, priceCents: piece.priceCents }));
+}
+
+/** The saved pieces' prices added up: null when none has one. */
+export function storedPiecesTotalCents(stored: readonly StoredPiecePrice[] | null | undefined): number | null {
+  const prices = (stored ?? []).map((piece) => piece.priceCents);
+  if (prices.every((cents) => cents === null)) return null;
+  return prices.reduce<number>((sum, cents) => sum + (cents ?? 0), 0);
+}
+
+/**
+ * The price field a saved package opens on: the sum of its pieces' prices,
+ * blank when none has one (a car has no pieces to price).
+ */
+export function onePriceFromLine(line: unknown): string {
+  const row = line && typeof line === "object" ? (line as Record<string, unknown>) : {};
+  if (text(row.kind, 20) === "car") return "";
+  const prices = storedPiecePrices(row).map((piece) => piece.priceCents);
+  if (prices.every((cents) => cents === null)) return "";
+  return centsToInput(prices.reduce<number>((sum, cents) => sum + (cents ?? 0), 0));
 }
 
 export type PieceDraftCode = PieceErrorCode | PiecePriceRequiredCode;
@@ -286,14 +350,22 @@ export type PieceDraftProblems = {
  */
 export function pieceDraftProblems(
   drafts: readonly PieceDraft[],
-  options: { priceRequired?: boolean } = {},
+  options: { priceRequired?: boolean; pricing?: PiecePricing } = {},
 ): PieceDraftProblems {
   const list = Array.isArray(drafts) ? drafts : [];
   if (list.length === 0) return { codes: ["pieces_required"], byPiece: [] };
   const codes = new Set<PieceDraftCode>();
   if (piecesDraftCount(list) > MAX_PIECES) codes.add("pieces_too_many");
-  const byPiece: PieceDraftCode[][] = list.map((draft) => readPiece(draft).problems);
+  const byPiece: PieceDraftCode[][] = list.map((draft) => readPiece(draft, !!options.pricing).problems);
   for (const own of byPiece) own.forEach((code) => codes.add(code));
+  if (options.pricing) {
+    // One price for the whole package: shown at its own field. A customer's
+    // package needs more than $0; the business's own stock may have none.
+    const typed = readPiecePrice(options.pricing.onePrice);
+    if (typed !== null && Number.isNaN(typed)) codes.add("piece_price_invalid");
+    else if (options.priceRequired && (typed === null || typed <= 0)) codes.add("package_price_required");
+    return { codes: [...codes], byPiece };
+  }
   if (options.priceRequired && !codes.has("piece_price_invalid")) {
     list.forEach((draft, i) => {
       if (readPiecePrice(draft.price) === null) byPiece[i].push("piece_price_required");
@@ -308,8 +380,8 @@ export function pieceDraftProblems(
  * has one (null while no piece is priced), as the server computes it
  * (`lineTotalCents`): the fee is never spread into the piece prices.
  */
-export function piecesDraftTotalCents(drafts: readonly PieceDraft[], pickupFeeCents = 0): number | null {
-  return lineTotalCents(piecesPayload(drafts), pickupFeeCents);
+export function piecesDraftTotalCents(drafts: readonly PieceDraft[], pickupFeeCents = 0, pricing?: PiecePricing): number | null {
+  return lineTotalCents(piecesPayload(drafts, pricing), pickupFeeCents);
 }
 
 /**
@@ -329,11 +401,11 @@ export function readPickupFeeInput(value: unknown): { cents: number; error: "pic
  * description, size or price; ids aside). A legacy line saved unchanged is
  * sent in its old form, so an edit to its contacts does not rewrite it.
  */
-export function piecesDifferFromLine(line: unknown, drafts: readonly PieceDraft[]): boolean {
+export function piecesDifferFromLine(line: unknown, drafts: readonly PieceDraft[], pricing?: PiecePricing): boolean {
   const shape = (p: { kind: string; description: string; sizeIn: PieceSize | null; priceCents: number | null }) =>
     JSON.stringify([p.kind, p.description, p.sizeIn ? [p.sizeIn.l, p.sizeIn.w, p.sizeIn.h] : null, p.priceCents]);
   const stored = linePieces(line).map(shape);
-  const typed = piecesPayload(drafts).map(shape);
+  const typed = piecesPayload(drafts, pricing).map(shape);
   return stored.length !== typed.length || stored.some((value, i) => value !== typed[i]);
 }
 
@@ -482,4 +554,56 @@ export function countConfirmText(count: number, lang: Lang = "en"): string {
   return lang === "fr"
     ? `Passer \u00e0 ${count} colis ? Cela imprime ${count} \u00e9tiquettes.`
     : `Make this ${count} pieces? It prints ${count} labels.`;
+}
+
+// ---------------------------------------------------------------------------
+// One price for the whole package: the words (docs/PACKAGE_ONE_PRICE.md).
+// ---------------------------------------------------------------------------
+
+/** The price field's label: "Price for everything ($)" / "Prix pour le tout ($)". */
+export function onePriceLabel(lang: Lang = "en"): string {
+  return lang === "fr" ? "Prix pour le tout ($)" : "Price for everything ($)";
+}
+
+/** Under the label: "3 pieces, one price" / "3 pièces, un seul prix"; one piece is "1 piece" / "1 pièce". */
+export function onePriceCountText(count: number, lang: Lang = "en"): string {
+  const n = Math.max(1, Math.floor(Number(count) || 1));
+  if (lang === "fr") return `${n} ${n === 1 ? "pièce" : "pièces"}, un seul prix`;
+  return `${n} ${n === 1 ? "piece" : "pieces"}, one price`;
+}
+
+/**
+ * When the number of pieces differs from what is saved and a price is typed:
+ * "You added 1 piece. Still $300.00 for all 4? Change it here if not." /
+ * "You removed 1 piece. Still $300.00 for the 2 left? Change it here if
+ * not."; "" when the count is the same, nothing is saved yet or no price is
+ * typed - or, given the saved package's price, once another price is typed.
+ * The money is in the language's format (the console's one formatter).
+ */
+export function onePriceChangeNote(
+  storedCount: number | undefined,
+  count: number,
+  priceCents: number | null,
+  lang: Lang = "en",
+  storedPriceCents?: number | null,
+): string {
+  if (storedCount === undefined || !(storedCount > 0) || storedCount === count || priceCents === null) return "";
+  // The question is "still the same price?": once staff typed another price
+  // they have answered it (seen in the browser check, 2026-11-23).
+  if (typeof storedPriceCents === "number" && storedPriceCents !== priceCents) return "";
+  const fr = lang === "fr";
+  const money = moneyText(priceCents, fr ? "fr" : "en");
+  if (count > storedCount) {
+    const added = count - storedCount;
+    return fr
+      ? `Vous avez ajouté ${added} ${added === 1 ? "pièce" : "pièces"}. Toujours ${money} pour les ${count} ? Sinon, modifiez-le ici.`
+      : `You added ${added} ${added === 1 ? "piece" : "pieces"}. Still ${money} for all ${count}? Change it here if not.`;
+  }
+  const removed = storedCount - count;
+  if (fr) {
+    const left = count === 1 ? "la pièce restante" : `les ${count} restantes`;
+    return `Vous avez retiré ${removed} ${removed === 1 ? "pièce" : "pièces"}. Toujours ${money} pour ${left} ? Sinon, modifiez-le ici.`;
+  }
+  const left = count === 1 ? "the piece left" : `the ${count} left`;
+  return `You removed ${removed} ${removed === 1 ? "piece" : "pieces"}. Still ${money} for ${left}? Change it here if not.`;
 }

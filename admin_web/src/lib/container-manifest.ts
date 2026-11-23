@@ -35,14 +35,18 @@ import {
 } from "./line-pieces.ts";
 import {
   newPieceDraft,
+  onePriceFromLine,
+  packagePricingOf,
   pieceDraftProblems,
   pieceDraftsFromLine,
   piecesDifferFromLine,
   piecesPayload,
+  storedPiecePrices,
   readPickupFeeInput,
   type PieceDraft,
   type PiecePayload,
 } from "./piece-drafts.ts";
+import { PRICE_MODE, type PriceMode, type StoredPiecePrice } from "./package-price-mode.ts";
 
 export const CONTAINER_STATUSES = ["loading", "shipped", "arrived"] as const;
 export type ContainerStatus = (typeof CONTAINER_STATUSES)[number];
@@ -723,6 +727,15 @@ export type ContainerLineDraft = {
    */
   pieces: PieceDraft[];
   /**
+   * One price for the whole package (docs/PACKAGE_ONE_PRICE.md): how the
+   * business prices a package (absent = a price on each row), the one price as
+   * typed, and - editing - the line's pieces as saved. Set by the form from
+   * the business's setting; never stored on a line.
+   */
+  priceMode?: PriceMode;
+  onePrice?: string;
+  storedPieces?: StoredPiecePrice[] | null;
+  /**
    * A collected request's pickup fee in US dollars as typed, for a line that
    * has one (`lineHasPickupFee`); null for every other line, which shows no
    * fee field and sends none. Its own amount beside the pieces, inside the
@@ -833,7 +846,7 @@ export function validateContainerLineDraft(
     // (`linesInPiecesMode`): 1-60 of them, each saying what it is.
     // A customer's package also needs its price: every piece priced, the
     // pieces over $0 (docs/PACKAGE_PRICE_REQUIRED.md); stock is exempt.
-    errors.push(...pieceDraftProblems(draft.pieces ?? [], { priceRequired: text(draft.ownerKind, 20) === "customer" }).codes);
+    errors.push(...pieceDraftProblems(draft.pieces ?? [], { priceRequired: text(draft.ownerKind, 20) === "customer", pricing: packagePricingOf(draft) }).codes);
     if (draft.pickupFee !== null && draft.pickupFee !== undefined && readPickupFeeInput(draft.pickupFee).error) {
       errors.push("pickup_fee_invalid");
     }
@@ -976,7 +989,7 @@ export function containerLinePayload(draft: ContainerLineDraft): ContainerLinePa
     ...lineContacts(draft, owner),
   };
   if (isCar) return { kind, ...base, quantity: 1, description: "" };
-  const pieces = piecesPayload(draft.pieces ?? []);
+  const pieces = piecesPayload(draft.pieces ?? [], packagePricingOf(draft));
   const summary = piecesSummaryFields(pieces);
   const hasFee = draft.pickupFee !== null && draft.pickupFee !== undefined;
   return {
@@ -1012,10 +1025,10 @@ function legacyLinePayload(line: unknown, draft: ContainerLineDraft): ContainerL
 }
 
 /** Whether an edit keeps a legacy line in its old form (its pieces were left as they read). */
-export function editKeepsLegacyForm(line: unknown, draft: Pick<ContainerLineDraft, "kind" | "pieces">): boolean {
+export function editKeepsLegacyForm(line: unknown, draft: Pick<ContainerLineDraft, "kind" | "pieces" | "priceMode" | "onePrice" | "storedPieces">): boolean {
   const r = asRow(line);
   const legacy = text(r.kind, 20) !== "car" && !lineHasPieces(r);
-  return lineDraftHasPieces(draft) && legacy && !piecesDifferFromLine(r, draft.pieces ?? []);
+  return lineDraftHasPieces(draft) && legacy && !piecesDifferFromLine(r, draft.pieces ?? [], packagePricingOf(draft));
 }
 
 /**
@@ -1039,7 +1052,7 @@ export function editedLinePayload(line: unknown, draft: ContainerLineDraft): Con
  * line saved before the WhatsApp switches existed reads as switched on, like
  * the server's `onUnlessOff`.
  */
-export function containerLineDraftFromRow(line: unknown): ContainerLineDraft {
+export function containerLineDraftFromRow(line: unknown, priceMode?: PriceMode): ContainerLineDraft {
   const r = asRow(line);
   const rawKind = text(r.kind, 20);
   const kind: ContainerLineKind = (CONTAINER_LINE_KINDS as readonly string[]).includes(rawKind)
@@ -1072,7 +1085,11 @@ export function containerLineDraftFromRow(line: unknown): ContainerLineDraft {
     notifyReceiver: !text(r.receiverPhone, 40) || onUnlessOff(r.notifyReceiver),
     senderIsReceiver: same,
     // The line's pieces, ids kept (a legacy line's count expanded).
-    pieces: pieceDraftsFromLine(r),
+    pieces: pieceDraftsFromLine(r, { priceMode }),
+    // One price for the whole package: its sum, and the pieces as saved.
+    ...(priceMode === PRICE_MODE.PACKAGE && !isCar
+      ? { priceMode, onePrice: onePriceFromLine(r), storedPieces: storedPiecePrices(r) }
+      : {}),
     // Its own pickup fee, kept apart from the pieces, when it has one.
     pickupFee: lineHasPickupFee(r) ? centsToInput(linePickupFeeCents(r)) : null,
   };

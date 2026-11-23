@@ -38,7 +38,8 @@ import {
 } from "@/lib/package-proof";
 import { ShipsByChoice } from "@/components/business/ships-by";
 import { CONTAINER_MESSAGES } from "@/lib/container-manifest";
-import type { PieceDraft } from "@/lib/piece-drafts";
+import { readPiecePrice, type PieceDraft } from "@/lib/piece-drafts";
+import { PRICE_MODE, PRICE_MODE_HINT, PRICE_MODE_OPTIONS, packagePriceModeOf, type PriceMode } from "@/lib/package-price-mode";
 import {
   comingToday,
   piecePriceOf,
@@ -82,6 +83,7 @@ import {
   plannedDayText,
   readDollars,
   receiveDraftsFrom,
+  receivePrefillOnePrice,
   receivedLineStub,
   receivePayload,
   receivePrefillPickupFeeCents,
@@ -622,6 +624,8 @@ type ExpectedProps = {
   enabled: boolean;
   /** The business ships by air: Received offers "Ships by: Sea · Air". */
   shipsByAir?: boolean;
+  /** How the business prices a package (docs/PACKAGE_ONE_PRICE.md): Received opens on one price or a price per row. */
+  priceMode?: PriceMode;
   /** The business's time zone: "Coming today" is today there. */
   timeZone?: string;
   /** The viewer may refund a Pay now payment (owner, admin, or staff who can void). */
@@ -632,7 +636,7 @@ type ExpectedProps = {
  * The confirmed requests, above "In the shop": what customers said they will
  * bring (or the business will collect). "Received" turns one into a line.
  */
-export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlash, enabled, shipsByAir = false, timeZone = DEFAULT_TIME_ZONE, canRefund = false }: ExpectedProps) {
+export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlash, enabled, shipsByAir = false, priceMode = PRICE_MODE.PIECE, timeZone = DEFAULT_TIME_ZONE, canRefund = false }: ExpectedProps) {
   const expected = useMemo(() => expectedRequests(rows), [rows]);
   // "Coming today" (docs/PACKAGE_PRICE_LIST.md decision 6): the open
   // requests already loaded, narrowed to today in the business's zone. The
@@ -714,6 +718,7 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
           row={receiving}
           staffOptions={staffOptions}
           shipsByAir={shipsByAir}
+          priceMode={priceMode}
           canRefund={canRefund}
         />
       )}
@@ -841,7 +846,7 @@ function RequestDetailDialog({ businessId, row, canRefund, onClose, onFlash }: {
   );
 }
 
-function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onFlash, shipsByAir = false, canRefund = false }: {
+function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onFlash, shipsByAir = false, priceMode = PRICE_MODE.PIECE, canRefund = false }: {
   businessId: string;
   row: Row;
   staffOptions: readonly { id: string; name: string }[];
@@ -849,6 +854,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   onReceived: (line: Row) => void;
   onFlash: (message: string) => void;
   shipsByAir?: boolean;
+  priceMode?: PriceMode;
   canRefund?: boolean;
 }) {
   const l = lang();
@@ -856,6 +862,11 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   // The load as it arrived: the request's pieces in phase 1's pieces editor
   // (the counter's), plus or minus what the customer actually brought.
   const [pieces, setPieces] = useState<PieceDraft[]>(() => receiveDraftsFrom(row));
+  // One price for the whole package: opens on the estimate's total (pickup fee
+  // left out) when every piece has an estimate (docs/PACKAGE_ONE_PRICE.md).
+  const onePriceMode = priceMode === PRICE_MODE.PACKAGE;
+  const [onePrice, setOnePrice] = useState(() => (onePriceMode ? receivePrefillOnePrice(row) : ""));
+  const pricing = onePriceMode ? { onePrice, stored: null } : undefined;
   const [showErrors, setShowErrors] = useState(false);
   const [payOnArrival, setPayOnArrival] = useState(false);
   const [takeMoney, setTakeMoney] = useState(false);
@@ -892,7 +903,17 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
     // No rate for this weight: empty the price so an older weight's price is
     // never received by mistake; staff type it.
     const newPrice = next ?? (missingRate ? "" : null);
-    if (newPrice !== null) setPieces((list) => list.map((piece) => (piece.id === id ? { ...piece, price: newPrice } : piece)));
+    if (newPrice !== null) {
+      const nextPieces = pieces.map((piece) => (piece.id === id ? { ...piece, price: newPrice } : piece));
+      setPieces(nextPieces);
+      // One price: the weighed pieces' prices come to the package's price once every piece has one.
+      if (onePriceMode) {
+        const cents = nextPieces.map((piece) => readPiecePrice(piece.price));
+        if (cents.every((value) => value !== null && !Number.isNaN(value))) {
+          setOnePrice(ledgerCentsToInput((cents as number[]).reduce((sum, value) => sum + value, 0)));
+        }
+      }
+    }
   }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -902,7 +923,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   const [pickupFee, setPickupFee] = useState(() => (receiveTakesPickupFee(row) ? ledgerCentsToInput(receivePrefillPickupFeeCents(row)) : ""));
 
   async function receive() {
-    const { pieces: payloadPieces, pickupFeeCents, error: problem } = receivePayload(pieces, receiveTakesPickupFee(row) ? pickupFee : null);
+    const { pieces: payloadPieces, pickupFeeCents, error: problem } = receivePayload(pieces, receiveTakesPickupFee(row) ? pickupFee : null, pricing);
     if (problem) {
       setShowErrors(true);
       setError(REQUEST_ERROR_MESSAGES[problem] ?? CONTAINER_MESSAGES[problem as keyof typeof CONTAINER_MESSAGES] ?? REQUEST_ERROR_MESSAGES.price_invalid);
@@ -955,7 +976,9 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         <header className="lst-modal-head">
           <div>
             <h3>{collect ? "Picked up · Received" : <span data-no-translate>{l === "fr" ? "Reçu" : "Received"}</span>}</h3>
-            <p>Confirm the final price of each piece. This registers the package and sends the received message on WhatsApp.</p>
+            {onePriceMode
+              ? <p>Confirm the final price. This registers the package and sends the received message on WhatsApp.</p>
+              : <p>Confirm the final price of each piece. This registers the package and sends the received message on WhatsApp.</p>}
           </div>
           <button aria-label="Close" className="lst-icon-btn" onClick={onClose} type="button"><X size={18} /></button>
         </header>
@@ -994,6 +1017,9 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
             onChange={setPieces}
             pieces={pieces}
             priceRequired
+            priceMode={priceMode}
+            onePrice={onePrice}
+            onOnePriceChange={setOnePrice}
             showErrors={showErrors}
             {...(collect ? { pickupFee, onPickupFeeChange: setPickupFee } : {})}
           />
@@ -1098,6 +1124,54 @@ function PackageReceiptsSetting({ businessId, business }: { businessId: string; 
           <small className="lst-hint">{option.hint}</small>
         </div>
       ))}
+      {message && <small className={failed ? "ctn-wa-fail" : "lst-hint"} role="status">{message}</small>}
+    </section>
+  );
+}
+
+/**
+ * "Package price": a price on each item, or one price for the whole package
+ * (docs/PACKAGE_ONE_PRICE.md). Saves on its own through setPackagePriceMode;
+ * the server allows only the owner or a business admin.
+ */
+function PackagePriceSetting({ businessId, business }: { businessId: string; business: FirestoreRow | null }) {
+  const [mode, setMode] = useState<PriceMode>(() => packagePriceModeOf(business));
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  async function choose(next: PriceMode) {
+    if (busy || next === mode) return;
+    const before = mode;
+    setMode(next);
+    setBusy(true);
+    setMessage("");
+    setFailed(false);
+    try {
+      const result = await callRequest<{ success?: boolean; mode?: string }>("setPackagePriceMode", { businessId, mode: next });
+      setMode(result.mode === PRICE_MODE.PACKAGE ? PRICE_MODE.PACKAGE : PRICE_MODE.PIECE);
+      setMessage("Saved.");
+    } catch {
+      setMode(before);
+      setFailed(true);
+      setMessage("Could not save. Only the business owner or an admin can change this. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="pkq-settings-block">
+      <h4>Package price</h4>
+      {PRICE_MODE_OPTIONS.map((option) => (
+        <div className="pkq-proof-switch" key={option.value}>
+          <label className="ctn-notify">
+            <input checked={mode === option.value} disabled={busy} name="package-price-mode" onChange={() => void choose(option.value)} type="radio" />
+            <span>{option.label}</span>
+          </label>
+        </div>
+      ))}
+      <small className="lst-hint">{PRICE_MODE_HINT}</small>
       {message && <small className={failed ? "ctn-wa-fail" : "lst-hint"} role="status">{message}</small>}
     </section>
   );
@@ -1269,6 +1343,7 @@ function RequestSettingsDialog({ businessId, business, officeLocations, onClose,
           </section>
 
           {isOwner && <PackageReceiptsSetting business={business} businessId={businessId} />}
+          {isOwner && <PackagePriceSetting business={business} businessId={businessId} />}
 
           {/* Proof on every package (docs/AIR_PACKAGES.md §1 decision 3):
               three switches, all off until the owner turns them on. */}

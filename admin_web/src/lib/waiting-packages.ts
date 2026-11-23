@@ -66,11 +66,13 @@ import {
   newPieceDraft,
   parseInches,
   piecesCountText,
+  packagePricingOf,
   piecesDraftCount,
   piecesDraftTotalCents,
   readPickupFeeInput,
   type PieceDraft,
 } from "./piece-drafts.ts";
+import type { PriceMode, StoredPiecePrice } from "./package-price-mode.ts";
 import { bankCheckFrom, type BankCheck } from "./zelle-check.ts";
 
 export { parseInches };
@@ -600,6 +602,10 @@ export type WaitingPackageDraft = {
   carYear: string;
   /** What a package that is not a car holds: one entry per barrel, box or thing handed over. */
   pieces: PieceDraft[];
+  /** One price for the whole package (docs/PACKAGE_ONE_PRICE.md): the business's mode, the price as typed, and - editing - the pieces as saved. */
+  priceMode?: PriceMode;
+  onePrice?: string;
+  storedPieces?: StoredPiecePrice[] | null;
   /** A collected request's pickup fee as typed, for a package that has one; null for any other (no field). */
   pickupFee: string | null;
   customerName: string;
@@ -682,9 +688,9 @@ export function nextPackageForSameSender(draft: WaitingPackageDraft, destination
 }
 
 /** A stored waiting package back into the form, so the same form edits it. */
-export function waitingPackageDraftFromRow(row: unknown): WaitingPackageDraft {
+export function waitingPackageDraftFromRow(row: unknown, priceMode?: PriceMode): WaitingPackageDraft {
   const line = containerLineFromRow(row);
-  const base = containerLineDraftFromRow(row);
+  const base = containerLineDraftFromRow(row, priceMode);
   return {
     kind: base.kind,
     vinNumber: base.vinNumber,
@@ -692,6 +698,7 @@ export function waitingPackageDraftFromRow(row: unknown): WaitingPackageDraft {
     carModel: base.carModel,
     carYear: base.carYear,
     pieces: base.pieces,
+    ...(base.priceMode ? { priceMode: base.priceMode, onePrice: base.onePrice, storedPieces: base.storedPieces } : {}),
     pickupFee: base.pickupFee,
     customerName: base.customerName,
     customerPhone: base.customerPhone,
@@ -726,6 +733,9 @@ function lineDraftOf(draft: WaitingPackageDraft): ContainerLineDraft {
     quantity: "",
     description: "",
     pieces: draft.pieces,
+    priceMode: draft.priceMode,
+    onePrice: draft.onePrice,
+    storedPieces: draft.storedPieces,
     pickupFee: draft.pickupFee ?? null,
     // A waiting package is always a customer's: stock has no counter drop-off.
     ownerKind: "customer",
@@ -799,10 +809,10 @@ export function validateWaitingPackage(
  * (the server's rule, `lineTotalCents`). Null while nothing is priced or a
  * typed price cannot be read.
  */
-export function waitingDraftTotalCents(draft: Pick<WaitingPackageDraft, "kind" | "price" | "pieces"> & { pickupFee?: string | null }): number | null {
+export function waitingDraftTotalCents(draft: Pick<WaitingPackageDraft, "kind" | "price" | "pieces" | "priceMode" | "onePrice" | "storedPieces"> & { pickupFee?: string | null }): number | null {
   if (!lineDraftHasPieces(draft)) return readPackagePrice(draft.price).cents;
   const fee = draft.pickupFee === null || draft.pickupFee === undefined ? 0 : readPickupFeeInput(draft.pickupFee).cents;
-  return piecesDraftTotalCents(draft.pieces ?? [], fee);
+  return piecesDraftTotalCents(draft.pieces ?? [], fee, packagePricingOf(draft));
 }
 
 /** How many labels the package prints: one per piece, one for a car. */
@@ -817,7 +827,7 @@ export function waitingDraftLabelCount(draft: Pick<WaitingPackageDraft, "kind" |
 export type IntakeMoneyError = PackagePaymentError | "received_by_invalid";
 
 /** The switch can only be turned on once there is a total to judge a payment against. */
-export function intakeMoneyAvailable(draft: Pick<WaitingPackageDraft, "kind" | "price" | "pieces">): boolean {
+export function intakeMoneyAvailable(draft: Pick<WaitingPackageDraft, "kind" | "price" | "pieces" | "priceMode" | "onePrice" | "storedPieces">): boolean {
   return waitingDraftTotalCents(draft) !== null;
 }
 

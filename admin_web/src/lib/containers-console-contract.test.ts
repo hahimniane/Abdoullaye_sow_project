@@ -367,7 +367,7 @@ test("a line on a loading container is edited in the add-line form", () => {
   assert.ok(editAt > openOnlyAt && openOnlyAt >= 0, "Edit line belongs to a loading container");
   // The same modal and draft as adding, pre-filled from the stored line.
   // The proof (photos, contents, weight, value) is pre-filled beside it.
-  assert.match(panelSource, /function openEditLine\(row: FirestoreRow\) \{\s*const draft = containerLineDraftFromRow\(row\);\s*setLineDraft\(draft\);\s*setLineProof\(proofDraftFromLine\(row\)\);\s*setEditingLineId\(String\(row\.id\)\);/);
+  assert.match(panelSource, /function openEditLine\(row: FirestoreRow\) \{\s*const draft = containerLineDraftFromRow\(row, priceMode\);\s*setLineDraft\(draft\);\s*setLineProof\(proofDraftFromLine\(row\)\);\s*setEditingLineId\(String\(row\.id\)\);/);
   assert.match(panelSource, /lastVinRef\.current = draft\.vinNumber;/);
   assert.equal((panelSource.match(/\{modal === "line" && selected && \(/g) ?? []).length, 1, "one line form, not a fork");
   assert.match(panelSource, /<h3>\{editingLineId \? "Edit line" : "Add a line"\}<\/h3>/);

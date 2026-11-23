@@ -23,6 +23,7 @@ import {
   piecesDraftCount,
   piecesDraftTotalCents,
   piecesPayload,
+  type PiecePricing,
   readPickupFeeInput,
   type PieceDraft as LinePieceDraft,
   type PiecePayload,
@@ -965,15 +966,16 @@ export function receiveDraftsFrom(row: unknown): LinePieceDraft[] {
 export function receivePayload(
   drafts: readonly LinePieceDraft[],
   pickupFee: string | null = null,
+  pricing?: PiecePricing,
 ): { pieces: PiecePayload[]; pickupFeeCents?: number; error: string } {
-  const problems = pieceDraftProblems(drafts, { priceRequired: true });
+  const problems = pieceDraftProblems(drafts, { priceRequired: true, pricing });
   if (problems.codes.length > 0) {
     // The server names a piece with no price `price_required` on a receive.
     const first = problems.codes[0];
     return { pieces: [], error: first === "piece_price_required" ? "price_required" : first };
   }
   if (piecesDraftCount(drafts) > REQUEST_LIMITS.pieces) return { pieces: [], error: "too_many_pieces" };
-  const pieces = piecesPayload(drafts);
+  const pieces = piecesPayload(drafts, pricing);
   if (pickupFee === null) return { pieces, error: "" };
   const fee = readPickupFeeInput(pickupFee);
   if (fee.error) return { pieces: [], error: fee.error };
@@ -1001,8 +1003,19 @@ export function receivedLineStub(
 }
 
 /** The Received total: the pieces plus the pickup fee (cents, 0 for none), as the line will hold it. */
-export function receiveTotalCents(drafts: readonly LinePieceDraft[], pickupFeeCents = 0): number | null {
-  return piecesDraftTotalCents(drafts, pickupFeeCents);
+export function receiveTotalCents(drafts: readonly LinePieceDraft[], pickupFeeCents = 0, pricing?: PiecePricing): number | null {
+  return piecesDraftTotalCents(drafts, pickupFeeCents, pricing);
+}
+
+/**
+ * The one price Received opens on for a business that prices a package as a
+ * whole (docs/PACKAGE_ONE_PRICE.md): the sum of the pieces' estimates, the
+ * pickup fee left out, when every piece has one; else blank.
+ */
+export function receivePrefillOnePrice(row: unknown): string {
+  const prices = [...receivePrefillCents(row).values()];
+  if (prices.length === 0 || prices.some((cents) => cents === null)) return "";
+  return ledgerCentsToInput((prices as number[]).reduce((sum, cents) => sum + cents, 0));
 }
 
 // ---------------------------------------------------------------------------
