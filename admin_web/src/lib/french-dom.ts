@@ -4754,6 +4754,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Sends the receipt PDF to the sender on WhatsApp.": "Envoie le reçu en PDF à l’expéditeur sur WhatsApp.",
   "Getting the receipt link…": "Récupération du lien du reçu…",
   "Laawol sends the text with the receipt link.": "Laawol envoie le texto avec le lien du reçu.",
+  "Ask the customer first: “Would you like your receipt sent to this number by text message?” Send it only if they say yes.": "Demandez d’abord au client : « Voulez-vous recevoir votre reçu par message texte à ce numéro ? » Envoyez-le seulement s’il dit oui.",
   "Send text message": "Envoyer le texto",
   "Opens your Messages app with the text and the receipt link filled in.": "Ouvre votre application Messages avec le texte et le lien du reçu déjà remplis.",
   "Text from this phone": "Texto depuis ce téléphone",

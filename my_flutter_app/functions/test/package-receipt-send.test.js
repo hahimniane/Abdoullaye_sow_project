@@ -94,8 +94,12 @@ describe("texting", () => {
     const body = receiptSmsBody({businessName: "Dala Shipping",
       code: "CL-K7M4P2", link: "https://laawoldigital.com/d?view=x"});
     assert.equal(body, "Dala Shipping: your package receipt CL-K7M4P2 / " +
-      "votre reçu de colis CL-K7M4P2 : https://laawoldigital.com/d?view=x");
-    assert.ok(body.length < 200);
+      "votre reçu de colis CL-K7M4P2 : https://laawoldigital.com/d?view=x " +
+      "Reply STOP to opt out, HELP for help.");
+    assert.ok(body.length < 240);
+    // The toll-free registration's sample ends this way: every text must.
+    assert.match(receiptSmsBody({link: "https://x.test"}),
+        / Reply STOP to opt out, HELP for help\.$/);
     assert.match(receiptSmsBody({link: "https://x.test"}), /^Laawol: /);
   });
 });

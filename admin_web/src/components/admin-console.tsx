@@ -5361,7 +5361,7 @@ const GENERAL_DEFAULTS = {
   branding: {
     platformName: "Laawol Digital",
     tagline: "Trusted services from registered businesses",
-    supportEmail: "hello@laawoldigital.com",
+    supportEmail: "legal@laawoldigital.com",
     supportPhone: "",
     whatsapp: "",
     address: "",
@@ -6988,7 +6988,7 @@ const WEBSITE_HOME_DEFAULTS = {
 };
 
 const WEBSITE_CONTACT_DEFAULTS = {
-  supportEmail: "hello@laawoldigital.com",
+  supportEmail: "legal@laawoldigital.com",
   supportPhone: "",
   whatsapp: "",
   address: "",

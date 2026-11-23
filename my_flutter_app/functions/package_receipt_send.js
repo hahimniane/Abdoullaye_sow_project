@@ -150,8 +150,13 @@ function senderOf(line) {
   };
 }
 
+// What carriers expect at the end of a business text, and what the toll-free
+// registration and laawoldigital.com/sms-en.html promise (2026-11-23).
+const SMS_OPT_OUT = "Reply STOP to opt out, HELP for help.";
+
 /**
- * The text message: short, in both languages, with the receipt's link.
+ * The text message: short, in both languages, with the receipt's link and
+ * how to stop these texts.
  *
  * @param {{businessName: string, code: string, link: string}} args
  * @return {string}
@@ -161,7 +166,7 @@ function receiptSmsBody(args) {
   const code = text(args?.code, 40);
   const label = code ? ` ${code}` : "";
   return `${business}: your package receipt${label} / ` +
-    `votre reçu de colis${label} : ${text(args?.link, 1000)}`;
+    `votre reçu de colis${label} : ${text(args?.link, 1000)} ${SMS_OPT_OUT}`;
 }
 
 /**
