@@ -317,7 +317,13 @@ function packageReceiptSigningPath(lineId) {
  * received" message, docs/WHATSAPP_CONTAINER_UPDATES.md), served by the /d
  * document endpoint (view=packageReceiptPdf). Signed like a car receipt
  * link, with the line's own document token, its id and the expiry.
- * @param {object} o `{base, token, lineId, expiresMs}`
+ *
+ * `filename` ("Receipt CL-K7M4P2.pdf") puts the file's name at the end of
+ * the address (`.../d/Receipt-CL-K7M4P2.pdf?view=...`): a phone's link
+ * preview titles a PDF by the last part of its address, and without it a
+ * customer saw the function's own name, "parkingDocument" (owner's phone,
+ * 2026-11-23). The name is decoration: the signature does not cover it.
+ * @param {object} o `{base, token, lineId, expiresMs, filename?}`
  * @return {string}
  */
 function packageReceiptLink(o) {
@@ -328,7 +334,21 @@ function packageReceiptLink(o) {
     view: "packageReceiptPdf", t: String(o.token), p: String(o.lineId),
     e: String(expires), s: sig,
   });
-  return `${o.base}?${q.toString()}`;
+  const name = linkFileName(o.filename);
+  return `${o.base}${name ? `/${name}` : ""}?${q.toString()}`;
+}
+
+/**
+ * A file name as one safe part of an address: letters, digits, dot, dash
+ * and underscore only (spaces become dashes), 80 characters at most. Empty
+ * for nothing usable. The /d rewrite on the public site accepts exactly
+ * this alphabet.
+ * @param {*} filename "Receipt CL-K7M4P2.pdf".
+ * @return {string} "Receipt-CL-K7M4P2.pdf".
+ */
+function linkFileName(filename) {
+  return String(filename ?? "").trim().replace(/\s+/g, "-")
+      .replace(/[^A-Za-z0-9._-]/g, "").replace(/^[.-]+/, "").slice(0, 80);
 }
 
 /**
@@ -767,6 +787,7 @@ module.exports = {
   billReceiptLink,
   billReceiptLinkValid,
   packageReceiptLink,
+  linkFileName,
   packageReceiptLinkValid,
   packageReceiptSigningPath,
   invoiceLink,

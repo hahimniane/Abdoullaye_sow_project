@@ -286,6 +286,41 @@ describe("package receipt links", () => {
         Date.now()), true);
   });
 
+  // Owner's phone, 2026-11-23: the preview of a texted receipt link was
+  // titled "parkingDocument", the function's own name, because that is the
+  // last part of the address. A link given a file name ends with it.
+  it("ends with the file's name when given one, and still opens", () => {
+    const url = link({filename: "Receipt CL-K7M4P2.pdf"});
+    assert.ok(url.startsWith(`${BASE}/Receipt-CL-K7M4P2.pdf?view=`), url);
+    assert.equal(new URL(url).pathname.split("/").pop(),
+        "Receipt-CL-K7M4P2.pdf");
+    assert.equal(proof.packageReceiptLinkValid(query(url),
+        "line-token-0123456789", Date.now()), true);
+  });
+
+  it("keeps the plain address with no file name", () => {
+    for (const filename of [undefined, "", "   ", "///", "été"]) {
+      const url = link({filename});
+      if (filename === "été") {
+        assert.ok(url.startsWith(`${BASE}/t?view=`), url);
+      } else {
+        assert.ok(url.startsWith(`${BASE}?view=`), url);
+      }
+    }
+  });
+
+  it("makes a file name one safe part of an address", () => {
+    assert.equal(proof.linkFileName("Receipt CL-K7M4P2.pdf"),
+        "Receipt-CL-K7M4P2.pdf");
+    assert.equal(proof.linkFileName("  a  b/c?d#e&f=g.pdf "), "a-bcdefg.pdf");
+    assert.equal(proof.linkFileName("../../etc/passwd"), "etcpasswd");
+    assert.equal(proof.linkFileName("x".repeat(200)).length, 80);
+    assert.match(proof.linkFileName("Reçu CL-1.pdf"), /^[A-Za-z0-9._-]+$/);
+    for (const nothing of [null, undefined, "", "..", "/"]) {
+      assert.equal(proof.linkFileName(nothing), "");
+    }
+  });
+
   it("refuses another token, another line, a stretched or expired date",
       () => {
         const q = query(link());

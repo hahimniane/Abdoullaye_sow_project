@@ -21,6 +21,10 @@
   # NEW_PROJECT_CONFIG (laawol-a855a), active since the 2026-10-20 cutover:
   RewriteRule ^p$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
   RewriteRule ^d$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingDocument [QSA,R=302,L]
+  # A document link that ends with its file's name (/d/Receipt-CL-K7M4P2.pdf):
+  # a phone's link preview titles a PDF by the last part of its address, and
+  # without the name customers saw "parkingDocument". Same project as above.
+  RewriteRule ^d/([A-Za-z0-9._-]{1,80})$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingDocument/$1 [QSA,R=302,L]
   # Old project (car-selling-flutter-app) - rollback only; delete once it is decommissioned:
   # RewriteRule ^p$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
   # RewriteRule ^d$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingDocument [QSA,R=302,L]

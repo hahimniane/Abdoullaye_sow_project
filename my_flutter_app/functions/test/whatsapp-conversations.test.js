@@ -892,7 +892,7 @@ describe("a text when a delivery report says WhatsApp failed (docs/WHATSAPP_SMS_
     await postWebhook(failed(made.wamid));
     assert.equal(twilioTexts.length, 1);
     assert.match(twilioTexts[0].get("Body"), new RegExp(`^Nensona: your package receipt ${made.code} / votre reçu de colis ${made.code} : ` +
-      "https://laawoldigital\\.com/d\\?view=packageReceiptPdf&t=.+ Reply STOP to opt out, HELP for help\\.$"));
+      "https://laawoldigital\\.com/d/Receipt-CL-[A-Z0-9]+\\.pdf\\?view=packageReceiptPdf&t=.+ Reply STOP to opt out, HELP for help\\.$"));
     assert.equal((await rowOf(made.rowId)).smsFallback.status, "sent");
     assert.deepEqual((await db.collection("containerLines").doc(made.lineId).get()).data().lastCustomerUpdate, before);
   });

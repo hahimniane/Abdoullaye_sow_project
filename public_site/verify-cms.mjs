@@ -390,6 +390,13 @@ for (const key of [
       ".htaccess /p and /d rewrites must target the same project as site-config.js",
     );
   }
+  const namedDocument = htaccess.split("\n")
+    .filter((line) => /^\s*RewriteRule \^d\/\(/.test(line));
+  assert(
+    namedDocument.length === 1 &&
+      namedDocument[0].includes(`${site.region}-${site.firebase.projectId}.cloudfunctions.net/parkingDocument/$1`),
+    ".htaccess must have one /d/<file name> rewrite, to the same project's parkingDocument",
+  );
   assert(
     /#\s*RewriteRule \^p\$ https:\/\/us-central1-car-selling-flutter-app\.cloudfunctions\.net\/parkingPaymentLink/.test(htaccess) &&
       /#\s*RewriteRule \^d\$ https:\/\/us-central1-car-selling-flutter-app\.cloudfunctions\.net\/parkingDocument/.test(htaccess),

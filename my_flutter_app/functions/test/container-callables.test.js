@@ -6088,7 +6088,7 @@ describe("Send receipt", () => {
       assert.ok(out.expiresAtMs >= before + proof.PHOTO_LINK_MS - 5000);
       // The short human link, signed with the line's own token.
       assert.match(out.link, new RegExp(
-          "^https://laawoldigital\\.com/d\\?view=packageReceiptPdf&t=" +
+          "^https://laawoldigital\\.com/d/Receipt-CL-[A-Z0-9]+\\.pdf\\?view=packageReceiptPdf&t=" +
           `${line.documentToken}&p=${lineId}&e=${out.expiresAtMs}&s=`));
       const query = Object.fromEntries(new URL(out.link).searchParams);
       assert.equal(proof.packageReceiptLinkValid(query, line.documentToken,
@@ -6376,7 +6376,7 @@ describe("Send receipt", () => {
           assert.match(twilioCalls[0].body.get("Body"), new RegExp(
               `^Dala Shipping: your package receipt ${line.trackingCode} / ` +
               `votre reçu de colis ${line.trackingCode} : ` +
-              "https://laawoldigital\\.com/d\\?view=packageReceiptPdf"));
+              "https://laawoldigital\\.com/d/Receipt-CL-[A-Z0-9]+\\.pdf\\?view=packageReceiptPdf"));
           const [log] = await receiptRows(lineId);
           assert.equal(log.id, out.messageId);
           const row = log.data();
@@ -6743,7 +6743,7 @@ describe("Send receipt", () => {
       const code = (await lineOf(lineId)).trackingCode;
       assert.match(texts[0].get("Body"), new RegExp("^Dala Shipping: your " +
         `package receipt ${code} / votre reçu de colis ${code} : ` +
-        "https://laawoldigital\\.com/d\\?view=packageReceiptPdf&t=.+ " +
+        "https://laawoldigital\\.com/d/Receipt-CL-[A-Z0-9]+\\.pdf\\?view=packageReceiptPdf&t=.+ " +
         "Reply STOP to opt out, HELP for help\\.$"));
       const row = (await db.collection("containerUpdates").doc(messageId)
           .get()).data();

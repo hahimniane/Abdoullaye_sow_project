@@ -26721,6 +26721,10 @@ async function buildPackageReceiptDocument(db, args) {
     link: packageProof.packageReceiptLink({
       base, token, lineId: lineRef.id,
       expiresMs: nowMs + packageProof.PHOTO_LINK_MS,
+      // A link a person opens (the human base) ends with the file's name,
+      // so a phone's preview reads "Receipt-CL-..." and not the function's
+      // name. Meta's own fetch keeps the plain address.
+      filename: args.base ? filename : "",
     }),
   };
 }

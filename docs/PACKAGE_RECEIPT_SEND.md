@@ -111,6 +111,13 @@ says DEVIATION.
   endpoint 302s to `parkingDocument`, a browser follows it). Meta's own
   fetch (WhatsApp header) still uses the function URL. The signature covers
   token + line + expiry, not the host, so both open the same PDF.
+- **The link ends with the file's name** (2026-11-23):
+  `https://laawoldigital.com/d/Receipt-CL-K7M4P2.pdf?view=...`. A phone's
+  link preview titles a PDF by the last part of its address; without the
+  name the owner's phone showed "parkingDocument". `.htaccess` rewrites
+  `/d/<name>` to `parkingDocument/<name>` (letters, digits, `.`, `_`, `-`,
+  80 at most: `packageProof.linkFileName`). The name is decoration, not
+  signed. Deploy order: website first, then the functions.
 - **Guard.** `lastReceiptSend.{whatsapp|sms}: {atMs, byUid}` on the
   `containerLines` doc, taken in the same transaction that writes the
   WhatsApp row (race-safe). A text that fails to send releases it.
