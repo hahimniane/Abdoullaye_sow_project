@@ -4,7 +4,7 @@
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
-const {before, beforeEach, describe, it} = require("node:test");
+const {afterEach, before, beforeEach, describe, it} = require("node:test");
 const admin = require("firebase-admin");
 
 // Two-way WhatsApp (docs/WHATSAPP_CONVERSATIONS.md) end to end against the
@@ -27,6 +27,9 @@ process.env.ANTHROPIC_API_KEY = "sk-ant-test-key";
 const sent = [];
 let failNextSendCode = 0;
 const realFetch = globalThis.fetch;
+// Fake Twilio (the text sent when WhatsApp fails: docs/WHATSAPP_SMS_FALLBACK.md).
+const twilioTexts = [];
+let twilioAnswer = {status: 201, body: {sid: "SMTEST"}};
 // Fake Claude API (Fleet reads payment screenshots with it).
 const anthropicCalls = [];
 let anthropicText = "";
@@ -36,6 +39,10 @@ globalThis.fetch = async (url, init = {}) => {
     anthropicCalls.push(JSON.parse(init.body));
     if (anthropicText === null) return new Response("{}", {status: 500});
     return new Response(JSON.stringify({content: [{type: "text", text: anthropicText}]}), {status: 200});
+  }
+  if (href.includes("api.twilio.com")) {
+    twilioTexts.push(new URLSearchParams(init.body));
+    return new Response(JSON.stringify(twilioAnswer.body), {status: twilioAnswer.status});
   }
   if (href.includes("graph.facebook.com") && href.endsWith("/messages")) {
     const body = JSON.parse(init.body);
@@ -754,5 +761,137 @@ describe("Fleet payment pictures (docs/FLEET_PAYMENT_PROOF.md)", () => {
     const before = (await db.collection("fleetClaims").get()).size;
     await inbound(DRIVER_PHONE, "", photo("media-1"));
     assert.equal((await db.collection("fleetClaims").get()).size, before);
+  });
+});
+
+describe("a text when a delivery report says WhatsApp failed (docs/WHATSAPP_SMS_FALLBACK.md)", () => {
+  const SID = `AC${"0123456789abcdef".repeat(2)}`;
+  const US = "+16465550100";
+  let seq = 0;
+  const failed = (wamid) => ({statuses: [{id: wamid, status: "failed", recipient_id: US.slice(1), timestamp: "2",
+    errors: [{code: 131026, title: "Message undeliverable"}]}]});
+  // A line, and a sent row of it, whose message Meta then reports failed.
+  async function seed(rowExtra = {}, lineExtra = {}) {
+    seq += 1;
+    const lineId = `line-sms-${seq}`;
+    const rowId = `row-sms-${seq}`;
+    const wamid = `wamid.sms.${seq}`;
+    await db.collection("containerLines").doc(lineId).set({businessId: BIZ, trackingCode: `CL-SMS${seq}`,
+      lastCustomerUpdate: {update: "received", atMs: 1000,
+        results: [{role: "sender", status: "sent"}, {role: "receiver", status: "sent"}]}, ...lineExtra});
+    await db.collection("containerUpdates").doc(rowId).set({businessId: BIZ, businessName: "Nensona", phone: US,
+      lineId, trackingCode: `CL-SMS${seq}`, whatsappMessageId: wamid, status: "sent", update: "received",
+      role: "sender", ...rowExtra});
+    return {lineId, rowId, wamid, code: `CL-SMS${seq}`};
+  }
+  const rowOf = async (rowId) => (await db.collection("containerUpdates").doc(rowId).get()).data();
+  const bodyFor = (code) => `Nensona: we received your package ${code} / colis recu. Track: ` +
+    `https://customer.laawoldigital.com/t/${code} Reply STOP to opt out, HELP for help.`;
+
+  beforeEach(() => {
+    twilioTexts.length = 0;
+    twilioAnswer = {status: 201, body: {sid: "SMTEST"}};
+    process.env.SMS_FALLBACK = "on";
+    process.env.TWILIO_ACCOUNT_SID = SID;
+    process.env.TWILIO_AUTH_TOKEN = "token";
+    process.env.TWILIO_FROM_NUMBER = "+15550001111";
+  });
+  afterEach(async () => {
+    delete process.env.SMS_FALLBACK;
+    delete process.env.TWILIO_ACCOUNT_SID;
+    delete process.env.TWILIO_AUTH_TOKEN;
+    delete process.env.TWILIO_FROM_NUMBER;
+    await db.collection("businesses").doc(BIZ).set({packageTextFallback: admin.firestore.FieldValue.delete()}, {merge: true});
+  });
+
+  it("texts the sender once, with the exact words, and records it on the row and the line", async () => {
+    const {lineId, rowId, wamid, code} = await seed();
+    await postWebhook(failed(wamid));
+    assert.equal(twilioTexts.length, 1);
+    assert.equal(twilioTexts[0].get("To"), US);
+    assert.equal(twilioTexts[0].get("Body"), bodyFor(code));
+    const row = await rowOf(rowId);
+    assert.equal(row.deliveryErrorCode, 131026);
+    assert.equal(row.smsFallback.status, "sent");
+    assert.equal(row.smsFallback.twilioSid, "SMTEST");
+    const last = (await db.collection("containerLines").doc(lineId).get()).data().lastCustomerUpdate;
+    assert.deepEqual(last.results, [
+      {role: "sender", status: "failed", delivery: "failed", reason: "Message undeliverable", sms: "sent"},
+      {role: "receiver", status: "sent"}]);
+    // Meta reports the same failure again, even at the same moment: still one text.
+    await postWebhook(failed(wamid));
+    await Promise.all([postWebhook(failed(wamid)), postWebhook(failed(wamid))]);
+    assert.equal(twilioTexts.length, 1);
+  });
+
+  it("texts nobody the rule excludes", async () => {
+    const cases = {
+      receiver: {role: "receiver"},
+      "not a US number": {phone: "+224620000000"},
+      "already texted": {smsFallback: {status: "sent", reason: "", twilioSid: "SMOLD", atMs: 1}},
+      "a row that is a text": {channel: "sms"},
+      "news that is not a message": {update: "at_port"},
+    };
+    for (const [name, extra] of Object.entries(cases)) {
+      const {rowId, wamid} = await seed(extra);
+      await postWebhook(failed(wamid));
+      assert.equal(twilioTexts.length, 0, name);
+      assert.equal((await rowOf(rowId)).deliveryStatus, "failed", name);
+    }
+    const {rowId, wamid} = await seed({phone: "+224620000000"});
+    await postWebhook(failed(wamid));
+    assert.equal((await rowOf(rowId)).smsFallback.reason, "not_us_number");
+  });
+
+  it("texts nobody with the switch off, Twilio not set up, or the business's setting off", async () => {
+    delete process.env.SMS_FALLBACK;
+    let made = await seed();
+    await postWebhook(failed(made.wamid));
+    assert.equal(twilioTexts.length, 0);
+    assert.equal((await rowOf(made.rowId)).smsFallback, undefined);
+    process.env.SMS_FALLBACK = "on";
+    process.env.TWILIO_ACCOUNT_SID = "unset";
+    made = await seed();
+    await postWebhook(failed(made.wamid));
+    assert.equal(twilioTexts.length, 0);
+    assert.equal((await rowOf(made.rowId)).smsFallback, undefined);
+    process.env.TWILIO_ACCOUNT_SID = SID;
+    await db.collection("businesses").doc(BIZ).set({packageTextFallback: false}, {merge: true});
+    made = await seed();
+    await postWebhook(failed(made.wamid));
+    assert.equal(twilioTexts.length, 0);
+    assert.equal((await rowOf(made.rowId)).smsFallback.reason, "business_off");
+  });
+
+  it("records a Twilio refusal, and a STOP, without losing Meta's failure", async () => {
+    twilioAnswer = {status: 400, body: {code: 30008, message: "Unknown"}};
+    let made = await seed();
+    await postWebhook(failed(made.wamid));
+    let row = await rowOf(made.rowId);
+    assert.equal(row.deliveryStatus, "failed");
+    assert.equal(row.smsFallback.status, "failed");
+    assert.equal(row.smsFallback.reason, "twilio_error");
+    const last = (await db.collection("containerLines").doc(made.lineId).get()).data().lastCustomerUpdate;
+    assert.equal(last.results[0].delivery, "failed");
+    assert.equal(last.results[0].sms, "failed");
+    twilioAnswer = {status: 400, body: {code: 21610, message: "Unsubscribed"}};
+    made = await seed();
+    await postWebhook(failed(made.wamid));
+    row = await rowOf(made.rowId);
+    assert.equal(row.smsFallback.reason, "opted_out");
+  });
+
+  it("texts a receipt with the receipt's link and leaves the line's news alone", async () => {
+    const made = await seed({update: "receipt", trigger: "button"}, {
+      kind: "other", description: "box", ownerKind: "customer", customerName: "Fatou Diallo",
+      customerPhone: US, receiverName: "Mariama Bah", receiverPhone: "+224620000000", priceCents: 30000,
+      pieces: [{kind: "box", description: "A TV", priceCents: 30000}]});
+    const before = (await db.collection("containerLines").doc(made.lineId).get()).data().lastCustomerUpdate;
+    await postWebhook(failed(made.wamid));
+    assert.equal(twilioTexts.length, 1);
+    assert.match(twilioTexts[0].get("Body"), new RegExp(`^Nensona: your package receipt ${made.code} / votre reçu de colis ${made.code} : ` +
+      "https://laawoldigital\\.com/d\\?view=packageReceiptPdf&t=.+ Reply STOP to opt out, HELP for help\\.$"));
+    assert.equal((await rowOf(made.rowId)).smsFallback.status, "sent");
+    assert.deepEqual((await db.collection("containerLines").doc(made.lineId).get()).data().lastCustomerUpdate, before);
   });
 });

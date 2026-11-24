@@ -245,6 +245,12 @@ export type PackageUpdateResult = {
    * Null before Meta reports, and for anything not sent.
    */
   tick: PackageUpdateTick | null;
+  /**
+   * The text that went out in WhatsApp's place when it failed
+   * (docs/WHATSAPP_SMS_FALLBACK.md): "sent", "failed", or "" when none was
+   * tried.
+   */
+  sms: "sent" | "failed" | "";
 };
 
 export type PackageUpdateTick = {
@@ -298,6 +304,7 @@ export function packageLastUpdate(value: unknown): PackageLastUpdate | null {
       tone: packageUpdateResultTone(status),
       failure: status === "failed" && !SKIP_PHRASE[reason] ? reason : "",
       tick: packageUpdateTick(role, entry.delivery, status),
+      sms: entry.sms === "sent" || entry.sms === "failed" ? entry.sms : "",
     });
   }
   const atMs = Number(row.atMs);

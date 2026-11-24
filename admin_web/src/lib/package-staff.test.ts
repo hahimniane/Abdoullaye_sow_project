@@ -413,6 +413,11 @@ test("Meta's report on a package update: delivered and read ticks, failures stay
   assert.deepEqual(packageUpdateMarks(value).map((r) => r.tick?.delivery), ["delivered", "read"]);
   const failed = { update: "shipped", results: [{ role: "receiver", status: "failed", delivery: "failed", reason: "Message undeliverable" }, { role: "sender", status: "sent" }] };
   assert.deepEqual(packageUpdateMarks(failed).map((r) => [r.tone, r.tick, r.failure]), [["error", null, "Message undeliverable"]]);
+  // A text sent in WhatsApp's place (docs/WHATSAPP_SMS_FALLBACK.md) rides on the same mark.
+  assert.deepEqual(packageUpdateMarks(failed).map((r) => r.sms), [""]);
+  const texted = { update: "received", results: [{ role: "sender", status: "failed", reason: "Message undeliverable", sms: "sent" }, { role: "receiver", status: "failed", reason: "Message undeliverable", sms: "bogus" }] };
+  assert.deepEqual(packageUpdateMarks(texted).map((r) => [r.role, r.tone, r.sms]), [["sender", "error", "sent"], ["receiver", "error", ""]]);
+  assert.deepEqual(packageUpdateMarks({ ...texted, results: [{ ...texted.results[0], sms: "failed" }] }).map((r) => r.sms), ["failed"]);
   assert.equal(packageUpdateTick("sender", "failed", "failed"), null);
   assert.equal(packageUpdateTick("sender", "sent"), null);
   assert.equal(packageUpdateTick("sender", undefined), null);

@@ -823,8 +823,11 @@ describe("the server wiring", () => {
     assert.ok(body.includes("document: \"containerUpdates/{messageId}\""));
     assert.match(body, /onDocumentWritten\(/);
     assert.match(body, /retry: true/);
-    assert.match(body,
-        /secrets: \[whatsappAccessToken, whatsappPhoneNumberId\]/);
+    // The Twilio secrets too: a refused message is texted to the sender
+    // (docs/WHATSAPP_SMS_FALLBACK.md).
+    assert.match(body, new RegExp("secrets: \\[whatsappAccessToken, " +
+      "whatsappPhoneNumberId,\\s+twilioAccountSid, twilioAuthToken, " +
+      "twilioFromNumber\\]"));
     assert.match(body, /shouldSendQueuedRow\(before, after\)/);
     // The claim is a transaction that takes a lease.
     assert.match(body, /claimContainerUpdate\(row, nowMs, \{eventAgeMs\}\)/);

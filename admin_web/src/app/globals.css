@@ -17004,6 +17004,8 @@ button.pkq-card:hover { border-color: var(--brand); }
 .ctn-wa-again-button:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .ctn-wa-again-button:disabled { opacity: 0.6; cursor: progress; }
 .ctn-wa-again-done { color: var(--muted); font-size: 12px; font-weight: 600; }
+/* The text that went in WhatsApp's place: it reached them, so not in the failure's red. */
+.ctn-wa-fail .ctn-wa-texted { color: var(--brand); }
 .wpk-counter-alert { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--danger); border-left-width: 4px; border-radius: 10px; background: color-mix(in srgb, var(--danger) 7%, transparent); }
 .wpk-counter-alert > strong { display: block; color: var(--danger); }
 .wpk-counter-alert > p { margin: 4px 0 8px; font-size: 13px; }

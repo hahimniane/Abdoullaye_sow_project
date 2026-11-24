@@ -48,6 +48,7 @@ const {
 } = require("./guest_tracking");
 const packageProof = require("./package_proof");
 const receiptSend = require("./package_receipt_send");
+const smsFallback = require("./sms_fallback");
 const packagePriceMode = require("./package_price_mode");
 const {createPhoneAccounts, notSignedInYet} = require("./phone_accounts");
 const whatsappInbox = require("./whatsapp_inbox");
@@ -18115,7 +18116,13 @@ async function sendTwilioSms({to, body}) {
         status: response.status,
         detail: detail.slice(0, 300),
       });
-      return {...result, skipped: false,
+      let code = 0;
+      try {
+        code = Number(JSON.parse(detail)?.code) || 0;
+      } catch (parseError) {
+        code = 0;
+      }
+      return {...result, skipped: false, code,
         error: `Twilio answered ${response.status}`};
     }
     const answer = await response.json().catch(() => ({}));
@@ -25712,6 +25719,138 @@ async function recordWhatsAppUpdateDelivery(rowRef, row, delivery, error) {
         String(error || ""));
     if (next) tx.update(lineRef, {lastCustomerUpdate: next});
   });
+  // Meta says it never arrived (131026, not on WhatsApp, ...): the sender is
+  // texted instead (docs/WHATSAPP_SMS_FALLBACK.md).
+  if (delivery === "failed") {
+    await textAfterWhatsAppFailure(db, rowRef, row, {});
+  }
+}
+
+/**
+ * A text through Twilio in place of a WhatsApp message that failed for good
+ * (docs/WHATSAPP_SMS_FALLBACK.md). The rule, the words and the record are
+ * sms_fallback.js; this reads what it needs, claims the row, sends, and
+ * records on the row and on the line's lastCustomerUpdate.
+ *
+ * One text per row, ever, even when the trigger is delivered twice or the
+ * webhook repeats: the row is claimed (`smsFallback.status: "sending"`) in
+ * a transaction before anything is sent, so a second run finds it set and
+ * stops. A run that dies after the claim leaves "sending": no second text.
+ * Never throws: a failure is logged and recorded, and the WhatsApp
+ * bookkeeping that called it is already done.
+ *
+ * @param {object} db Firestore.
+ * @param {object} rowRef The containerUpdates row.
+ * @param {object} row The row as the caller knows it.
+ * @param {object} context {business?, line?, lineRef?, container?, group?}:
+ *   what the caller already read; the rest is read here when needed.
+ * @return {Promise<string>} sent | failed | skipped | none.
+ */
+async function textAfterWhatsAppFailure(db, rowRef, row, context = {}) {
+  let claimed = false;
+  try {
+    if (!row || row.requestId || !row.lineId) return "none";
+    // Dark until switched on: no read, no write, nothing recorded.
+    if (!smsFallback.smsFallbackSwitchOn() || !twilioSettings().ready) {
+      return "off";
+    }
+    const businessId = String(row.businessId || "");
+    const business = context.business || (businessId ?
+      (await db.collection("businesses").doc(businessId).get()).data() :
+      null) || {};
+    const decision = smsFallback.smsFallbackWanted({row, business,
+      smsReady: twilioSettings().ready,
+      switchOn: smsFallback.smsFallbackSwitchOn()});
+    if (!decision.send) {
+      if (decision.record) {
+        await db.runTransaction(async (tx) => {
+          const fresh = await tx.get(rowRef);
+          if (!fresh.exists || fresh.data()?.smsFallback) return;
+          tx.update(rowRef, {smsFallback:
+            smsFallback.smsFallbackSkipRecord(decision.reason, Date.now())});
+        });
+      }
+      return "skipped";
+    }
+    // The claim: only the run that finds `smsFallback` unset goes on.
+    await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(rowRef);
+      if (!fresh.exists || fresh.data()?.smsFallback) return;
+      tx.update(rowRef, {smsFallback: {status: "sending",
+        atMs: Date.now()}});
+      claimed = true;
+    });
+    if (!claimed) return "none";
+    const lineRef = context.lineRef ||
+      db.collection("containerLines").doc(String(row.lineId));
+    let line = context.line || null;
+    if (!line) {
+      const lineDoc = await lineRef.get();
+      line = lineDoc.exists ? lineDoc.data() || {} : {};
+    }
+    const code = String(row.trackingCode || line.trackingCode || "");
+    const businessName = String(row.businessName || business.name || "");
+    let receiptLink = "";
+    if (String(row.update || "") === CONTAINER_UPDATE.RECEIPT) {
+      try {
+        const containerId = String(line.containerId || row.containerId || "");
+        const container = context.container !== undefined ?
+          context.container : (containerId ?
+            (await db.collection("containers").doc(containerId).get())
+                .data() || null : null);
+        const group = context.group !== undefined ? context.group :
+          (lineWasSplit(line) ?
+            await containerLineGroup(db, lineRef.id, line) : null);
+        // The link a person opens in a browser (the human base).
+        const made = await buildPackageReceiptDocument(db, {
+          lineRef, line, business, container, group, businessId,
+          businessName: businessName || business.name,
+          base: humanDocumentBase(),
+        });
+        receiptLink = made.link;
+      } catch (error) {
+        await rowRef.update({smsFallback: {status: "failed",
+          reason: "receipt_unavailable", twilioSid: "", atMs: Date.now()}});
+        logger.warn("Receipt text not built", {rowId: rowRef.id,
+          error: String(error?.message || error).slice(0, 300)});
+        return "failed";
+      }
+    }
+    const body = smsFallback.smsFallbackBody({update: row.update,
+      businessName, code, receiptLink});
+    const result = await sendTwilioSms({to: row.phone, body});
+    if (result.skipped) {
+      // Texting went off between the check and the send: let it go later.
+      await rowRef.update({smsFallback: FirestoreFieldValue.delete()});
+      return "skipped";
+    }
+    const record = smsFallback.smsFallbackRecord(result, Date.now());
+    await rowRef.update({smsFallback: record});
+    if (!result.ok) {
+      logger.warn("Fallback text not sent", {rowId: rowRef.id,
+        reason: record.reason, error: result.error});
+    }
+    if (String(row.update || "") !== CONTAINER_UPDATE.RECEIPT) {
+      await db.runTransaction(async (tx) => {
+        const lineDoc = await tx.get(lineRef);
+        if (!lineDoc.exists) return;
+        const next = smsFallback.withSmsResult(
+            lineDoc.data()?.lastCustomerUpdate, String(row.update || ""),
+            String(row.role || ""), result.ok ? "sent" : "failed");
+        if (next) tx.update(lineRef, {lastCustomerUpdate: next});
+      });
+    }
+    return result.ok ? "sent" : "failed";
+  } catch (error) {
+    logger.error("Fallback text failed", {rowId: rowRef?.id,
+      error: String(error?.message || error).slice(0, 300)});
+    if (claimed) {
+      await rowRef.update({smsFallback: {status: "failed",
+        reason: "twilio_error", twilioSid: "", atMs: Date.now()}})
+          .catch(() => null);
+    }
+    return "failed";
+  }
 }
 
 // Everything staff do to a WhatsApp conversation besides writing in it
@@ -25951,8 +26090,11 @@ exports.whatsappWebhook = onRequest(
       // WHATSAPP_FLOW_PRIVATE_KEY decrypts the Send a package form
       // (ops/whatsapp/package_flow.py key creates it).
       // ANTHROPIC_API_KEY reads Fleet payment screenshots.
+      // The Twilio secrets: a delivery report that says WhatsApp failed
+      // texts the sender (docs/WHATSAPP_SMS_FALLBACK.md).
       secrets: [whatsappAppSecret, whatsappAccessToken, whatsappPhoneNumberId,
-        googleMapsApiKey, whatsappFlowPrivateKey, anthropicApiKey],
+        googleMapsApiKey, whatsappFlowPrivateKey, anthropicApiKey,
+        twilioAccountSid, twilioAuthToken, twilioFromNumber],
     },
     async (req, res) => {
       const secret = safeSecretValue(whatsappAppSecret);
@@ -26882,7 +27024,10 @@ exports.setPackagePriceMode = onCall(
 exports.deliverContainerCustomerUpdate = onDocumentWritten(
     {
       document: "containerUpdates/{messageId}",
-      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+      // The Twilio secrets: a message WhatsApp refuses for good is texted
+      // to the sender (docs/WHATSAPP_SMS_FALLBACK.md).
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId,
+        twilioAccountSid, twilioAuthToken, twilioFromNumber],
       retry: true,
       timeoutSeconds: 60,
     },
@@ -26931,6 +27076,8 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
           error: String(row.error || row.lastError ||
             "Gave up after repeated failures").slice(0, 300),
         });
+        // WhatsApp never took it: the sender is texted instead.
+        await textAfterWhatsAppFailure(db, rowRef, row, {});
         return;
       }
       if (claim.action !== "claim") return;
@@ -27164,6 +27311,9 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
           messageId: rowRef.id, containerId: row.containerId,
           lineId: row.lineId, role: row.role, error: sent.error,
         });
+        // Meta refused it for good: the sender is texted instead.
+        await textAfterWhatsAppFailure(db, rowRef, row,
+            {business, line, lineRef: lineDoc.ref, container, group});
       }
     },
 );

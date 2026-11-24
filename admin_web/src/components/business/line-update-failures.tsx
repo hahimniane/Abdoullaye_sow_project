@@ -83,6 +83,8 @@ export function LineUpdateFailures({ line }: { line: Record<string, unknown> }) 
         <small className="ctn-wa-fail" key={mark.role}>
           <AlertTriangle size={11} aria-hidden="true" /> <span>{mark.text}</span>
           {mark.failure && <> · <span data-no-translate>{mark.failure}</span></>}
+          {mark.sms === "sent" && <> · <span className="ctn-wa-texted">Sent by text</span></>}
+          {mark.sms === "failed" && <> · <span>The text could not be sent either</span></>}
         </small>
       ))}
       {failed && <SendAgainButton businessId={text(line.businessId, "")} lineId={text(line.id, "")} />}

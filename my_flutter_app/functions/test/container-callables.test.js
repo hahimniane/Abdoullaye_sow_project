@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
-const {afterEach, before, describe, it} = require("node:test");
+const {afterEach, before, beforeEach, describe, it} = require("node:test");
 const admin = require("firebase-admin");
 const {EventEmitter} = require("node:events");
 
@@ -774,7 +774,9 @@ describe("WhatsApp updates", () => {
     const endpoint = functions.deliverContainerCustomerUpdate.__endpoint;
     assert.equal(endpoint.eventTrigger.retry, true);
     assert.deepEqual(endpoint.secretEnvironmentVariables.map((s) => s.key)
-        .sort(), ["WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"]);
+        .sort(), ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
+      "TWILIO_FROM_NUMBER", "WHATSAPP_ACCESS_TOKEN",
+      "WHATSAPP_PHONE_NUMBER_ID"]);
   });
 
   it("records who would hear while WhatsApp is not connected", async () => {
@@ -6478,6 +6480,251 @@ describe("Send receipt", () => {
       assert.equal(whatsappCalls[0].template.name,
           "shipment_received_photo_2lang");
       assert.equal((await receiptRows(lineId)).length, 0);
+    });
+  });
+
+  // docs/WHATSAPP_SMS_FALLBACK.md: a sender's message WhatsApp refuses for
+  // good is texted through Twilio, once.
+  describe("a text when WhatsApp fails", () => {
+    const REFUSED = {status: 400, body: {error: {code: 131026,
+      message: "Message undeliverable"}}};
+    let twilioAnswer = {status: 201, body: {sid: "SMTEST"}};
+    const texts = [];
+    function fakeBoth(whatsappAnswer) {
+      whatsappCalls = [];
+      texts.length = 0;
+      global.fetch = async (url, init) => {
+        const href = String(url);
+        if (href.endsWith("/assets/logo.png")) {
+          return new Response("", {status: 404});
+        }
+        if (href.includes("api.twilio.com")) {
+          texts.push(new URLSearchParams(init.body));
+          return new Response(JSON.stringify(twilioAnswer.body),
+              {status: twilioAnswer.status});
+        }
+        if (href.includes("graph.facebook.com")) {
+          whatsappCalls.push(JSON.parse(init.body));
+          return new Response(JSON.stringify(whatsappAnswer.body || {}),
+              {status: whatsappAnswer.status});
+        }
+        return realFetch(url, init);
+      };
+    }
+    const bodyFor = (code) => `Dala Shipping: we received your package ` +
+      `${code} / colis recu. Track: https://customer.laawoldigital.com/t/` +
+      `${code} Reply STOP to opt out, HELP for help.`;
+    const rowOf = async (lineId, role = "sender", update = "received") =>
+      (await rowRef(lineId, role, update).get()).data();
+    const lineOf = async (lineId) => (await lineRef(lineId).get()).data();
+    // A sender whose message Meta refuses; returns the line and its row.
+    async function refusedSender(extra = {}, answer = REFUSED) {
+      await setMode("button");
+      connectWhatsApp();
+      const {lineId} = await dropOff(extra);
+      fakeBoth(answer);
+      await deliver(rowRef(lineId, "sender").id);
+      return lineId;
+    }
+
+    beforeEach(() => {
+      process.env.SMS_FALLBACK = "on";
+      twilioOn();
+      twilioAnswer = {status: 201, body: {sid: "SMTEST"}};
+    });
+    afterEach(async () => {
+      delete process.env.SMS_FALLBACK;
+      await db.collection("businesses").doc(BIZ).update({
+        packageTextFallback: admin.firestore.FieldValue.delete()});
+    });
+
+    it("texts the sender once, with the exact words, and says so on the " +
+        "row and the line", async () => {
+      const lineId = await refusedSender();
+      const code = (await lineOf(lineId)).trackingCode;
+      assert.equal(texts.length, 1);
+      assert.equal(texts[0].get("To"), "+16465550100");
+      assert.equal(texts[0].get("From"), "+15550001111");
+      assert.equal(texts[0].get("Body"), bodyFor(code));
+      const row = await rowOf(lineId);
+      assert.equal(row.status, "failed");
+      assert.equal(row.smsFallback.status, "sent");
+      assert.equal(row.smsFallback.twilioSid, "SMTEST");
+      assert.ok(row.smsFallback.atMs > 0);
+      const sender = (await lineOf(lineId)).lastCustomerUpdate.results
+          .find((entry) => entry.role === "sender");
+      assert.equal(sender.status, "failed");
+      assert.equal(sender.sms, "sent");
+    });
+
+    it("texts when WhatsApp was given up on after repeated failures",
+        async () => {
+          await setMode("button");
+          connectWhatsApp();
+          const {lineId} = await dropOff();
+          const code = (await lineOf(lineId)).trackingCode;
+          // Five tries already failed: the next run gives up without
+          // calling Meta again.
+          await rowRef(lineId, "sender").update({status: "retrying",
+            attempts: 5, error: "HTTP 503"});
+          fakeBoth(OK);
+          await deliver(rowRef(lineId, "sender").id);
+          assert.equal(whatsappCalls.length, 0);
+          const row = await rowOf(lineId);
+          assert.equal(row.status, "failed");
+          assert.equal(texts.length, 1);
+          assert.equal(texts[0].get("Body"), bodyFor(code));
+          assert.equal(row.smsFallback.status, "sent");
+        });
+
+    it("writes nothing at all while it is off, even for a number abroad",
+        async () => {
+          delete process.env.SMS_FALLBACK;
+          const lineId = await refusedSender({customerPhone: "+224620000001"});
+          assert.equal(texts.length, 0);
+          assert.equal((await rowOf(lineId)).smsFallback, undefined);
+          assert.equal((await rowOf(lineId)).status, "failed");
+        });
+
+    it("never texts twice, even when the row is sent again", async () => {
+      const lineId = await refusedSender();
+      await rowRef(lineId, "sender").update({status: "queued", attempts: 0});
+      fakeBoth(REFUSED);
+      await deliver(rowRef(lineId, "sender").id);
+      assert.equal((await rowOf(lineId)).status, "failed");
+      assert.equal(texts.length, 0);
+    });
+
+    it("texts nobody for the receiver's row", async () => {
+      await setMode("button");
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      fakeBoth(REFUSED);
+      await deliver(rowRef(lineId, "receiver").id);
+      assert.equal((await rowOf(lineId, "receiver")).status, "failed");
+      assert.equal((await rowOf(lineId, "receiver")).smsFallback, undefined);
+      assert.equal(texts.length, 0);
+    });
+
+    it("texts no number outside the US, and records why", async () => {
+      const lineId = await refusedSender({customerPhone: "+224620000001"});
+      assert.equal(texts.length, 0);
+      const row = await rowOf(lineId);
+      assert.equal(row.status, "failed");
+      assert.equal(row.smsFallback.status, "skipped");
+      assert.equal(row.smsFallback.reason, "not_us_number");
+    });
+
+    it("sends nothing, and writes nothing, with the switch off or " +
+        "Twilio not set up", async () => {
+      delete process.env.SMS_FALLBACK;
+      let lineId = await refusedSender();
+      assert.equal(texts.length, 0);
+      assert.equal((await rowOf(lineId)).smsFallback, undefined);
+      process.env.SMS_FALLBACK = "off";
+      lineId = await refusedSender();
+      assert.equal(texts.length, 0);
+      assert.equal((await rowOf(lineId)).smsFallback, undefined);
+      process.env.SMS_FALLBACK = "on";
+      twilioOff();
+      lineId = await refusedSender();
+      assert.equal(texts.length, 0);
+      assert.equal((await rowOf(lineId)).smsFallback, undefined);
+      assert.equal((await rowOf(lineId)).status, "failed");
+    });
+
+    it("respects a business that turned it off", async () => {
+      await db.collection("businesses").doc(BIZ).update({
+        packageTextFallback: false});
+      const lineId = await refusedSender();
+      assert.equal(texts.length, 0);
+      assert.equal((await rowOf(lineId)).smsFallback.reason, "business_off");
+    });
+
+    it("never texts a row that already has a text", async () => {
+      await setMode("button");
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      await rowRef(lineId, "sender").update({smsFallback: {
+        status: "sent", reason: "", twilioSid: "SMOLD", atMs: 1}});
+      fakeBoth(REFUSED);
+      await deliver(rowRef(lineId, "sender").id);
+      assert.equal(texts.length, 0);
+      assert.equal((await rowOf(lineId)).smsFallback.twilioSid, "SMOLD");
+    });
+
+    it("waits for a template, and for a retry, without texting", async () => {
+      const lineId = await refusedSender({}, {status: 404, body: {error: {
+        code: 132001, message: "Template name does not exist"}}});
+      assert.equal((await rowOf(lineId)).status, "waiting_for_template");
+      assert.equal(texts.length, 0);
+      await setMode("button");
+      const {lineId: other} = await dropOff();
+      fakeBoth({status: 500, body: {}});
+      await assert.rejects(deliver(rowRef(other, "sender").id), /retried/);
+      assert.equal((await rowOf(other)).status, "retrying");
+      assert.equal(texts.length, 0);
+    });
+
+    it("never texts a row that is itself a text", async () => {
+      await setMode("button");
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      await rowRef(lineId, "sender").update({channel: "sms"});
+      fakeBoth(REFUSED);
+      await deliver(rowRef(lineId, "sender").id);
+      assert.equal(texts.length, 0);
+      assert.equal((await rowOf(lineId)).smsFallback, undefined);
+    });
+
+    it("records a Twilio refusal without breaking the WhatsApp record",
+        async () => {
+          twilioAnswer = {status: 400, body: {code: 30008,
+            message: "Unknown error"}};
+          const lineId = await refusedSender();
+          assert.equal(texts.length, 1);
+          const row = await rowOf(lineId);
+          assert.equal(row.status, "failed");
+          assert.equal(row.error, "Message undeliverable");
+          assert.equal(row.smsFallback.status, "failed");
+          assert.equal(row.smsFallback.reason, "twilio_error");
+          const sender = (await lineOf(lineId)).lastCustomerUpdate.results
+              .find((entry) => entry.role === "sender");
+          assert.equal(sender.status, "failed");
+          assert.equal(sender.sms, "failed");
+        });
+
+    it("records a number that replied STOP as opted out", async () => {
+      twilioAnswer = {status: 400, body: {code: 21610,
+        message: "Attempt to send to unsubscribed recipient"}};
+      const lineId = await refusedSender();
+      const row = await rowOf(lineId);
+      assert.equal(row.smsFallback.status, "failed");
+      assert.equal(row.smsFallback.reason, "opted_out");
+    });
+
+    it("texts a receipt with the receipt's words and link, and leaves the " +
+        "line's news alone", async () => {
+      await setMode("button");
+      connectWhatsApp();
+      const {lineId} = await dropOff();
+      fakeBoth(OK);
+      await deliver(rowRef(lineId, "sender").id);
+      const summary = (await lineOf(lineId)).lastCustomerUpdate;
+      const {messageId} = await send(lineId, "whatsapp");
+      fakeBoth(REFUSED);
+      await deliver(messageId);
+      assert.equal(texts.length, 1);
+      const code = (await lineOf(lineId)).trackingCode;
+      assert.match(texts[0].get("Body"), new RegExp("^Dala Shipping: your " +
+        `package receipt ${code} / votre reçu de colis ${code} : ` +
+        "https://laawoldigital\\.com/d\\?view=packageReceiptPdf&t=.+ " +
+        "Reply STOP to opt out, HELP for help\\.$"));
+      const row = (await db.collection("containerUpdates").doc(messageId)
+          .get()).data();
+      assert.equal(row.status, "failed");
+      assert.equal(row.smsFallback.status, "sent");
+      assert.deepEqual((await lineOf(lineId)).lastCustomerUpdate, summary);
     });
   });
 });

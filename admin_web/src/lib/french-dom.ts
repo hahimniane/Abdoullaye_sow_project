@@ -4754,6 +4754,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Sends the receipt PDF to the sender on WhatsApp.": "Envoie le reçu en PDF à l’expéditeur sur WhatsApp.",
   "Getting the receipt link…": "Récupération du lien du reçu…",
   "Laawol sends the text with the receipt link.": "Laawol envoie le texto avec le lien du reçu.",
+  "Sent by text": "Envoyé par texto",
+  "The text could not be sent either": "Le texto n’a pas pu être envoyé non plus",
   "Ask the customer first, and send it only if they say yes:": "Demandez d’abord au client, et envoyez-le seulement s’il dit oui :",
   "“We can text your package receipt to this number: one message each time you ask for a receipt. Message and data rates may apply. Reply HELP for help or STOP to stop at any time. Our terms and privacy policy are at laawoldigital.com/sms-en.html. Would you like your receipt by text message, yes or no?”": "« Nous pouvons vous envoyer le reçu de votre colis par message texte à ce numéro : un message chaque fois que vous demandez un reçu. Des frais de messages et de données peuvent s’appliquer. Répondez HELP pour de l’aide ou STOP pour arrêter à tout moment. Nos conditions et notre politique de confidentialité sont sur laawoldigital.com/sms.html. Voulez-vous recevoir votre reçu par message texte, oui ou non ? »",
   "Send text message": "Envoyer le texto",
