@@ -13803,7 +13803,7 @@
   "@ppmCountLine": {"placeholders": {"count": {"type": "int"}}},
   "ppmNoteAdded": "You added {added, plural, =1{1 piece} other{{added} pieces}}. Still {price} for all {total}? Change it here if not.",
   "@ppmNoteAdded": {"placeholders": {"added": {"type": "int"}, "price": {"type": "String"}, "total": {"type": "int"}}},
-  "ppmNoteRemoved": "You removed {removed, plural, =1{1 piece} other{{removed} pieces}}. Still {price} for the {left} left? Change it here if not.",
+  "ppmNoteRemoved": "You removed {removed, plural, =1{1 piece} other{{removed} pieces}}. Still {price} for {left, plural, =1{the piece left} other{the {left} left}}? Change it here if not.",
   "@ppmNoteRemoved": {"placeholders": {"removed": {"type": "int"}, "price": {"type": "String"}, "left": {"type": "int"}}},
   "ppmSettingsTitle": "Package price",
   "ppmModePiece": "A price for each item",

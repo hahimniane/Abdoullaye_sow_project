@@ -23628,7 +23628,13 @@ class AppLocalizationsEn extends AppLocalizations {
       other: '$removed pieces',
       one: '1 piece',
     );
-    return 'You removed $_temp0. Still $price for the $left left? Change it here if not.';
+    String _temp1 = intl.Intl.pluralLogic(
+      left,
+      locale: localeName,
+      other: 'the $left left',
+      one: 'the piece left',
+    );
+    return 'You removed $_temp0. Still $price for $_temp1? Change it here if not.';
   }
 
   @override

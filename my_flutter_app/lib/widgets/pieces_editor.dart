@@ -300,6 +300,11 @@ class PiecesEditorController extends ChangeNotifier {
   /// How many pieces the saved package had; 0 for a new one.
   int get savedCount => _stored?.length ?? 0;
 
+  /// What the saved package came to (the sum of its pieces' prices); null
+  /// for a new one or when no piece had a price.
+  int? get savedPriceCents =>
+      _stored == null ? null : packagePricePrefill(_stored);
+
   /// The one price typed, in whole cents; null while blank or unreadable.
   int? get onePriceCents => readPackagePriceField(packagePrice.text).cents;
 
@@ -784,14 +789,17 @@ class _PackagePriceBlock extends StatelessWidget {
     final count = controller.count;
     final cents = controller.onePriceCents;
     final change = packagePieceCountChange(controller.savedCount, count);
+    // The note asks "still the same price?": it goes once another price
+    // than the saved one is typed (the website does the same).
+    final asks = cents != null && cents == controller.savedPriceCents;
     String? note;
-    if (cents != null && change.added > 0) {
+    if (asks && change.added > 0) {
       note = l10n.ppmNoteAdded(
         change.added,
         formatLotCents(cents, language: language),
         count,
       );
-    } else if (cents != null && change.removed > 0) {
+    } else if (asks && change.removed > 0) {
       note = l10n.ppmNoteRemoved(
         change.removed,
         formatLotCents(cents, language: language),

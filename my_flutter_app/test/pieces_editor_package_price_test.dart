@@ -171,10 +171,38 @@ void main() {
     );
     expect(_prices(controller), [15000, 15000]);
 
+    // The note asks "still the same price?": it goes once another price is
+    // typed, and comes back with the saved one.
+    await tester.enterText(
+      find.byKey(const Key('pieces-package-price')),
+      '250',
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pieces-package-note')), findsNothing);
+    await tester.enterText(
+      find.byKey(const Key('pieces-package-price')),
+      '300',
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pieces-package-note')), findsOneWidget);
+
     // No note while the price is blank.
     await tester.enterText(find.byKey(const Key('pieces-package-price')), '');
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('pieces-package-note')), findsNothing);
+  });
+
+  testWidgets('one piece left reads "the piece left"', (tester) async {
+    final controller = _package(
+      isEdit: true,
+      initial: [_saved('p1', 10000), _saved('p2', 20000)],
+    );
+    await _pump(tester, controller);
+    await _tap(tester, 'piece-fewer-0');
+    expect(
+      _text(tester, 'pieces-package-note'),
+      'You removed 1 piece. Still \$300.00 for the piece left? Change it here if not.',
+    );
   });
 
   testWidgets('in French: the label, the count and the note', (tester) async {

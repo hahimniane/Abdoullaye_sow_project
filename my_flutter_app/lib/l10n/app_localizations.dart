@@ -39885,7 +39885,7 @@ abstract class AppLocalizations {
   /// No description provided for @ppmNoteRemoved.
   ///
   /// In en, this message translates to:
-  /// **'You removed {removed, plural, =1{1 piece} other{{removed} pieces}}. Still {price} for the {left} left? Change it here if not.'**
+  /// **'You removed {removed, plural, =1{1 piece} other{{removed} pieces}}. Still {price} for {left, plural, =1{the piece left} other{the {left} left}}? Change it here if not.'**
   String ppmNoteRemoved(int removed, String price, int left);
 
   /// No description provided for @ppmSettingsTitle.
