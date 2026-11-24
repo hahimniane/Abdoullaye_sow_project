@@ -18066,8 +18066,11 @@ function twilioSettings() {
   const sid = String(safeSecretValue(twilioAccountSid)).trim();
   const token = String(safeSecretValue(twilioAuthToken)).trim();
   const from = String(safeSecretValue(twilioFromNumber)).trim();
+  // Real keys AND the live switch: until the toll-free number is approved
+  // Twilio accepts a text the carriers then drop, so "ready" must be false.
   return {sid, token, from,
-    ready: receiptSend.smsConfigured({sid, token, from})};
+    ready: receiptSend.smsConfigured({sid, token, from}) &&
+      receiptSend.smsLiveSwitchOn()};
 }
 
 /**

@@ -16,6 +16,7 @@ const {
   senderPhoneOf,
   sendModeOf,
   smsConfigured,
+  smsLiveSwitchOn,
   validSendMode,
 } = require("../package_receipt_send");
 
@@ -146,5 +147,21 @@ describe("the receipt rows", () => {
       "receipt_too_soon", "receipt_line_gone", "receipt_whatsapp_off"]) {
       assert.ok(RECEIPT_REFUSAL[reason], reason);
     }
+  });
+});
+
+// 2026-11-23: the owner saved real Twilio keys while the toll-free number was
+// still in review, and the console at once offered "Send text message" for
+// texts the carriers drop. Keys alone no longer turn texting on.
+describe("the live switch for texting", () => {
+  it("is on only for SMS_LIVE=on, any case, trimmed", () => {
+    assert.equal(smsLiveSwitchOn({}), false);
+    assert.equal(smsLiveSwitchOn({SMS_LIVE: ""}), false);
+    assert.equal(smsLiveSwitchOn({SMS_LIVE: "off"}), false);
+    assert.equal(smsLiveSwitchOn({SMS_LIVE: "true"}), false);
+    assert.equal(smsLiveSwitchOn({SMS_LIVE: "1"}), false);
+    assert.equal(smsLiveSwitchOn({SMS_LIVE: "on"}), true);
+    assert.equal(smsLiveSwitchOn({SMS_LIVE: " ON "}), true);
+    assert.equal(smsLiveSwitchOn(null), false);
   });
 });

@@ -792,12 +792,14 @@ describe("a text when a delivery report says WhatsApp failed (docs/WHATSAPP_SMS_
     twilioTexts.length = 0;
     twilioAnswer = {status: 201, body: {sid: "SMTEST"}};
     process.env.SMS_FALLBACK = "on";
+    process.env.SMS_LIVE = "on";
     process.env.TWILIO_ACCOUNT_SID = SID;
     process.env.TWILIO_AUTH_TOKEN = "token";
     process.env.TWILIO_FROM_NUMBER = "+15550001111";
   });
   afterEach(async () => {
     delete process.env.SMS_FALLBACK;
+    delete process.env.SMS_LIVE;
     delete process.env.TWILIO_ACCOUNT_SID;
     delete process.env.TWILIO_AUTH_TOKEN;
     delete process.env.TWILIO_FROM_NUMBER;

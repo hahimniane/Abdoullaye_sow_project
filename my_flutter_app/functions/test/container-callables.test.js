@@ -5971,8 +5971,10 @@ describe("Send receipt", () => {
     process.env.TWILIO_ACCOUNT_SID = TWILIO_SID;
     process.env.TWILIO_AUTH_TOKEN = "token";
     process.env.TWILIO_FROM_NUMBER = "+15550001111";
+    process.env.SMS_LIVE = "on";
   }
   function twilioOff() {
+    delete process.env.SMS_LIVE;
     delete process.env.TWILIO_ACCOUNT_SID;
     delete process.env.TWILIO_AUTH_TOKEN;
     delete process.env.TWILIO_FROM_NUMBER;
@@ -6333,6 +6335,29 @@ describe("Send receipt", () => {
       const out = await call("updateContainerLine",
           {action: "receipt_link", lineId});
       assert.equal(out.smsReady, false);
+    });
+
+    // The owner saved real keys on 2026-11-23 while the number was still in
+    // review: the console offered "Send text message" for texts carriers
+    // drop. Real keys without the live switch are "not set up".
+    it("is refused with real keys while the live switch is off", async () => {
+      twilioOn();
+      delete process.env.SMS_LIVE;
+      fakeTwilio();
+      const {lineId} = await dropOff();
+      const link = await call("updateContainerLine",
+          {action: "receipt_link", lineId});
+      assert.equal(link.smsReady, false);
+      assert.equal(await reasonOf(send(lineId, "sms")),
+          "receipt_sms_not_set_up");
+      assert.equal(twilioCalls.length, 0);
+      assert.equal((await receiptRows(lineId)).length, 0);
+      // The switch alone, with placeholders, is not enough either.
+      twilioOff();
+      process.env.SMS_LIVE = "on";
+      const again = await call("updateContainerLine",
+          {action: "receipt_link", lineId});
+      assert.equal(again.smsReady, false);
     });
 
     it("texts the link through Twilio and logs it for the screens",

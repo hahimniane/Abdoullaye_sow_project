@@ -123,6 +123,21 @@ function smsConfigured(config) {
 }
 
 /**
+ * The deploy-time switch for texting through Twilio at all (`SMS_LIVE=on`
+ * in the functions' environment; anything else is off). Real keys alone are
+ * not enough: carriers block a toll-free number until its registration is
+ * approved, and Twilio still answers "accepted" for a text that then never
+ * arrives (seen 2026-11-23, error 30032), so texting stays off until the
+ * owner says the number is approved.
+ *
+ * @param {object} [env] The environment.
+ * @return {boolean}
+ */
+function smsLiveSwitchOn(env = process.env) {
+  return text(env?.SMS_LIVE, 20).toLowerCase() === "on";
+}
+
+/**
  * The sender's number as it can be messaged ("" when there is none or it
  * has no country code).
  *
@@ -210,6 +225,7 @@ module.exports = {
   autoReceiptRowId,
   receiptTooSoon,
   smsConfigured,
+  smsLiveSwitchOn,
   senderPhoneOf,
   senderOf,
   receiptSmsBody,
