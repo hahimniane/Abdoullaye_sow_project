@@ -112,7 +112,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(_prices(controller), [3334, 3333, 3333]);
-    expect(_text(tester, 'pieces-total-amount'), '\$100.00');
+    // The price field is the total: no second "Total" line under it.
+    expect(controller.totalCents, 10000);
+    expect(find.byKey(const Key('pieces-total')), findsNothing);
     // A new package has nothing saved to compare with: no note.
     expect(find.byKey(const Key('pieces-package-note')), findsNothing);
   });
@@ -126,6 +128,8 @@ void main() {
     expect(controller.packagePrice.text, '80');
     expect(controller.totalCents, 10000);
     expect(_prices(controller), [8000]);
+    // With a fee the total is the price plus the fee: the line stays.
+    expect(_text(tester, 'pieces-total-amount'), '\$100.00');
   });
 
   testWidgets('an edit opens on the sum and says when pieces were added', (

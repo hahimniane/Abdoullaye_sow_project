@@ -1501,6 +1501,12 @@ class PiecesTotalLine extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
+        // One price for the whole package: the price field IS the total,
+        // so saying it twice is noise (the website shows none either). With
+        // a pickup fee the total is the price plus the fee and stays.
+        if (controller.isPackageMode && !controller.hasPickupFee) {
+          return const SizedBox.shrink();
+        }
         final total = controller.totalCents;
         final fee = controller.pickupFeeCents;
         final totalRow = Row(

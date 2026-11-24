@@ -569,9 +569,10 @@ void main() {
             .text,
         '165',
       );
-      expect(totalShown(tester), r'$165.00');
+      // No fee on this request: the price field is the total, no second
+      // "Total" line.
+      expect(find.byKey(const Key('pieces-total')), findsNothing);
       await _type(tester, 'pieces-package-price', '100');
-      expect(totalShown(tester), r'$100.00');
       await _tap(tester, 'receive-save');
       final body = opened.fake.of('receivePackageRequest').single;
       expect([for (final p in body['pieces'] as List) (p as Map)['priceCents']],
