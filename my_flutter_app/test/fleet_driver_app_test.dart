@@ -328,6 +328,22 @@ void main() {
       },
     );
 
+    test('the same person, not eligible for a moment, keeps their account '
+        'and is not asked again', () async {
+      final service = FakeFleetDriverService(driverHomeAnswer());
+      final c = FleetDriverController(
+        service: service,
+        cache: MemoryDriverHomeCache(),
+      );
+      addTearDown(c.dispose);
+      await c.setAccount('u1', eligible: true);
+      await c.setAccount('u1', eligible: false);
+      expect(c.home.lockedFleet, isNotNull);
+      await c.setAccount('u1', eligible: true);
+      expect(service.calls, 1);
+      expect(c.home.lockedFleet, isNotNull);
+    });
+
     test('a phone whose storage is broken still gets its answer', () async {
       final service = FakeFleetDriverService(driverHomeAnswer());
       final c = FleetDriverController(service: service, cache: _Broken());

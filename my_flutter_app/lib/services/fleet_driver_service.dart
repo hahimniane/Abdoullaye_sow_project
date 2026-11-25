@@ -105,6 +105,10 @@ class FleetDriverController extends ChangeNotifier {
   /// [eligible] is false for a guest, a session still loading, or a person
   /// with business access (they use the business home).
   Future<void> setAccount(String? uid, {required bool eligible}) async {
+    // The same person, only not eligible for a moment (their profile is
+    // being read again): keep what we know rather than wiping it and showing
+    // the regular home for a blink. The host shows none of it meanwhile.
+    if (uid != null && uid == _uid) return;
     final next = eligible ? uid : null;
     if (next == _uid) return;
     final previous = _uid;
