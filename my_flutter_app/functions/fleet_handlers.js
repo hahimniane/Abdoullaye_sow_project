@@ -10,6 +10,7 @@ const fleetBilling = require("./fleet_billing");
 const fleetBank = require("./fleet_bank");
 const fleetWhatsApp = require("./fleet_whatsapp");
 const fleetClaims = require("./fleet_claims");
+const fleetDriverView = require("./fleet_driver_view");
 const {messageDocId} = require("./whatsapp_conversations");
 const {parseFleetSheet, previousMonth} = require("./fleet_import");
 
@@ -2813,11 +2814,74 @@ function createFleetHandlers(deps) {
     payer_names_save: payerNamesSave,
   };
 
+  // ---- the driver's own view (docs/FLEET.md section 11) -----------------
+
+  /**
+   * `driver_home`: what the caller owes and holds, in every fleet business
+   * that has their verified phone on a driver. No business id is asked: the
+   * phone decides, so a driver can never ask for someone else's records. An
+   * account with no verified phone, or a phone on no driver, gets an empty
+   * list (a regular customer), never a refusal.
+   *
+   * @param {object} request The callable request.
+   * @return {Promise<object>} {success, todayKey, proofWhatsApp, onlyFleet,
+   *   fleets}.
+   */
+  async function driverHome(request) {
+    const todayKey = deps.dayKeyNow();
+    const answer = (fleets) => ({success: true, todayKey,
+      proofWhatsApp: fleetDriverView.proofWhatsApp(process.env),
+      onlyFleet: fleets.some((f) => f.onlyFleet), fleets});
+    const phone = await deps.callerPhone(request);
+    if (!phone) return answer([]);
+    const found = await db().collection("fleetDrivers")
+        .where("phone", "==", phone).limit(10).get();
+    const fleets = [];
+    for (const doc of found.docs) {
+      const driver = doc.data() || {};
+      const businessId = text(driver.businessId, 180);
+      if (!businessId) continue;
+      const bizDoc = await db().collection("businesses").doc(businessId)
+          .get();
+      const business = bizDoc.data() || {};
+      if (!bizDoc.exists || !fleetOn(business)) continue;
+      const rows = (snap) => snap.docs.map((d) => ({id: d.id, ...d.data()}));
+      const own = (col) => db().collection(col)
+          .where("driverId", "==", doc.id).get().then(rows);
+      const [bills, payments, assignments, claims] = await Promise.all([
+        own("fleetBills"), own("fleetPayments"), own("fleetAssignments"),
+        own("fleetClaims")]);
+      // A driver id is unique, but the records must also be this business's.
+      const mine = (list) => list.filter((r) => r.businessId === businessId);
+      const open = mine(assignments).filter((a) => !a.endDayKey);
+      const carIds = [...new Set(open.map((a) => a.carId).filter(Boolean))];
+      const carsById = new Map();
+      if (carIds.length) {
+        const cars = await db().getAll(...carIds.map((id) =>
+          db().collection("fleetCars").doc(id)));
+        for (const c of cars) {
+          if (c.exists && c.get("businessId") === businessId) {
+            carsById.set(c.id, c.data());
+          }
+        }
+      }
+      const view = fleetDriverView.driverFleetView({businessId, business,
+        driverId: doc.id, driver, bills: mine(bills),
+        payments: mine(payments), assignments: open, carsById,
+        claims: mine(claims), todayKey});
+      if (view) fleets.push(view);
+    }
+    fleets.sort((a, b) => a.businessName.localeCompare(b.businessName));
+    return answer(fleets);
+  }
+
   async function fleetAction(request) {
     const uid = deps.requireAuth(request);
     const data = request.data || {};
     const action = text(data.action, 40);
     if (action === "fleet_enable") return setEnabled(uid, data);
+    // A driver's own account: the caller's phone decides, not a business id.
+    if (action === "driver_home") return driverHome(request);
     const handler = ACTIONS[action];
     if (!handler) throw refuse("fleet_bad_input", "invalid-argument");
     const businessId = text(data.businessId, 180);

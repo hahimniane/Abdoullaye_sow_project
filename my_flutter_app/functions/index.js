@@ -48902,6 +48902,19 @@ const fleet = createFleetHandlers({
   // free-form replies recorded in the business's thread.
   readPicture: readFleetPaymentPicture,
   sendFleetText: (args) => whatsappConversations().sayInThread(args),
+  // The driver's own view (docs/FLEET.md section 11): the verified phone of
+  // the signed-in account, "" when it has none (then: not a driver).
+  callerPhone: async (request) => {
+    try {
+      return await phoneAccounts.verifiedPhoneOf(request);
+    } catch (error) {
+      const reason = error?.details?.reason;
+      if (reason === "no_verified_phone" || reason === "sign_in_required") {
+        return "";
+      }
+      throw error;
+    }
+  },
 });
 
 /**

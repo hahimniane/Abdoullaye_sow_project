@@ -2198,6 +2198,7 @@ function createPhoneAccounts(deps) {
     requestPhoneLoginCode,
     signInBookkeeping,
     syncRecordPhones,
+    verifiedPhoneOf,
     verifyPhoneLoginCode,
   };
 }
