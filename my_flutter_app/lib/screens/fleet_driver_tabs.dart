@@ -215,7 +215,7 @@ class FleetDriverHomeTab extends StatelessWidget {
   final DriverLinkOpener openLink;
   final Widget? leading, trailing;
 
-  Future<void> _copy(BuildContext context, String text) async {
+  Future<void> _toClipboard(BuildContext context, String text) async {
     final l10n = AppLocalizations.of(context)!;
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) showSuccessSnackBar(context, l10n.fdrCopied);
@@ -370,7 +370,7 @@ class FleetDriverHomeTab extends StatelessWidget {
                     const SizedBox(width: AppSpacing.sm),
                     OutlinedButton(
                       key: const Key('fleet-driver-copy-zelle'),
-                      onPressed: () => _copy(context, fleet.zelleHandle),
+                      onPressed: () => _toClipboard(context, fleet.zelleHandle),
                       child: Text(l10n.fdrCopy),
                     ),
                   ],
