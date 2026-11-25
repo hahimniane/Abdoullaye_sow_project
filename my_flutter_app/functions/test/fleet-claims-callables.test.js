@@ -50,9 +50,13 @@ const receipts = [];
 let refreshes = 0;
 let nextReading = null;
 let readCalls = 0;
+const pushes = [];
 const handlers = createFleetHandlers({admin, HttpsError, FieldValue,
   logger: silent, writeAudit: async () => undefined,
   dayKeyNow: () => "2026-12-02", now: () => clock.t,
+  pushFleetDriver: async (p) => {
+    pushes.push(p);
+  },
   sendFleetMessage: async (args) => {
     receipts.push(args);
     return "sent";
@@ -492,6 +496,12 @@ describe("the timers: 2 days, 7 days, and the late reminder", () => {
     assert.equal(told.length, 1);
     assert.equal(told[0].text,
         "We have not received your $400.00 yet. Please check with your bank.");
+    // The same news as a push, to the driver's own phone, once.
+    const late = pushes.filter((p) => p.kind === "not_received" &&
+      p.phone === "+16465559160");
+    assert.equal(late.length, 1);
+    assert.equal(late[0].amountCents, 40000);
+    assert.equal(late[0].driverId, claim.driverId);
     const flagged = await doc("fleetClaims", claim.id);
     assert.ok(flagged.toldLateAtMs > 0);
     assert.equal(flagged.reason, "no_deposit");

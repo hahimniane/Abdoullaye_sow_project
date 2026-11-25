@@ -87,6 +87,36 @@ describe("driverFleetView", () => {
   });
 });
 
+describe("shippingOf", () => {
+  const shipper = (over = {}) => ({status: "approved",
+    enabledServices: ["fleet", "barrelShipping"], requestSlug: "dala-ship",
+    packageRequestSettings: {acceptRequests: true}, ...over});
+  it("offers the business's own request form when it takes requests", () => {
+    assert.deepEqual(view.shippingOf(shipper()),
+        {enabled: true, sendSlug: "dala-ship"});
+    assert.deepEqual(build({business: {...business(), ...shipper()}})
+        .shipping, {enabled: true, sendSlug: "dala-ship"});
+  });
+  it("shows packages but no form when requests are off or it has no link",
+      () => {
+        assert.deepEqual(view.shippingOf(shipper(
+            {packageRequestSettings: {acceptRequests: false}})),
+        {enabled: true, sendSlug: ""});
+        assert.deepEqual(view.shippingOf(shipper({requestSlug: ""})),
+            {enabled: true, sendSlug: ""});
+      });
+  it("is off for a business that does not ship, or is not approved", () => {
+    const off = {enabled: false, sendSlug: ""};
+    assert.deepEqual(view.shippingOf(shipper({enabledServices: ["fleet"]})),
+        off);
+    assert.deepEqual(view.shippingOf(shipper({status: "pending"})), off);
+    assert.deepEqual(view.shippingOf(shipper(
+        {enabledServices: "barrelShipping"})), off);
+    assert.deepEqual(view.shippingOf(null), off);
+    assert.deepEqual(build().shipping, off);
+  });
+});
+
 describe("shownBills", () => {
   it("drops void bills, puts open ones first by due day, then the newest",
       () => {

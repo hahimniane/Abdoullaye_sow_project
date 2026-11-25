@@ -12,6 +12,7 @@
 const fleetBilling = require("./fleet_billing");
 const fleetClaims = require("./fleet_claims");
 const {driverDisplayName} = require("./fleet_whatsapp");
+const {requestSettingsOf} = require("./package_requests");
 
 /** Closed bills and payments sent to the phone, newest first. */
 const CLOSED_BILL_LIMIT = 60;
@@ -154,6 +155,29 @@ function shownPlates(assignments, carsById) {
       .sort((a, b) => a.plate.localeCompare(b.plate));
 }
 
+/** The services that make a business a shipper of packages. */
+const SHIPPING_SERVICES = ["barrelShipping", "sharedBarrels", "freight"];
+
+/**
+ * What a driver may do with the fleet business's OWN shipping service
+ * (docs/FLEET.md Q11: its Fleet pages and its other services, never another
+ * business): `enabled` when the business ships packages at all, and
+ * `sendSlug`, its request link's name, when it takes package requests from
+ * customers ("" when it does not).
+ *
+ * @param {object} business The business record.
+ * @return {{enabled: boolean, sendSlug: string}} The shipping part.
+ */
+function shippingOf(business) {
+  const services = Array.isArray(business?.enabledServices) ?
+    business.enabledServices : [];
+  const enabled = text(business?.status, 40) === "approved" &&
+    SHIPPING_SERVICES.some((s) => services.includes(s));
+  const slug = text(business?.requestSlug, 40);
+  return {enabled, sendSlug: enabled && slug &&
+    requestSettingsOf(business).acceptRequests ? slug : ""};
+}
+
 /**
  * One fleet business as its driver sees it, or null when there is nothing
  * to show (a driver who left, owes nothing and holds no plate is a regular
@@ -182,6 +206,7 @@ function driverFleetView(p) {
     onlyFleet: settings.driversSeeOnlyThisBusiness !== false,
     zelle: {name: text(settings.zelle?.name, 80),
       handle: text(settings.zelle?.handle, 120)},
+    shipping: shippingOf(business),
     driver: {
       id: text(p.driverId, 200),
       name: text(driverDisplayName(driver.name), 80),
@@ -207,6 +232,7 @@ module.exports = {
   PROOF_WHATSAPP,
   driverFleetView,
   proofWhatsApp,
+  shippingOf,
   shownBills,
   shownClaims,
   shownPayments,

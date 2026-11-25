@@ -11,6 +11,7 @@ const fleetBank = require("./fleet_bank");
 const fleetWhatsApp = require("./fleet_whatsapp");
 const fleetClaims = require("./fleet_claims");
 const fleetDriverView = require("./fleet_driver_view");
+const fleetDriverPush = require("./fleet_driver_push");
 const {messageDocId} = require("./whatsapp_conversations");
 const {parseFleetSheet, previousMonth} = require("./fleet_import");
 
@@ -1772,6 +1773,36 @@ function createFleetHandlers(deps) {
   }
 
   /**
+   * A push to the driver's phone beside a WhatsApp message (docs/FLEET.md
+   * section 12). One push per message row, however often the WhatsApp send
+   * is retried. Never throws: a payment or a reminder never fails over it.
+   *
+   * @param {string} messageId The fleetMessages id ("" for a message with
+   *   no row, already sent once by its caller).
+   * @param {?object} push What to say (fleet_driver_push.driverPushText).
+   * @return {Promise<void>}
+   */
+  async function pushDriver(messageId, push) {
+    if (typeof deps.pushFleetDriver !== "function" || !push) return;
+    try {
+      if (messageId) {
+        const ref = db().collection("fleetMessages").doc(messageId);
+        const first = await db().runTransaction(async (tx) => {
+          const snap = await tx.get(ref);
+          if (snap.exists && snap.get("pushAtMs")) return false;
+          tx.set(ref, {pushAtMs: nowMs()}, {merge: true});
+          return true;
+        });
+        if (!first) return;
+      }
+      await deps.pushFleetDriver(push);
+    } catch (error) {
+      deps.logger.warn("Fleet push not sent", {messageId,
+        kind: push?.kind, error: String(error?.message || error)});
+    }
+  }
+
+  /**
    * A payment's receipt to its driver, when the business has WhatsApp on.
    * Never throws: a payment never fails over a message.
    *
@@ -1797,8 +1828,9 @@ function createFleetHandlers(deps) {
         amountCents: Number(pay.get("amountCents")) || 0,
         paidDayKey: String(pay.get("paidDayKey") || deps.dayKeyNow()),
         owedCents: money.owedCents, creditCents: money.creditCents});
-      return await deps.sendFleetMessage({
-        id: fleetWhatsApp.messageId("receipt", {paymentId}),
+      const id = fleetWhatsApp.messageId("receipt", {paymentId});
+      const status = await deps.sendFleetMessage({
+        id,
         row: {businessId, driverId, kind: "receipt", paymentId,
           template: fleetWhatsApp.RECEIPT_TEMPLATE,
           phone: String(driver.phone || ""), name: String(driver.name || "")},
@@ -1806,6 +1838,14 @@ function createFleetHandlers(deps) {
             driver.phone, values),
         reachable: fleetWhatsApp.reachable(driver.phone),
       });
+      // "" = this receipt already went out on an earlier call.
+      if (status) {
+        await pushDriver(id, {kind: fleetDriverPush.KIND.RECEIPT, businessId,
+          businessName: business.name, driverId, phone: driver.phone,
+          amountCents: Number(pay.get("amountCents")) || 0,
+          owedCents: money.owedCents, creditCents: money.creditCents});
+      }
+      return status;
     } catch (error) {
       deps.logger.warn("Fleet receipt not sent", {businessId, paymentId,
         error: String(error?.message || error)});
@@ -1852,13 +1892,15 @@ function createFleetHandlers(deps) {
     let failed = 0;
     const send = async (message, driverId) => {
       tried += 1;
-      const status = await deps.sendFleetMessage(message)
+      const {push, ...wire} = message;
+      const status = await deps.sendFleetMessage(wire)
           .catch((error) => {
             deps.logger.warn("Fleet reminder not sent",
                 {businessId, driverId, error: String(error?.message || error)});
             return "failed";
           });
       if (status === "failed") failed += 1;
+      if (status) await pushDriver(wire.id, push);
     };
     const reminded = new Set();
     for (const driver of drivers) {
@@ -1936,6 +1978,11 @@ function createFleetHandlers(deps) {
       body: fleetWhatsApp.templateBody(fleetWhatsApp.REMINDER_TEMPLATE,
           driver.phone, values),
       reachable: fleetWhatsApp.reachable(driver.phone),
+      // Not for WhatsApp: the push that goes beside it (pushDriver).
+      push: {kind: fleetDriverPush.KIND.REMINDER, businessId,
+        businessName: business.name, driverId: driver.id,
+        phone: driver.phone, reminder: "soon", dueDayKey: coming.dueDayKey,
+        owedCents: owed},
     };
   }
 
@@ -1975,6 +2022,11 @@ function createFleetHandlers(deps) {
       body: fleetWhatsApp.templateBody(fleetWhatsApp.REMINDER_TEMPLATE,
           driver.phone, values),
       reachable: fleetWhatsApp.reachable(driver.phone),
+      // Not for WhatsApp: the push that goes beside it (pushDriver).
+      push: {kind: fleetDriverPush.KIND.REMINDER, businessId,
+        businessName: business.name, driverId: driver.id,
+        phone: driver.phone, reminder: kind, dueDayKey: oldest.dueDayKey,
+        owedCents: owed},
     };
   }
 
@@ -2013,8 +2065,10 @@ function createFleetHandlers(deps) {
     const message = oldest && reminderMessage({businessId, business, driver,
       bills, oldest, kind, todayKey, manual: true, byUid: uid});
     if (!message) throw refuse("fleet_nothing_owed");
-    const status = await deps.sendFleetMessage(message);
+    const {push, ...wire} = message;
+    const status = await deps.sendFleetMessage(wire);
     if (status) {
+      await pushDriver(wire.id, push);
       await audit(businessId, uid, "fleet_driver", driverId,
           "fleet_whatsapp_reminder", `WhatsApp reminder sent (${status})`);
     }
@@ -2681,6 +2735,18 @@ function createFleetHandlers(deps) {
         reason: claim.reason || fleetClaims.REASON.NO_DEPOSIT,
         updatedAt: FieldValue.serverTimestamp()});
       out.told += 1;
+      // The same news as a push, to the driver's own phone (the picture may
+      // have come from another one).
+      if (claim.driverId) {
+        const driverDoc = await db().collection("fleetDrivers")
+            .doc(claim.driverId).get();
+        if (driverDoc.exists && driverDoc.get("businessId") === businessId) {
+          await pushDriver("", {kind: fleetDriverPush.KIND.NOT_RECEIVED,
+            businessId, businessName: business.name,
+            driverId: claim.driverId, phone: driverDoc.get("phone"),
+            amountCents: claim.amountCents});
+        }
+      }
     }
     return out;
   }

@@ -114,6 +114,8 @@ describe("driver_home", () => {
     assert.equal(mine.businessName, "Driver Fleet Co");
     assert.deepEqual(mine.zelle, {name: "Driver Fleet Co LLC",
       handle: `pay@${BIZ}.test`});
+    // This fleet business does not ship packages.
+    assert.deepEqual(mine.shipping, {enabled: false, sendSlug: ""});
     assert.equal(mine.driver.name, "Awa Test");
     assert.equal(mine.driver.creditCents, 1500);
     assert.deepEqual(mine.bills.map((b) => b.id),
@@ -144,6 +146,16 @@ describe("driver_home", () => {
     assert.deepEqual(out.fleets.map((f) => [f.businessId, f.onlyFleet]),
         [[BIZ, true], [BIZ2, false]]);
     assert.equal(out.onlyFleet, true);
+  });
+
+  it("offers the fleet business's own shipping when it has one", async () => {
+    await db.collection("businesses").doc(BIZ2).set({status: "approved",
+      enabledServices: ["fleet", "barrelShipping"],
+      requestSlug: "second-fleet", packageRequestSettings:
+        {acceptRequests: true}}, {merge: true});
+    const out = await asPhone(P_AWA);
+    assert.deepEqual(out.fleets.find((f) => f.businessId === BIZ2).shipping,
+        {enabled: true, sendSlug: "second-fleet"});
   });
 
   it("reads the phone from the account when the token has none",

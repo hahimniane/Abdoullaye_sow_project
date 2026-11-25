@@ -48875,6 +48875,30 @@ exports.getParkingTotals = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
     consoleTotals.getParkingTotals);
 
 // ---- Fleet (fleet_handlers.js, docs/FLEET.md) ------------------------------
+// A push to the driver's phone beside each Fleet WhatsApp message
+// (docs/FLEET.md section 12). The account is the one Firebase Auth holds the
+// number as VERIFIED for; a driver without the app gets no push.
+const fleetDriverPusher = require("./fleet_driver_push").createDriverPusher({
+  findUidByVerifiedPhone: async (phone) => {
+    // Emulator workflows must never reach the real Auth service.
+    if (process.env.FUNCTIONS_EMULATOR === "true" &&
+        !process.env.FIREBASE_AUTH_EMULATOR_HOST) return null;
+    try {
+      return (await admin.auth().getUserByPhoneNumber(phone)).uid;
+    } catch (error) {
+      if (error?.code === "auth/user-not-found" ||
+          error?.code === "auth/invalid-phone-number") return null;
+      throw error;
+    }
+  },
+  readUser: async (uid) => {
+    const snap = await admin.firestore().collection("users").doc(uid).get();
+    return snap.exists ? snap.data() || {} : null;
+  },
+  recipientLanguage,
+  notify: ({uid, title, body, data}) => sendPreferenceNotification({uid,
+    preferenceKey: "carActivity", title, body, data, pushOnly: true}),
+});
 const fleet = createFleetHandlers({
   admin,
   HttpsError,
@@ -48902,6 +48926,7 @@ const fleet = createFleetHandlers({
   // free-form replies recorded in the business's thread.
   readPicture: readFleetPaymentPicture,
   sendFleetText: (args) => whatsappConversations().sayInThread(args),
+  pushFleetDriver: (p) => fleetDriverPusher(p),
   // The driver's own view (docs/FLEET.md section 11): the verified phone of
   // the signed-in account, "" when it has none (then: not a driver).
   callerPhone: async (request) => {
