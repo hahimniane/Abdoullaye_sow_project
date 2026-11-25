@@ -259,11 +259,10 @@ class FleetCard extends StatelessWidget {
                       if (title != null)
                         Text(
                           title!,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.ink,
-                          ),
+                          // From the theme: the typeface ships one file per
+                          // weight, so a bare fontWeight is not drawn bold.
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(color: AppColors.ink),
                         ),
                       ?action,
                     ],

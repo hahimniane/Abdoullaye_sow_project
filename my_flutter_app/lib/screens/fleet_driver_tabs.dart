@@ -16,13 +16,19 @@ typedef DriverLinkOpener = Future<bool> Function(Uri uri);
 String _lang(BuildContext context) =>
     Localizations.localeOf(context).languageCode == 'fr' ? 'fr' : 'en';
 
-const _muted = TextStyle(fontSize: 13, color: AppColors.muted, height: 1.35);
-const _body = TextStyle(fontSize: 15, color: AppColors.ink, height: 1.35);
-const _strong = TextStyle(
-  fontSize: 15,
-  fontWeight: FontWeight.w700,
-  color: AppColors.ink,
-);
+// Styles come from the theme: the app's typeface ships one file per weight,
+// so a bare `fontWeight` on a plain TextStyle would not be drawn bold.
+TextStyle _muted(BuildContext context) => Theme.of(context)
+    .textTheme
+    .bodyMedium!
+    .copyWith(fontSize: 13, color: AppColors.muted, height: 1.35);
+TextStyle _body(BuildContext context) => Theme.of(
+  context,
+).textTheme.bodyLarge!.copyWith(color: AppColors.ink, height: 1.35);
+TextStyle _strong(BuildContext context) =>
+    Theme.of(context).textTheme.titleMedium!.copyWith(color: AppColors.ink);
+TextStyle _display(BuildContext context) =>
+    Theme.of(context).textTheme.displayLarge!.copyWith(color: AppColors.ink);
 
 /// The page frame every driver tab shares: a title block, then cards, with
 /// pull to refresh. Nothing touches the screen's edge.
@@ -70,18 +76,14 @@ class _DriverPage extends StatelessWidget {
                       if (eyebrow != null)
                         Text(
                           eyebrow!,
-                          style: _muted,
+                          style: _muted(context),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       Text(
                         title,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
-                          letterSpacing: -0.3,
-                        ),
+                        style: Theme.of(context).textTheme.displaySmall
+                            ?.copyWith(color: AppColors.ink),
                       ),
                     ],
                   ),
@@ -121,19 +123,26 @@ class _Line extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: _body),
-                if (sub != null && sub!.isNotEmpty) Text(sub!, style: _muted),
+                Text(label, style: _body(context)),
+                if (sub != null && sub!.isNotEmpty)
+                  Text(sub!, style: _muted(context)),
               ],
             ),
           ),
           const SizedBox(width: AppSpacing.md),
-          // Never wider than the row: a long French chip wraps instead.
-          Flexible(
+          // Sized to its content, against the right edge; never wider than
+          // this, so a long French chip wraps instead of overflowing.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 150),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 if (value != null)
-                  Text(value!, style: _strong, textAlign: TextAlign.end),
+                  Text(
+                    value!,
+                    style: _strong(context),
+                    textAlign: TextAlign.end,
+                  ),
                 if (trailing != null) ...[
                   if (value != null) const SizedBox(height: 4),
                   trailing!,
@@ -265,27 +274,25 @@ class FleetDriverHomeTab extends StatelessWidget {
           Text(
             l10n.fdrStale,
             key: const Key('fleet-driver-stale'),
-            style: _muted,
+            style: _muted(context),
           ),
         if (fleet.left)
           Text(
             l10n.fdrLeftNote(fleet.businessName),
             key: const Key('fleet-driver-left'),
-            style: _body,
+            style: _body(context),
           ),
         FleetCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.fdrYouOwe, style: _muted),
+              Text(l10n.fdrYouOwe, style: _muted(context)),
               const SizedBox(height: 2),
               Text(
                 fleetMoney(owe.cents),
                 key: const Key('fleet-driver-owed'),
-                style: TextStyle(
+                style: _display(context).copyWith(
                   fontSize: 34,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
                   color: owe.state == DriverOwe.late
                       ? AppColors.errorRed
                       : AppColors.ink,
@@ -296,7 +303,7 @@ class FleetDriverHomeTab extends StatelessWidget {
                 DriverOwe.nothing => Text(
                   l10n.fdrPaidUp,
                   key: const Key('fleet-driver-paid-up'),
-                  style: _strong.copyWith(color: AppColors.sage),
+                  style: _strong(context).copyWith(color: AppColors.sage),
                 ),
                 DriverOwe.late => Text(
                   owe.dayKey.isEmpty
@@ -305,12 +312,12 @@ class FleetDriverHomeTab extends StatelessWidget {
                           driverDayLabel(owe.dayKey, language: language),
                         ),
                   key: const Key('fleet-driver-late'),
-                  style: _strong.copyWith(color: AppColors.errorRed),
+                  style: _strong(context).copyWith(color: AppColors.errorRed),
                 ),
                 DriverOwe.due => Text(
                   l10n.fdrDueOn(driverDayLabel(owe.dayKey, language: language)),
                   key: const Key('fleet-driver-due'),
-                  style: _strong,
+                  style: _strong(context),
                 ),
               },
               if (shown.isNotEmpty) ...[
@@ -329,7 +336,7 @@ class FleetDriverHomeTab extends StatelessWidget {
                 if (open.length > shown.length)
                   Text(
                     l10n.fdrMoreBills(open.length - shown.length),
-                    style: _muted,
+                    style: _muted(context),
                   ),
               ],
               if (credit > 0) ...[
@@ -337,7 +344,7 @@ class FleetDriverHomeTab extends StatelessWidget {
                 Text(
                   l10n.fdrCredit(fleetMoney(credit)),
                   key: const Key('fleet-driver-credit'),
-                  style: _muted,
+                  style: _muted(context),
                 ),
               ],
             ],
@@ -356,13 +363,13 @@ class FleetDriverHomeTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(l10n.fdrPaySendTo, style: _muted),
+                          Text(l10n.fdrPaySendTo, style: _muted(context)),
                           if (fleet.zelleName.isNotEmpty)
-                            Text(fleet.zelleName, style: _body),
+                            Text(fleet.zelleName, style: _body(context)),
                           SelectableText(
                             fleet.zelleHandle,
                             key: const Key('fleet-driver-zelle'),
-                            style: _strong,
+                            style: _strong(context),
                           ),
                         ],
                       ),
@@ -377,14 +384,14 @@ class FleetDriverHomeTab extends StatelessWidget {
                 ),
                 if (owe.cents > 0) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  Text(l10n.fdrPayAmount, style: _muted),
-                  Text(fleetMoney(owe.cents), style: _strong),
+                  Text(l10n.fdrPayAmount, style: _muted(context)),
+                  Text(fleetMoney(owe.cents), style: _strong(context)),
                 ],
               ] else
                 Text(
                   l10n.fdrPayNoZelle(fleet.businessName),
                   key: const Key('fleet-driver-no-zelle'),
-                  style: _body,
+                  style: _body(context),
                 ),
               const SizedBox(height: AppSpacing.lg),
               SizedBox(
@@ -402,7 +409,10 @@ class FleetDriverHomeTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              Text(l10n.fdrProofHint(fleet.businessName), style: _muted),
+              Text(
+                l10n.fdrProofHint(fleet.businessName),
+                style: _muted(context),
+              ),
             ],
           ),
         ),
@@ -419,7 +429,10 @@ class FleetDriverHomeTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_claimLabel(l10n, claim, language), style: _body),
+                        Text(
+                          _claimLabel(l10n, claim, language),
+                          style: _body(context),
+                        ),
                         const SizedBox(height: 4),
                         FleetChip(
                           label: switch (claim.state) {
@@ -441,16 +454,10 @@ class FleetDriverHomeTab extends StatelessWidget {
           ),
         FleetCard(
           title: l10n.fdrLastPayments,
-          action: fleet.payments.isEmpty
-              ? null
-              : TextButton(
-                  key: const Key('fleet-driver-see-payments'),
-                  onPressed: onSeePayments,
-                  child: Text(l10n.fdrSeeAll),
-                ),
           child: fleet.payments.isEmpty
-              ? Text(l10n.fdrNoPayments, style: _muted)
+              ? Text(l10n.fdrNoPayments, style: _muted(context))
               : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (final p in fleet.payments.take(3))
                       _Line(
@@ -458,6 +465,16 @@ class FleetDriverHomeTab extends StatelessWidget {
                         sub: _methodText(l10n, p),
                         value: fleetMoney(p.amountCents),
                       ),
+                    TextButton(
+                      key: const Key('fleet-driver-see-payments'),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(44, 44),
+                        alignment: Alignment.centerLeft,
+                      ),
+                      onPressed: onSeePayments,
+                      child: Text(l10n.fdrSeeAll),
+                    ),
                   ],
                 ),
         ),
@@ -516,7 +533,7 @@ class FleetDriverPaymentsTab extends StatelessWidget {
         FleetCard(
           title: l10n.fdrBillsTitle,
           child: fleet.bills.isEmpty
-              ? Text(l10n.fdrNoBills, style: _muted)
+              ? Text(l10n.fdrNoBills, style: _muted(context))
               : Column(
                   children: [
                     for (final bill in fleet.bills)
@@ -552,7 +569,7 @@ class FleetDriverPaymentsTab extends StatelessWidget {
         FleetCard(
           title: l10n.fdrPaymentsReceived,
           child: fleet.payments.isEmpty
-              ? Text(l10n.fdrNoPayments, style: _muted)
+              ? Text(l10n.fdrNoPayments, style: _muted(context))
               : Column(
                   children: [
                     for (final p in fleet.payments)
@@ -611,7 +628,7 @@ class FleetDriverPlateTab extends StatelessWidget {
             child: Text(
               l10n.fdrPlateNone,
               key: const Key('fleet-driver-no-plate'),
-              style: _body,
+              style: _body(context),
             ),
           ),
         for (final plate in fleet.plates) ...[
@@ -619,23 +636,18 @@ class FleetDriverPlateTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.fltPlate, style: _muted),
+                Text(l10n.fltPlate, style: _muted(context)),
                 Text(
                   plate.plate.isEmpty ? '—' : plate.plate,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                    color: AppColors.ink,
-                  ),
+                  style: _display(context).copyWith(letterSpacing: 1),
                 ),
                 if (plate.vehicleType.isNotEmpty)
-                  Text(plate.vehicleType, style: _body),
+                  Text(plate.vehicleType, style: _body(context)),
                 Text(
                   plate.driverOwnsCar
                       ? l10n.fdrCarYours
                       : l10n.fdrCarBusiness(fleet.businessName),
-                  style: _muted,
+                  style: _muted(context),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 const Divider(height: 1, color: AppColors.hairline),
@@ -653,7 +665,7 @@ class FleetDriverPlateTab extends StatelessWidget {
                     l10n.fdrPlateSince(
                       driverDayLabel(plate.startDayKey, language: language),
                     ),
-                    style: _muted,
+                    style: _muted(context),
                   ),
               ],
             ),

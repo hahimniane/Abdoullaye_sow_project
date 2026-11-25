@@ -412,9 +412,13 @@ void main() {
     await _tab(tester, 'Ma plaque');
     expect(find.text('La voiture est à vous'), findsOneWidget);
     expect(find.text('À payer le 1 de chaque mois'), findsOneWidget);
-    expect(find.text('Expire le 20 déc. 2026'), findsOneWidget);
-    expect(find.text('À renouveler bientôt'), findsOneWidget);
     final plate = find.byKey(const Key('fleet-driver-plate'));
+    await tester.scrollUntilVisible(
+      find.text('Expire le 20 déc. 2026'),
+      150,
+      scrollable: scroller(plate),
+    );
+    expect(find.text('À renouveler bientôt'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.byKey(const Key('fleet-driver-call')),
       150,

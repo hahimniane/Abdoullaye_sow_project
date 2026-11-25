@@ -358,21 +358,19 @@ class FleetDriverHomeCard extends StatelessWidget {
                                 fleetMoney(fleet.balance.owedCents),
                               )
                             : l10n.fdrPaidUp,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: fleet.balance.lateCents > 0
-                              ? AppColors.errorRed
-                              : AppColors.ink,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: fleet.balance.lateCents > 0
+                                  ? AppColors.errorRed
+                                  : AppColors.ink,
+                            ),
                       ),
                     ),
                     Text(
                       l10n.fdrCardOpen,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.cobalt,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleSmall?.copyWith(color: AppColors.cobalt),
                     ),
                     const Icon(
                       Icons.chevron_right_rounded,
