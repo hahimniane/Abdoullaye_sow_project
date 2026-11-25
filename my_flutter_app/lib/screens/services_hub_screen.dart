@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../widgets/customer_notification_bell.dart';
+import 'fleet_driver_shell.dart';
 
 /// The content of each persistent-navbar tab. Services of the same nature live
 /// together: Shipping, Cars, and Activity. These are the *roots* of the tab
@@ -55,6 +56,11 @@ class HomeTab extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+            // A Fleet driver's plate and what they owe, when their business
+            // lets its drivers use the rest of Laawol; nothing otherwise.
+            const FleetDriverHomeCard(
+              padding: EdgeInsets.fromLTRB(20, 14, 20, 0),
             ),
             RiseIn(
               index: 1,

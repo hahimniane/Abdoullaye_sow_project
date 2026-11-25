@@ -13808,5 +13808,251 @@
   "ppmSettingsTitle": "Package price",
   "ppmModePiece": "A price for each item",
   "ppmModePackage": "One price for the whole package",
-  "ppmSettingsNote": "With one price, staff type a single amount for everything the customer drops off. It is shared equally among the pieces."
+  "ppmSettingsNote": "With one price, staff type a single amount for everything the customer drops off. It is shared equally among the pieces.",
+  "fdrOnLaawol": "{business} · on Laawol",
+  "@fdrOnLaawol": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrHi": "Hi {name}",
+  "@fdrHi": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrHiNoName": "Hello",
+  "fdrTabPayments": "Payments",
+  "fdrTabPlate": "My plate",
+  "fdrYouOwe": "You owe",
+  "fdrPaidUp": "You’re all paid up",
+  "fdrLateSince": "Late since {day}",
+  "@fdrLateSince": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrDueOn": "Due {day}",
+  "@fdrDueOn": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCredit": "Credit on your account: {amount}. It pays your next bill.",
+  "@fdrCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrMoreBills": "{count, plural, =1{and 1 more bill} other{and {count} more bills}}",
+  "@fdrMoreBills": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fdrPayTitle": "Pay by Zelle",
+  "fdrPaySendTo": "Send to",
+  "fdrPayAmount": "Amount",
+  "fdrCopy": "Copy",
+  "fdrCopied": "Copied",
+  "fdrPayNoZelle": "{business} has not added its Zelle details yet. Ask them how to pay.",
+  "@fdrPayNoZelle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofButton": "Send my payment screenshot",
+  "fdrProofHint": "After you pay, send the screenshot on WhatsApp. Your bill is marked paid when the money shows in {business}’s bank account.",
+  "@fdrProofHint": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofMessage": "Here is my Zelle payment for {business}.",
+  "@fdrProofMessage": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofNoWhatsApp": "WhatsApp could not be opened. Send the screenshot on WhatsApp to {number}.",
+  "@fdrProofNoWhatsApp": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrClaimsTitle": "Payments you reported",
+  "fdrClaimRow": "{amount} · reported {day}",
+  "@fdrClaimRow": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrClaimRowNoAmount": "Reported {day}",
+  "@fdrClaimRowNoAmount": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrClaimChecking": "Waiting for the bank",
+  "fdrClaimReply": "Answer our question on WhatsApp",
+  "fdrClaimOffice": "{business} is looking at it",
+  "@fdrClaimOffice": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrLastPayments": "Last payments",
+  "fdrSeeAll": "See all",
+  "fdrNoPayments": "No payment yet.",
+  "fdrLeftNote": "You no longer hold a plate with {business}. This is what you still owe.",
+  "@fdrLeftNote": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrStale": "We could not refresh. This is what we last knew.",
+  "fdrLoadFailed": "Your account could not be loaded. Check your connection and try again.",
+  "fdrBillsTitle": "Bills",
+  "fdrBillPlateFee": "Plate fee",
+  "fdrBillLateFee": "Late fee",
+  "fdrBillCharge": "Charge",
+  "fdrBillTicket": "Ticket",
+  "fdrBillPartPaid": "{paid} paid of {amount}",
+  "@fdrBillPartPaid": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrNoBills": "No bill yet.",
+  "fdrPaymentsReceived": "Payments received",
+  "fdrPaymentCredit": "{amount} kept as credit",
+  "@fdrPaymentCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrMethodEarlier": "Recorded before Laawol",
+  "fdrPlateNone": "You do not hold a plate right now.",
+  "fdrPlateDueMonthly": "Due on day {day} of each month",
+  "@fdrPlateDueMonthly": {
+    "placeholders": {
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "fdrPlateDueWeekly": "Due every {weekday}",
+  "@fdrPlateDueWeekly": {
+    "placeholders": {
+      "weekday": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrPlateSince": "With you since {day}",
+  "@fdrPlateSince": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrPapersTitle": "Papers",
+  "fdrPaperRegistration": "Registration",
+  "fdrPaperDiamond": "TLC diamond",
+  "fdrPaperExpires": "Expires {day}",
+  "@fdrPaperExpires": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrPaperExpired": "Expired {day}",
+  "@fdrPaperExpired": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrPaperNoDate": "No date on file",
+  "fdrPaperSoon": "Renew soon",
+  "fdrInsuranceTitle": "Insurance",
+  "fdrInsurer": "Insurance company",
+  "fdrPolicy": "Policy number",
+  "fdrCarYours": "The car is yours",
+  "fdrCarBusiness": "The car belongs to {business}",
+  "@fdrCarBusiness": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCallBusiness": "Something wrong? Call {business}",
+  "@fdrCallBusiness": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCardTitle": "Your plate · {business}",
+  "@fdrCardTitle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCardOwe": "You owe {amount}",
+  "@fdrCardOwe": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCardOpen": "Open",
+  "fdrSwitchBusiness": "Change business",
+  "fdrRefresh": "Refresh"
 }

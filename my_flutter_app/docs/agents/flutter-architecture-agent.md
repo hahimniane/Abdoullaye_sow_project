@@ -597,3 +597,12 @@ Add future project conventions and repeated architectural decisions here.
   link a Parking bill = the real owner or a platform admin (the server refuses
   a full-access person: `bankRoleOf` treats them as staff). Hide a control the
   server would refuse.
+- Fleet drivers (docs/FLEET.md section 11): who is a driver is the SERVER's
+  answer to `fleetAction {action: "driver_home"}` (verified phone on a driver
+  record), never a client query of the Fleet collections (the rules keep them
+  for the business's own people). `FleetDriverHost` wraps the customer home,
+  owns one `FleetDriverController` (kept copy first, then the answer; guarded
+  by a ticket per account) and swaps in `FleetDriverShell` when the business
+  is Fleet-only; anything below reads it through `FleetDriverScope`. A new
+  thing a driver may see is added to `functions/fleet_driver_view.js` (and
+  its "never in the answer" tests), then to `fleet_driver_app.dart`.

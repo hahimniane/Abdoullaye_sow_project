@@ -25,7 +25,13 @@ class SettingsScreen extends StatefulWidget {
     this.onOpenAccountProfile,
     this.showBackButton = false,
     this.onBack,
+    this.fleetDriverOnly = false,
   });
+
+  /// A Fleet driver whose business shows its drivers Fleet and nothing else
+  /// of Laawol (docs/FLEET.md section 11): no marketplace rows, no customer
+  /// bell. Account, language, support, legal and sign-out stay.
+  final bool fleetDriverOnly;
 
   final VoidCallback? onOpenAccountProfile;
   final bool showBackButton;
@@ -248,7 +254,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  const CustomerNotificationBell(),
+                  if (!widget.fleetDriverOnly) const CustomerNotificationBell(),
                   const LanguageToggle(),
                 ],
               ),
@@ -281,7 +287,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 14),
                   _SettingsGroup(
                     children: [
-                      if (!authProvider.hasBusinessDashboardAccess) ...[
+                      if (!authProvider.hasBusinessDashboardAccess &&
+                          !widget.fleetDriverOnly) ...[
                         _SettingRow(
                           icon: Icons.favorite_border,
                           title: l10n.favoriteCars,

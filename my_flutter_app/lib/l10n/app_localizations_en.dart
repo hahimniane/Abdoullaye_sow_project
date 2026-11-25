@@ -23649,4 +23649,256 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ppmSettingsNote =>
       'With one price, staff type a single amount for everything the customer drops off. It is shared equally among the pieces.';
+
+  @override
+  String fdrOnLaawol(String business) {
+    return '$business · on Laawol';
+  }
+
+  @override
+  String fdrHi(String name) {
+    return 'Hi $name';
+  }
+
+  @override
+  String get fdrHiNoName => 'Hello';
+
+  @override
+  String get fdrTabPayments => 'Payments';
+
+  @override
+  String get fdrTabPlate => 'My plate';
+
+  @override
+  String get fdrYouOwe => 'You owe';
+
+  @override
+  String get fdrPaidUp => 'You’re all paid up';
+
+  @override
+  String fdrLateSince(String day) {
+    return 'Late since $day';
+  }
+
+  @override
+  String fdrDueOn(String day) {
+    return 'Due $day';
+  }
+
+  @override
+  String fdrCredit(String amount) {
+    return 'Credit on your account: $amount. It pays your next bill.';
+  }
+
+  @override
+  String fdrMoreBills(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'and $count more bills',
+      one: 'and 1 more bill',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fdrPayTitle => 'Pay by Zelle';
+
+  @override
+  String get fdrPaySendTo => 'Send to';
+
+  @override
+  String get fdrPayAmount => 'Amount';
+
+  @override
+  String get fdrCopy => 'Copy';
+
+  @override
+  String get fdrCopied => 'Copied';
+
+  @override
+  String fdrPayNoZelle(String business) {
+    return '$business has not added its Zelle details yet. Ask them how to pay.';
+  }
+
+  @override
+  String get fdrProofButton => 'Send my payment screenshot';
+
+  @override
+  String fdrProofHint(String business) {
+    return 'After you pay, send the screenshot on WhatsApp. Your bill is marked paid when the money shows in $business’s bank account.';
+  }
+
+  @override
+  String fdrProofMessage(String business) {
+    return 'Here is my Zelle payment for $business.';
+  }
+
+  @override
+  String fdrProofNoWhatsApp(String number) {
+    return 'WhatsApp could not be opened. Send the screenshot on WhatsApp to $number.';
+  }
+
+  @override
+  String get fdrClaimsTitle => 'Payments you reported';
+
+  @override
+  String fdrClaimRow(String amount, String day) {
+    return '$amount · reported $day';
+  }
+
+  @override
+  String fdrClaimRowNoAmount(String day) {
+    return 'Reported $day';
+  }
+
+  @override
+  String get fdrClaimChecking => 'Waiting for the bank';
+
+  @override
+  String get fdrClaimReply => 'Answer our question on WhatsApp';
+
+  @override
+  String fdrClaimOffice(String business) {
+    return '$business is looking at it';
+  }
+
+  @override
+  String get fdrLastPayments => 'Last payments';
+
+  @override
+  String get fdrSeeAll => 'See all';
+
+  @override
+  String get fdrNoPayments => 'No payment yet.';
+
+  @override
+  String fdrLeftNote(String business) {
+    return 'You no longer hold a plate with $business. This is what you still owe.';
+  }
+
+  @override
+  String get fdrStale => 'We could not refresh. This is what we last knew.';
+
+  @override
+  String get fdrLoadFailed =>
+      'Your account could not be loaded. Check your connection and try again.';
+
+  @override
+  String get fdrBillsTitle => 'Bills';
+
+  @override
+  String get fdrBillPlateFee => 'Plate fee';
+
+  @override
+  String get fdrBillLateFee => 'Late fee';
+
+  @override
+  String get fdrBillCharge => 'Charge';
+
+  @override
+  String get fdrBillTicket => 'Ticket';
+
+  @override
+  String fdrBillPartPaid(String paid, String amount) {
+    return '$paid paid of $amount';
+  }
+
+  @override
+  String get fdrNoBills => 'No bill yet.';
+
+  @override
+  String get fdrPaymentsReceived => 'Payments received';
+
+  @override
+  String fdrPaymentCredit(String amount) {
+    return '$amount kept as credit';
+  }
+
+  @override
+  String get fdrMethodEarlier => 'Recorded before Laawol';
+
+  @override
+  String get fdrPlateNone => 'You do not hold a plate right now.';
+
+  @override
+  String fdrPlateDueMonthly(int day) {
+    return 'Due on day $day of each month';
+  }
+
+  @override
+  String fdrPlateDueWeekly(String weekday) {
+    return 'Due every $weekday';
+  }
+
+  @override
+  String fdrPlateSince(String day) {
+    return 'With you since $day';
+  }
+
+  @override
+  String get fdrPapersTitle => 'Papers';
+
+  @override
+  String get fdrPaperRegistration => 'Registration';
+
+  @override
+  String get fdrPaperDiamond => 'TLC diamond';
+
+  @override
+  String fdrPaperExpires(String day) {
+    return 'Expires $day';
+  }
+
+  @override
+  String fdrPaperExpired(String day) {
+    return 'Expired $day';
+  }
+
+  @override
+  String get fdrPaperNoDate => 'No date on file';
+
+  @override
+  String get fdrPaperSoon => 'Renew soon';
+
+  @override
+  String get fdrInsuranceTitle => 'Insurance';
+
+  @override
+  String get fdrInsurer => 'Insurance company';
+
+  @override
+  String get fdrPolicy => 'Policy number';
+
+  @override
+  String get fdrCarYours => 'The car is yours';
+
+  @override
+  String fdrCarBusiness(String business) {
+    return 'The car belongs to $business';
+  }
+
+  @override
+  String fdrCallBusiness(String business) {
+    return 'Something wrong? Call $business';
+  }
+
+  @override
+  String fdrCardTitle(String business) {
+    return 'Your plate · $business';
+  }
+
+  @override
+  String fdrCardOwe(String amount) {
+    return 'You owe $amount';
+  }
+
+  @override
+  String get fdrCardOpen => 'Open';
+
+  @override
+  String get fdrSwitchBusiness => 'Change business';
+
+  @override
+  String get fdrRefresh => 'Refresh';
 }

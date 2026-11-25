@@ -294,3 +294,62 @@ inbound hook in `whatsapp_conversations.handleInbound`, the picture reading
 in `index.js` (`ANTHROPIC_API_KEY` on `whatsappWebhook`). Q2: a payment whose
 bank date is on or before the late-fee day and that covers the rent bill
 voids that bill's unpaid late fee (`voidReason: "paid_on_time"`).
+
+## 11. The driver's own account in the app (2026-11-25)
+
+Owner, 2026-11-25: "build the driver screens in the app". Phase 2's app
+pages, first cut: Home, Payments, My plate, Settings. Drivers pay by Zelle
+only (Q13) and report a payment by sending the screenshot on WhatsApp
+(section 10); the app shows where that report stands.
+
+- **Who is a driver**: the signed-in account's VERIFIED phone (the token's
+  `phone_number`, else the auth record's) is the `phone` of a `fleetDrivers`
+  record of a business with Fleet on. No business id is asked, so a driver
+  can never ask for someone else's records. An account with no verified
+  phone, or a phone on no driver, is a regular customer.
+- **Server**: `fleetAction {action: "driver_home"}` (no `businessId`) →
+  `{success, todayKey, proofWhatsApp, onlyFleet, fleets: [{businessId,
+  businessName, businessPhone, onlyFleet, zelle {name, handle}, driver {id,
+  name, status, creditCents}, balance {owedCents, lateCents, nextDueDayKey,
+  nextDueCents}, plates [...], bills [...], payments [...], claims [...]}]}`.
+  Shaped by the pure `functions/fleet_driver_view.js`
+  (`test/fleet-driver-view.test.js`; emulator
+  `test/fleet-driver-callables.test.js` in `npm run test:fleet`).
+  Bills: open, paid and waived (void ones are nobody's), every open one and
+  the 60 newest closed. Payments: recorded ones, the 60 newest; spreadsheet
+  history says `method: "import"`. Claims: the open ones, as `checking`
+  (waiting for the bank), `reply` (we asked the driver something on
+  WhatsApp) or `office`. A driver who left is shown while they owe or still
+  hold a plate, then is a regular customer again.
+- **Never in the answer**: office notes, the track record, friends who
+  drove, remembered payer names, who recorded a payment, bank ids, the
+  screenshot or the name read from it, the VIN, the premium, other drivers.
+  Both test files assert it.
+- **Fleet only (Q11)**: `fleet.settings.driversSeeOnlyThisBusiness` (on
+  unless the Fleet admin switched it off; the switch is already on the
+  console's and the app's Fleet settings). On → the driver's account stands
+  where the customer home would (`FleetDriverHost` in
+  `customer_home_screen.dart`): four places, Settings without the
+  marketplace rows (`SettingsScreen(fleetDriverOnly: true)`). Off → the
+  regular home with a "Your plate" card (`FleetDriverHomeCard` on the Home
+  tab) that opens the same three pages with a way back.
+- **App**: pure model and wording rules `lib/services/fleet_driver_app.dart`;
+  call, kept copy and controller `lib/services/fleet_driver_service.dart`
+  (the last answer is kept per account in SharedPreferences so the account
+  opens at once, "not a driver" included; signing out forgets it; a failed
+  refresh keeps what is shown and says so); screens
+  `lib/screens/fleet_driver_shell.dart` (host, shell, card) and
+  `fleet_driver_tabs.dart` (Home, Payments, My plate). A phone-only account
+  waits for the first answer behind a spinner, 6 seconds at most
+  (`FleetDriverController.settleAfter`), so a driver never sees the
+  marketplace flash by. Refreshed on pull, and when the app comes back to
+  the front (20 s apart at least). Words: `fdr*` keys, English and French;
+  days read "Dec 1, 2026" in English and "1er déc. 2026" in French
+  (`driverDayLabel`).
+- **"Send my payment screenshot"** opens the WhatsApp chat with Laawol's
+  number (`proofWhatsApp`: `fleet_driver_view.PROOF_WHATSAPP`, or the
+  functions env `WHATSAPP_DISPLAY_NUMBER`) with a line ready to send; the
+  picture the driver then sends is a claim like any other (section 10).
+- **Not built**: push alerts to drivers (WhatsApp already sends the receipt
+  and the reminders), a Messages page, insurance proof upload, city tickets
+  (phase 3), card payments (Q13 says Zelle only).

@@ -15,6 +15,7 @@ import '../widgets/app_bottom_nav.dart';
 import '../widgets/ship_sheet.dart';
 import 'services_hub_screen.dart';
 import 'settings_screen.dart';
+import 'fleet_driver_shell.dart';
 
 // Customer service screens, reachable in-tab so the bottom navbar stays put.
 import 'open_barrels_screen.dart';
@@ -357,23 +358,33 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     // Invitations waiting for a signed-in customer: asked once per sign-in.
-    final (inviteUid, inviteEligible) = context
-        .select<AuthProvider, (String?, bool)>((auth) {
+    final (inviteUid, inviteEligible, phoneOnly) = context
+        .select<AuthProvider, (String?, bool, bool)>((auth) {
           final user = auth.user;
-          if (user == null) return (null, false);
+          if (user == null) return (null, false, false);
           return (
             user.uid,
             !user.isAnonymous &&
                 !auth.isInitializing &&
                 auth.loadedProfileUid == user.uid &&
                 !auth.hasBusinessDashboardAccess,
+            auth.isPhoneOnlyAccount,
           );
         });
-    return PendingInvitationsHost(
+    // A Fleet driver whose business shows its drivers Fleet and nothing else
+    // gets the driver account here instead of this home (docs/FLEET.md
+    // section 11). Drivers sign in with their phone, so only a phone-only
+    // account waits for that answer before anything is shown.
+    return FleetDriverHost(
       uid: inviteUid,
       eligible: inviteEligible,
-      onJoined: _onInvitationJoined,
-      child: _home(l10n),
+      hold: phoneOnly,
+      child: PendingInvitationsHost(
+        uid: inviteUid,
+        eligible: inviteEligible,
+        onJoined: _onInvitationJoined,
+        child: _home(l10n),
+      ),
     );
   }
 

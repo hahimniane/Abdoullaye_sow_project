@@ -13798,5 +13798,251 @@
   "ppmSettingsTitle": "Prix d'un colis",
   "ppmModePiece": "Un prix par article",
   "ppmModePackage": "Un seul prix pour tout le colis",
-  "ppmSettingsNote": "Avec un seul prix, le personnel saisit un seul montant pour tout ce que le client dépose. Il est réparti également entre les pièces."
+  "ppmSettingsNote": "Avec un seul prix, le personnel saisit un seul montant pour tout ce que le client dépose. Il est réparti également entre les pièces.",
+  "fdrOnLaawol": "{business} · sur Laawol",
+  "@fdrOnLaawol": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrHi": "Bonjour {name}",
+  "@fdrHi": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrHiNoName": "Bonjour",
+  "fdrTabPayments": "Paiements",
+  "fdrTabPlate": "Ma plaque",
+  "fdrYouOwe": "Vous devez",
+  "fdrPaidUp": "Vous êtes à jour",
+  "fdrLateSince": "En retard depuis le {day}",
+  "@fdrLateSince": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrDueOn": "À payer le {day}",
+  "@fdrDueOn": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCredit": "Crédit sur votre compte : {amount}. Il paiera votre prochaine facture.",
+  "@fdrCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrMoreBills": "{count, plural, =1{et 1 autre facture} other{et {count} autres factures}}",
+  "@fdrMoreBills": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fdrPayTitle": "Payer par Zelle",
+  "fdrPaySendTo": "Envoyer à",
+  "fdrPayAmount": "Montant",
+  "fdrCopy": "Copier",
+  "fdrCopied": "Copié",
+  "fdrPayNoZelle": "{business} n’a pas encore ajouté ses coordonnées Zelle. Demandez-leur comment payer.",
+  "@fdrPayNoZelle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofButton": "Envoyer ma capture de paiement",
+  "fdrProofHint": "Après avoir payé, envoyez la capture sur WhatsApp. Votre facture est marquée payée quand l’argent apparaît sur le compte bancaire de {business}.",
+  "@fdrProofHint": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofMessage": "Voici mon paiement Zelle pour {business}.",
+  "@fdrProofMessage": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofNoWhatsApp": "WhatsApp n’a pas pu s’ouvrir. Envoyez la capture sur WhatsApp au {number}.",
+  "@fdrProofNoWhatsApp": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrClaimsTitle": "Paiements que vous avez signalés",
+  "fdrClaimRow": "{amount} · signalé le {day}",
+  "@fdrClaimRow": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrClaimRowNoAmount": "Signalé le {day}",
+  "@fdrClaimRowNoAmount": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrClaimChecking": "En attente de la banque",
+  "fdrClaimReply": "Répondez à notre question sur WhatsApp",
+  "fdrClaimOffice": "{business} s’en occupe",
+  "@fdrClaimOffice": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrLastPayments": "Derniers paiements",
+  "fdrSeeAll": "Tout voir",
+  "fdrNoPayments": "Aucun paiement pour l’instant.",
+  "fdrLeftNote": "Vous n’avez plus de plaque chez {business}. Voici ce que vous devez encore.",
+  "@fdrLeftNote": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrStale": "Actualisation impossible. Voici les dernières informations connues.",
+  "fdrLoadFailed": "Votre compte n’a pas pu être chargé. Vérifiez votre connexion et réessayez.",
+  "fdrBillsTitle": "Factures",
+  "fdrBillPlateFee": "Frais de plaque",
+  "fdrBillLateFee": "Frais de retard",
+  "fdrBillCharge": "Frais",
+  "fdrBillTicket": "Contravention",
+  "fdrBillPartPaid": "{paid} payés sur {amount}",
+  "@fdrBillPartPaid": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrNoBills": "Aucune facture pour l’instant.",
+  "fdrPaymentsReceived": "Paiements reçus",
+  "fdrPaymentCredit": "{amount} gardés en crédit",
+  "@fdrPaymentCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrMethodEarlier": "Enregistré avant Laawol",
+  "fdrPlateNone": "Vous n’avez pas de plaque en ce moment.",
+  "fdrPlateDueMonthly": "À payer le {day} de chaque mois",
+  "@fdrPlateDueMonthly": {
+    "placeholders": {
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "fdrPlateDueWeekly": "À payer chaque {weekday}",
+  "@fdrPlateDueWeekly": {
+    "placeholders": {
+      "weekday": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrPlateSince": "Avec vous depuis le {day}",
+  "@fdrPlateSince": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrPapersTitle": "Papiers",
+  "fdrPaperRegistration": "Immatriculation",
+  "fdrPaperDiamond": "Diamant TLC",
+  "fdrPaperExpires": "Expire le {day}",
+  "@fdrPaperExpires": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrPaperExpired": "Expiré le {day}",
+  "@fdrPaperExpired": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrPaperNoDate": "Aucune date enregistrée",
+  "fdrPaperSoon": "À renouveler bientôt",
+  "fdrInsuranceTitle": "Assurance",
+  "fdrInsurer": "Compagnie d’assurance",
+  "fdrPolicy": "Numéro de police",
+  "fdrCarYours": "La voiture est à vous",
+  "fdrCarBusiness": "La voiture appartient à {business}",
+  "@fdrCarBusiness": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCallBusiness": "Un problème ? Appelez {business}",
+  "@fdrCallBusiness": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCardTitle": "Votre plaque · {business}",
+  "@fdrCardTitle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCardOwe": "Vous devez {amount}",
+  "@fdrCardOwe": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrCardOpen": "Ouvrir",
+  "fdrSwitchBusiness": "Changer d’entreprise",
+  "fdrRefresh": "Actualiser"
 }

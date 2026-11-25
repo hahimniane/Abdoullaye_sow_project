@@ -39911,6 +39911,396 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'With one price, staff type a single amount for everything the customer drops off. It is shared equally among the pieces.'**
   String get ppmSettingsNote;
+
+  /// No description provided for @fdrOnLaawol.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} · on Laawol'**
+  String fdrOnLaawol(String business);
+
+  /// No description provided for @fdrHi.
+  ///
+  /// In en, this message translates to:
+  /// **'Hi {name}'**
+  String fdrHi(String name);
+
+  /// No description provided for @fdrHiNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'Hello'**
+  String get fdrHiNoName;
+
+  /// No description provided for @fdrTabPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get fdrTabPayments;
+
+  /// No description provided for @fdrTabPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'My plate'**
+  String get fdrTabPlate;
+
+  /// No description provided for @fdrYouOwe.
+  ///
+  /// In en, this message translates to:
+  /// **'You owe'**
+  String get fdrYouOwe;
+
+  /// No description provided for @fdrPaidUp.
+  ///
+  /// In en, this message translates to:
+  /// **'You’re all paid up'**
+  String get fdrPaidUp;
+
+  /// No description provided for @fdrLateSince.
+  ///
+  /// In en, this message translates to:
+  /// **'Late since {day}'**
+  String fdrLateSince(String day);
+
+  /// No description provided for @fdrDueOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {day}'**
+  String fdrDueOn(String day);
+
+  /// No description provided for @fdrCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit on your account: {amount}. It pays your next bill.'**
+  String fdrCredit(String amount);
+
+  /// No description provided for @fdrMoreBills.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{and 1 more bill} other{and {count} more bills}}'**
+  String fdrMoreBills(int count);
+
+  /// No description provided for @fdrPayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay by Zelle'**
+  String get fdrPayTitle;
+
+  /// No description provided for @fdrPaySendTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to'**
+  String get fdrPaySendTo;
+
+  /// No description provided for @fdrPayAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get fdrPayAmount;
+
+  /// No description provided for @fdrCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get fdrCopy;
+
+  /// No description provided for @fdrCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get fdrCopied;
+
+  /// No description provided for @fdrPayNoZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} has not added its Zelle details yet. Ask them how to pay.'**
+  String fdrPayNoZelle(String business);
+
+  /// No description provided for @fdrProofButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Send my payment screenshot'**
+  String get fdrProofButton;
+
+  /// No description provided for @fdrProofHint.
+  ///
+  /// In en, this message translates to:
+  /// **'After you pay, send the screenshot on WhatsApp. Your bill is marked paid when the money shows in {business}’s bank account.'**
+  String fdrProofHint(String business);
+
+  /// No description provided for @fdrProofMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Here is my Zelle payment for {business}.'**
+  String fdrProofMessage(String business);
+
+  /// No description provided for @fdrProofNoWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp could not be opened. Send the screenshot on WhatsApp to {number}.'**
+  String fdrProofNoWhatsApp(String number);
+
+  /// No description provided for @fdrClaimsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments you reported'**
+  String get fdrClaimsTitle;
+
+  /// No description provided for @fdrClaimRow.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} · reported {day}'**
+  String fdrClaimRow(String amount, String day);
+
+  /// No description provided for @fdrClaimRowNoAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported {day}'**
+  String fdrClaimRowNoAmount(String day);
+
+  /// No description provided for @fdrClaimChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the bank'**
+  String get fdrClaimChecking;
+
+  /// No description provided for @fdrClaimReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer our question on WhatsApp'**
+  String get fdrClaimReply;
+
+  /// No description provided for @fdrClaimOffice.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} is looking at it'**
+  String fdrClaimOffice(String business);
+
+  /// No description provided for @fdrLastPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Last payments'**
+  String get fdrLastPayments;
+
+  /// No description provided for @fdrSeeAll.
+  ///
+  /// In en, this message translates to:
+  /// **'See all'**
+  String get fdrSeeAll;
+
+  /// No description provided for @fdrNoPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'No payment yet.'**
+  String get fdrNoPayments;
+
+  /// No description provided for @fdrLeftNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You no longer hold a plate with {business}. This is what you still owe.'**
+  String fdrLeftNote(String business);
+
+  /// No description provided for @fdrStale.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not refresh. This is what we last knew.'**
+  String get fdrStale;
+
+  /// No description provided for @fdrLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account could not be loaded. Check your connection and try again.'**
+  String get fdrLoadFailed;
+
+  /// No description provided for @fdrBillsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bills'**
+  String get fdrBillsTitle;
+
+  /// No description provided for @fdrBillPlateFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate fee'**
+  String get fdrBillPlateFee;
+
+  /// No description provided for @fdrBillLateFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Late fee'**
+  String get fdrBillLateFee;
+
+  /// No description provided for @fdrBillCharge.
+  ///
+  /// In en, this message translates to:
+  /// **'Charge'**
+  String get fdrBillCharge;
+
+  /// No description provided for @fdrBillTicket.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket'**
+  String get fdrBillTicket;
+
+  /// No description provided for @fdrBillPartPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'{paid} paid of {amount}'**
+  String fdrBillPartPaid(String paid, String amount);
+
+  /// No description provided for @fdrNoBills.
+  ///
+  /// In en, this message translates to:
+  /// **'No bill yet.'**
+  String get fdrNoBills;
+
+  /// No description provided for @fdrPaymentsReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments received'**
+  String get fdrPaymentsReceived;
+
+  /// No description provided for @fdrPaymentCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} kept as credit'**
+  String fdrPaymentCredit(String amount);
+
+  /// No description provided for @fdrMethodEarlier.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded before Laawol'**
+  String get fdrMethodEarlier;
+
+  /// No description provided for @fdrPlateNone.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not hold a plate right now.'**
+  String get fdrPlateNone;
+
+  /// No description provided for @fdrPlateDueMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Due on day {day} of each month'**
+  String fdrPlateDueMonthly(int day);
+
+  /// No description provided for @fdrPlateDueWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Due every {weekday}'**
+  String fdrPlateDueWeekly(String weekday);
+
+  /// No description provided for @fdrPlateSince.
+  ///
+  /// In en, this message translates to:
+  /// **'With you since {day}'**
+  String fdrPlateSince(String day);
+
+  /// No description provided for @fdrPapersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Papers'**
+  String get fdrPapersTitle;
+
+  /// No description provided for @fdrPaperRegistration.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration'**
+  String get fdrPaperRegistration;
+
+  /// No description provided for @fdrPaperDiamond.
+  ///
+  /// In en, this message translates to:
+  /// **'TLC diamond'**
+  String get fdrPaperDiamond;
+
+  /// No description provided for @fdrPaperExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {day}'**
+  String fdrPaperExpires(String day);
+
+  /// No description provided for @fdrPaperExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired {day}'**
+  String fdrPaperExpired(String day);
+
+  /// No description provided for @fdrPaperNoDate.
+  ///
+  /// In en, this message translates to:
+  /// **'No date on file'**
+  String get fdrPaperNoDate;
+
+  /// No description provided for @fdrPaperSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Renew soon'**
+  String get fdrPaperSoon;
+
+  /// No description provided for @fdrInsuranceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance'**
+  String get fdrInsuranceTitle;
+
+  /// No description provided for @fdrInsurer.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance company'**
+  String get fdrInsurer;
+
+  /// No description provided for @fdrPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Policy number'**
+  String get fdrPolicy;
+
+  /// No description provided for @fdrCarYours.
+  ///
+  /// In en, this message translates to:
+  /// **'The car is yours'**
+  String get fdrCarYours;
+
+  /// No description provided for @fdrCarBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'The car belongs to {business}'**
+  String fdrCarBusiness(String business);
+
+  /// No description provided for @fdrCallBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Something wrong? Call {business}'**
+  String fdrCallBusiness(String business);
+
+  /// No description provided for @fdrCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your plate · {business}'**
+  String fdrCardTitle(String business);
+
+  /// No description provided for @fdrCardOwe.
+  ///
+  /// In en, this message translates to:
+  /// **'You owe {amount}'**
+  String fdrCardOwe(String amount);
+
+  /// No description provided for @fdrCardOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get fdrCardOpen;
+
+  /// No description provided for @fdrSwitchBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Change business'**
+  String get fdrSwitchBusiness;
+
+  /// No description provided for @fdrRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get fdrRefresh;
 }
 
 class _AppLocalizationsDelegate
