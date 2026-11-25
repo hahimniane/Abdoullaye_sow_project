@@ -201,6 +201,9 @@ void main() {
       expect(driverDayLabel('2026-08-15', language: 'fr'), '15 août 2026');
       expect(driverDayLabel('nope', language: 'fr'), '');
       expect(driverDayLabel('2026-13-40', language: 'fr'), '');
+      expect(driverDayOfMonth(1), '1');
+      expect(driverDayOfMonth(1, language: 'fr'), '1er');
+      expect(driverDayOfMonth(15, language: 'fr'), '15');
       expect(driverWeekdayName(1), 'Monday');
       expect(driverWeekdayName(7, language: 'fr'), 'dimanche');
       expect(driverWeekdayName(0), 'Monday');

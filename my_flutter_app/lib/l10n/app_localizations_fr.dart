@@ -24194,7 +24194,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get fdrPlateNone => 'Vous n’avez pas de plaque en ce moment.';
 
   @override
-  String fdrPlateDueMonthly(int day) {
+  String fdrPlateDueMonthly(String day) {
     return 'À payer le $day de chaque mois';
   }
 

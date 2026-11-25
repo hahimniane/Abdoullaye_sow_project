@@ -13965,7 +13965,7 @@
   "@fdrPlateDueMonthly": {
     "placeholders": {
       "day": {
-        "type": "int"
+        "type": "String"
       }
     }
   },

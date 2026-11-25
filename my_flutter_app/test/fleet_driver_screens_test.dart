@@ -411,7 +411,7 @@ void main() {
 
     await _tab(tester, 'Ma plaque');
     expect(find.text('La voiture est à vous'), findsOneWidget);
-    expect(find.text('À payer le 1 de chaque mois'), findsOneWidget);
+    expect(find.text('À payer le 1er de chaque mois'), findsOneWidget);
     final plate = find.byKey(const Key('fleet-driver-plate'));
     await tester.scrollUntilVisible(
       find.text('Expire le 20 déc. 2026'),

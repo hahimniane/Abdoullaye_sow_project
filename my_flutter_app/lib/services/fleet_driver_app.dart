@@ -415,3 +415,8 @@ String driverWeekdayName(int dueDay, {String language = 'en'}) {
   final i = (dueDay < 1 || dueDay > 7 ? 1 : dueDay) - 1;
   return language == 'fr' ? _weekdaysFr[i] : _weekdaysEn[i];
 }
+
+/// A day of the month in a sentence: "1" in English, "1er" for the first in
+/// French ("le 1er de chaque mois").
+String driverDayOfMonth(int day, {String language = 'en'}) =>
+    language == 'fr' && day == 1 ? '1er' : '$day';

@@ -40180,7 +40180,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Due on day {day} of each month'**
-  String fdrPlateDueMonthly(int day);
+  String fdrPlateDueMonthly(String day);
 
   /// No description provided for @fdrPlateDueWeekly.
   ///

@@ -23822,7 +23822,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fdrPlateNone => 'You do not hold a plate right now.';
 
   @override
-  String fdrPlateDueMonthly(int day) {
+  String fdrPlateDueMonthly(String day) {
     return 'Due on day $day of each month';
   }
 

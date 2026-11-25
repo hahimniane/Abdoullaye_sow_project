@@ -657,7 +657,9 @@ class FleetDriverPlateTab extends StatelessWidget {
                       ? l10n.fdrPlateDueWeekly(
                           driverWeekdayName(plate.dueDay, language: language),
                         )
-                      : l10n.fdrPlateDueMonthly(plate.dueDay),
+                      : l10n.fdrPlateDueMonthly(
+                          driverDayOfMonth(plate.dueDay, language: language),
+                        ),
                   value: fleetRentText(l10n, plate.rentCents, plate.period),
                 ),
                 if (plate.startDayKey.isNotEmpty)
