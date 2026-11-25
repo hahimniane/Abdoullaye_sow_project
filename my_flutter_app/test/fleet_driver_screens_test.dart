@@ -75,6 +75,10 @@ Future<void> _pump(
         controller: rig.controller,
         openLink: rig.open,
         settings: (_) => const Center(child: Text('SETTINGS TAB')),
+        shipping: DriverShippingPages(
+          sendPackage: (slug) => Scaffold(body: Text('SEND FORM $slug')),
+          myPackages: (id) => Scaffold(body: Text('MY PACKAGES $id')),
+        ),
         child: _regularHome,
       ),
     ),
@@ -265,6 +269,64 @@ void main() {
     expect(find.byKey(const Key('fleet-driver-no-plate')), findsOneWidget);
   });
 
+  testWidgets('a locked driver reaches the fleet business\'s own shipping, '
+      'and only that business\'s', (tester) async {
+    final rig = _rig(driverHomeAnswer(ships: true, sendSlug: 'dala-ship'));
+    await _pump(tester, rig);
+    expect(find.byKey(const Key('fleet-driver-shipping')), findsOneWidget);
+    expect(find.text('Shipping with Dala Fleet'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('fleet-driver-send-package')));
+    await tester.pumpAndSettle();
+    // The request form, pinned to that business by its link name.
+    expect(find.text('SEND FORM dala-ship'), findsOneWidget);
+    Navigator.of(tester.element(find.text('SEND FORM dala-ship'))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('fleet-driver-my-packages')));
+    await tester.pumpAndSettle();
+    expect(find.text('MY PACKAGES biz-dala'), findsOneWidget);
+  });
+
+  testWidgets('no shipping block for a business that does not ship', (
+    tester,
+  ) async {
+    final rig = _rig(driverHomeAnswer());
+    await _pump(tester, rig);
+    expect(find.byKey(const Key('fleet-driver-shipping')), findsNothing);
+  });
+
+  testWidgets('no form row for a business that takes no requests', (
+    tester,
+  ) async {
+    final rig = _rig(driverHomeAnswer(ships: true));
+    await _pump(tester, rig);
+    expect(find.byKey(const Key('fleet-driver-shipping')), findsOneWidget);
+    expect(find.byKey(const Key('fleet-driver-send-package')), findsNothing);
+    expect(find.byKey(const Key('fleet-driver-my-packages')), findsOneWidget);
+  });
+
+  testWidgets('a push about the account makes the screens read it again', (
+    tester,
+  ) async {
+    final rig = _rig(driverHomeAnswer());
+    await _pump(tester, rig);
+    expect(rig.service.calls, 1);
+    expect(find.text('Late since Dec 1, 2026'), findsOneWidget);
+    // A push about something else changes nothing.
+    noteFleetDriverPush({'type': 'barrel_shipment_status'});
+    await tester.pumpAndSettle();
+    expect(rig.service.calls, 1);
+    // The receipt's push: the bill is paid now.
+    rig.service.answer = driverHomeAnswer(
+      owedCents: 0,
+      lateCents: 0,
+      claims: false,
+    );
+    noteFleetDriverPush({'type': 'fleet_driver', 'kind': 'receipt'});
+    await tester.pumpAndSettle();
+    expect(rig.service.calls, 2);
+    expect(find.byKey(const Key('fleet-driver-paid-up')), findsOneWidget);
+  });
+
   testWidgets('a customer keeps the regular home and sees no plate card', (
     tester,
   ) async {
@@ -288,7 +350,9 @@ void main() {
       'regular home with a "Your plate" card that opens the account', (
     tester,
   ) async {
-    final rig = _rig(driverHomeAnswer(onlyFleet: false));
+    final rig = _rig(
+      driverHomeAnswer(onlyFleet: false, ships: true, sendSlug: 'dala-ship'),
+    );
     await _pump(tester, rig);
     expect(find.text('REGULAR HOME'), findsOneWidget);
     expect(find.text('Your plate · Dala Fleet'), findsOneWidget);
@@ -299,6 +363,8 @@ void main() {
     expect(find.text('Hi Awa Test'), findsOneWidget);
     // Three places and a way back; Settings stays in the regular app.
     expect(find.text('Settings'), findsNothing);
+    // Shipping too: the regular app already has it.
+    expect(find.byKey(const Key('fleet-driver-shipping')), findsNothing);
     await tester.tap(find.byType(AppBackButton).first);
     await tester.pumpAndSettle();
     expect(find.text('REGULAR HOME'), findsOneWidget);
@@ -372,7 +438,9 @@ void main() {
 
   testWidgets('in French, on a 320 px phone, every place reads French and '
       'nothing overflows', (tester) async {
-    final rig = _rig(driverHomeAnswer(creditCents: 1500));
+    final rig = _rig(
+      driverHomeAnswer(creditCents: 1500, ships: true, sendSlug: 'dala-ship'),
+    );
     await _pump(
       tester,
       rig,
@@ -398,6 +466,14 @@ void main() {
     );
     expect(find.text('Derniers paiements'), findsOneWidget);
     expect(find.text('Enregistré avant Laawol'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('fleet-driver-my-packages')),
+      150,
+      scrollable: scroller(home),
+    );
+    expect(find.text('Expédier avec Dala Fleet'), findsOneWidget);
+    expect(find.text('Envoyer un colis'), findsOneWidget);
+    expect(find.text('Mes colis'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await _tab(tester, 'Paiements');

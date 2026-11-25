@@ -14054,5 +14054,30 @@
   },
   "fdrCardOpen": "Open",
   "fdrSwitchBusiness": "Change business",
-  "fdrRefresh": "Refresh"
+  "fdrRefresh": "Refresh",
+  "fdrShipTitle": "Shipping with {business}",
+  "@fdrShipTitle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrShipSend": "Send a package",
+  "fdrShipSendHint": "Tell {business} what you are sending and get their price",
+  "@fdrShipSendHint": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrShipMineHint": "The packages {business} recorded with your number",
+  "@fdrShipMineHint": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  }
 }

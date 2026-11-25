@@ -40301,6 +40301,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Refresh'**
   String get fdrRefresh;
+
+  /// No description provided for @fdrShipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping with {business}'**
+  String fdrShipTitle(String business);
+
+  /// No description provided for @fdrShipSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a package'**
+  String get fdrShipSend;
+
+  /// No description provided for @fdrShipSendHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell {business} what you are sending and get their price'**
+  String fdrShipSendHint(String business);
+
+  /// No description provided for @fdrShipMineHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The packages {business} recorded with your number'**
+  String fdrShipMineHint(String business);
 }
 
 class _AppLocalizationsDelegate

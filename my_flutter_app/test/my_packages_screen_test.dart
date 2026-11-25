@@ -77,6 +77,7 @@ Future<void> _pump(
   _FakeCallable callable, {
   Locale locale = const Locale('en'),
   GuestTrackingLookupService? tracking,
+  String onlyBusinessId = '',
 }) async {
   await tester.pumpWidget(
     ChangeNotifierProvider.value(
@@ -91,6 +92,7 @@ Future<void> _pump(
           service: PhoneAccountService(caller: callable.call),
           phoneSignInClient: FakePhoneSignIn(),
           guestTrackingService: tracking,
+          onlyBusinessId: onlyBusinessId,
         ),
       ),
     ),
@@ -422,6 +424,61 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('CL-AAAAAA'), findsOneWidget);
+  });
+
+  group('one business only (a Fleet driver, docs/FLEET.md section 13)', () {
+    testWidgets('lists that business\'s packages and never another\'s', (
+      tester,
+    ) async {
+      final callable = _FakeCallable()
+        ..pages.add({
+          'phoneLastTwo': '35',
+          'items': [
+            _row('containerLines/a', trackingCode: 'CL-MINE01'),
+            _row(
+              'containerLines/b',
+              businessId: 'biz-other',
+              businessName: 'Other Shipper',
+              trackingCode: 'CL-OTHER1',
+            ),
+          ],
+          'nextCursor': null,
+        });
+      await _pump(tester, callable, onlyBusinessId: 'biz-a');
+      expect(find.text('CL-MINE01'), findsOneWidget);
+      expect(find.text('CL-OTHER1'), findsNothing);
+      expect(find.textContaining('Other Shipper'), findsNothing);
+    });
+
+    testWidgets('reads on when its packages sit on a later page', (
+      tester,
+    ) async {
+      final callable = _FakeCallable()
+        ..pages.addAll([
+          {
+            'phoneLastTwo': '35',
+            'items': [
+              _row(
+                'containerLines/b',
+                businessId: 'biz-other',
+                trackingCode: 'CL-OTHER1',
+              ),
+            ],
+            'nextCursor': {'beforeMs': 1767225600000, 'skipKeys': <String>[]},
+          },
+          {
+            'phoneLastTwo': '35',
+            'items': [_row('containerLines/a', trackingCode: 'CL-MINE02')],
+            'nextCursor': null,
+          },
+        ]);
+      await _pump(tester, callable, onlyBusinessId: 'biz-a');
+      await tester.pump();
+      await tester.pump();
+      expect(callable.calls.length, 2);
+      expect(find.text('CL-MINE02'), findsOneWidget);
+      expect(find.text('CL-OTHER1'), findsNothing);
+    });
   });
 
   testWidgets('a load that never answers ends in Retry (safety timeout)', (

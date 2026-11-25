@@ -33,6 +33,27 @@ void main() {
       expect(home.lockedFleet?.businessId, 'biz-dala');
     });
 
+    test('knows when the fleet business also ships packages', () {
+      DriverFleet f(Map<String, dynamic> a) =>
+          DriverHome.fromMap(a).fleets.single;
+      final plain = f(driverHomeAnswer());
+      expect(plain.shipsPackages, isFalse);
+      expect(plain.takesPackageRequests, isFalse);
+      final both = f(driverHomeAnswer(ships: true, sendSlug: 'dala-ship'));
+      expect(both.shipsPackages, isTrue);
+      expect(both.sendPackageSlug, 'dala-ship');
+      final noForm = f(driverHomeAnswer(ships: true));
+      expect(noForm.shipsPackages, isTrue);
+      expect(noForm.takesPackageRequests, isFalse);
+      // A link without the service is nothing.
+      final a = driverHomeAnswer();
+      ((a['fleets'] as List).single as Map)['shipping'] = {
+        'enabled': false,
+        'sendSlug': 'stray',
+      };
+      expect(f(a).takesPackageRequests, isFalse);
+    });
+
     test('is nobody for a customer, a bad answer or an empty one', () {
       expect(DriverHome.fromMap(notADriverAnswer()).isDriver, isFalse);
       expect(DriverHome.fromMap(const {}).isDriver, isFalse);

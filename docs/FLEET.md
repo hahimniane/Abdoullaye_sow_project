@@ -350,6 +350,67 @@ only (Q13) and report a payment by sending the screenshot on WhatsApp
   number (`proofWhatsApp`: `fleet_driver_view.PROOF_WHATSAPP`, or the
   functions env `WHATSAPP_DISPLAY_NUMBER`) with a line ready to send; the
   picture the driver then sends is a claim like any other (section 10).
-- **Not built**: push alerts to drivers (WhatsApp already sends the receipt
-  and the reminders), a Messages page, insurance proof upload, city tickets
+- **Not built**: a Messages page, insurance proof upload, city tickets
   (phase 3), card payments (Q13 says Zelle only).
+
+## 12. Push alerts to drivers (2026-11-25)
+
+Owner, 2026-11-25: "do the push alerts". A driver with the app gets a push
+beside each WhatsApp message Fleet sends them:
+
+| Push | When | Words (`fleet_driver_push.driverPushText`) |
+|---|---|---|
+| `receipt` | a payment was recorded (`sendReceipt`) | "{business}: payment received" + the amount and what is left |
+| `reminder` | the daily or the manual rent reminder (soon / today / late) | "{business}: plate fee due soon / due today / late" + the due day and what is owed |
+| `not_received` | a reported payment the bank has not shown after 2 days (`runClaimTimers`) | "{business}: payment not found yet" |
+
+- **Who**: the same drivers as WhatsApp, no one else: a push only goes
+  where a WhatsApp message was tried (`whatsapp.enabled`, the
+  `onlyDriverIds` pilot list, never a driver who left). Turning messages on
+  for drivers turns the push on with them.
+- **Which phone**: the account Firebase Auth holds the driver's number as
+  VERIFIED for (`getUserByPhoneNumber`), never a number typed into a
+  profile. No account (the driver has not installed the app): no push.
+- **Once**: one push per `fleetMessages` row (`pushAtMs`, set in a
+  transaction), however often the WhatsApp send is retried; the claim's own
+  `toldLateAtMs` guards the third. A push that cannot be sent never fails
+  the payment or the reminder.
+- **Language**: the account's (`recipientLanguage`). Preference
+  `carActivity`; push only (no email, no text); it also lands in the
+  account's notification list. `data: {type: "fleet_driver", kind,
+  businessId}`.
+- **App**: `noteFleetDriverPush` (called by `PushNotificationService` for
+  every push that arrives or is tapped) bumps `fleetDriverNews`;
+  `FleetDriverHost` reads the account again. A tap opens the app on its
+  home, which for a locked driver is their account.
+- Code: `functions/fleet_driver_push.js` (words + `createDriverPusher`),
+  `pushDriver` in `fleet_handlers.js`, `fleetDriverPusher` in `index.js`
+  (the Auth lookup is skipped under the emulator). Tests:
+  `test/fleet-driver-push.test.js`, `test/fleet-driver-push-callables.test.js`
+  and the "2 days" case of `test/fleet-claims-callables.test.js`.
+- Deploy: every function that sends a Fleet message (`fleetAction`,
+  `fleetDaily`, `fleetBankRefresh`, `whatsappWebhook`, `plaidWebhook`,
+  `connectBusinessBank`, `checkZellePayment`).
+
+## 13. The fleet business's own shipping, for a locked driver (2026-11-25)
+
+Q11 says a driver sees their fleet business's Fleet pages **and its other
+services**, never another business. Owner, 2026-11-25: build it.
+
+- `driver_home` adds `shipping: {enabled, sendSlug}` per fleet
+  (`fleet_driver_view.shippingOf`): `enabled` when the business is approved
+  and has a shipping service (`barrelShipping`, `sharedBarrels`, `freight`);
+  `sendSlug` = its request link's name when it takes package requests
+  (`packageRequestSettings.acceptRequests` and a `requestSlug`), else "".
+- A LOCKED driver's Home ends with "Shipping with {business}": **Send a
+  package** (only with a `sendSlug`) opens the customer request form pinned
+  to that business (`PackageRequestFormScreen(slug:)`, the `/r/<slug>` path:
+  the server lists that business's options only), and **My packages** opens
+  `MyPackagesScreen(onlyBusinessId:)`, which drops every other business's
+  packages (and reads on, five pages at most, when that business's sit on a
+  later page). Opened from the regular home (switch off) the block is not
+  shown: the regular app already has shipping.
+- Not included: the business's car sales or parking for a locked driver
+  (the customer screens for those list every business), and the list of
+  package requests the driver made (the form's own confirmation and the
+  WhatsApp messages cover it).

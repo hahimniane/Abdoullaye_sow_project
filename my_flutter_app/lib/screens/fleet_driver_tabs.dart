@@ -156,6 +156,53 @@ class _Line extends StatelessWidget {
   }
 }
 
+/// A place to go: an icon, a title, one line about it, a chevron. The whole
+/// row is the button.
+class _Place extends StatelessWidget {
+  const _Place({
+    required this.placeKey,
+    required this.icon,
+    required this.title,
+    required this.hint,
+    required this.onTap,
+  });
+
+  final Key placeKey;
+  final IconData icon;
+  final String title, hint;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: placeKey,
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.cobalt),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: _strong(context)),
+                    Text(hint, style: _muted(context)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 String _billTitle(AppLocalizations l10n, FleetBill bill, String language) {
   final kind = driverBillKind(bill);
   final base = switch (kind) {
@@ -210,9 +257,15 @@ class FleetDriverHomeTab extends StatelessWidget {
     required this.onRefresh,
     required this.onSeePayments,
     required this.openLink,
+    this.onSendPackage,
+    this.onMyPackages,
     this.leading,
     this.trailing,
   });
+
+  /// The fleet business's own shipping service (docs/FLEET.md section 13),
+  /// shown to a driver who sees nothing else of Laawol: null hides the row.
+  final VoidCallback? onSendPackage, onMyPackages;
 
   final DriverFleet fleet;
   final DriverHome home;
@@ -478,6 +531,33 @@ class FleetDriverHomeTab extends StatelessWidget {
                   ],
                 ),
         ),
+        if (onSendPackage != null || onMyPackages != null)
+          FleetCard(
+            key: const Key('fleet-driver-shipping'),
+            title: l10n.fdrShipTitle(fleet.businessName),
+            child: Column(
+              children: [
+                if (onSendPackage != null)
+                  _Place(
+                    placeKey: const Key('fleet-driver-send-package'),
+                    icon: Icons.add_box_outlined,
+                    title: l10n.fdrShipSend,
+                    hint: l10n.fdrShipSendHint(fleet.businessName),
+                    onTap: onSendPackage!,
+                  ),
+                if (onSendPackage != null && onMyPackages != null)
+                  const Divider(height: 1, color: AppColors.hairline),
+                if (onMyPackages != null)
+                  _Place(
+                    placeKey: const Key('fleet-driver-my-packages'),
+                    icon: Icons.inventory_2_outlined,
+                    title: l10n.phaMyPackagesTitle,
+                    hint: l10n.fdrShipMineHint(fleet.businessName),
+                    onTap: onMyPackages!,
+                  ),
+              ],
+            ),
+          ),
       ],
     );
   }

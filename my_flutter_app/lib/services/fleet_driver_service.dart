@@ -13,6 +13,19 @@ import 'fleet_driver_app.dart';
 import 'fleet_requests.dart' show FleetFailure;
 import 'fleet_service.dart';
 
+/// `data.type` of a push about a driver's own account (the server's
+/// `fleet_driver_push.PUSH_TYPE`).
+const fleetDriverPushType = 'fleet_driver';
+
+/// Goes up by one each time such a push reaches the app, so the driver's
+/// screens read their account again (a payment was received, a fee is due).
+final ValueNotifier<int> fleetDriverNews = ValueNotifier<int>(0);
+
+/// Called with every push's data; only a driver push counts.
+void noteFleetDriverPush(Map<String, dynamic> data) {
+  if (data['type']?.toString() == fleetDriverPushType) fleetDriverNews.value++;
+}
+
 /// Asks the server who the signed-in account is to Fleet.
 class FleetDriverService {
   const FleetDriverService({this.fleet = const FleetService()});

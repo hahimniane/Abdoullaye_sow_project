@@ -14044,5 +14044,30 @@
   },
   "fdrCardOpen": "Ouvrir",
   "fdrSwitchBusiness": "Changer d’entreprise",
-  "fdrRefresh": "Actualiser"
+  "fdrRefresh": "Actualiser",
+  "fdrShipTitle": "Expédier avec {business}",
+  "@fdrShipTitle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrShipSend": "Envoyer un colis",
+  "fdrShipSendHint": "Dites à {business} ce que vous envoyez et recevez leur prix",
+  "@fdrShipSendHint": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrShipMineHint": "Les colis que {business} a enregistrés avec votre numéro",
+  "@fdrShipMineHint": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -14,6 +14,8 @@ Map<String, dynamic> driverHomeAnswer({
   bool plates = true,
   String businessId = 'biz-dala',
   String businessName = 'Dala Fleet',
+  bool ships = false,
+  String sendSlug = '',
 }) => {
   'success': true,
   'todayKey': '2026-12-05',
@@ -29,6 +31,7 @@ Map<String, dynamic> driverHomeAnswer({
         'name': zelle ? 'Dala Fleet LLC' : '',
         'handle': zelle ? 'pay@dala.test' : '',
       },
+      'shipping': {'enabled': ships, 'sendSlug': ships ? sendSlug : ''},
       'driver': {
         'id': 'd1',
         'name': 'Awa Test',

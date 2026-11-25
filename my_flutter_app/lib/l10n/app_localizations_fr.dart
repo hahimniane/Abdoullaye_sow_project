@@ -24273,4 +24273,22 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get fdrRefresh => 'Actualiser';
+
+  @override
+  String fdrShipTitle(String business) {
+    return 'Expédier avec $business';
+  }
+
+  @override
+  String get fdrShipSend => 'Envoyer un colis';
+
+  @override
+  String fdrShipSendHint(String business) {
+    return 'Dites à $business ce que vous envoyez et recevez leur prix';
+  }
+
+  @override
+  String fdrShipMineHint(String business) {
+    return 'Les colis que $business a enregistrés avec votre numéro';
+  }
 }

@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../navigation/app_launch_gate.dart';
 import '../navigation/app_navigator.dart';
+import 'fleet_driver_service.dart' show noteFleetDriverPush;
 import 'notification_routing.dart';
 
 /// Must be a top-level (or static) function annotated like this - the FCM
@@ -107,6 +108,8 @@ class PushNotificationService {
     }
 
     FirebaseMessaging.onMessage.listen((message) {
+      // A Fleet driver's account changed: its screens read it again.
+      noteFleetDriverPush(message.data);
       // On Apple platforms the option above already put a banner on screen;
       // showing a local copy as well would deliver the notification twice.
       if (defaultTargetPlatform == TargetPlatform.iOS ||
@@ -116,6 +119,7 @@ class PushNotificationService {
       _showForegroundNotification(message);
     });
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      noteFleetDriverPush(message.data);
       _route(message.data);
     });
 

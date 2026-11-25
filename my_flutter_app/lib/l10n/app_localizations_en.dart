@@ -23901,4 +23901,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fdrRefresh => 'Refresh';
+
+  @override
+  String fdrShipTitle(String business) {
+    return 'Shipping with $business';
+  }
+
+  @override
+  String get fdrShipSend => 'Send a package';
+
+  @override
+  String fdrShipSendHint(String business) {
+    return 'Tell $business what you are sending and get their price';
+  }
+
+  @override
+  String fdrShipMineHint(String business) {
+    return 'The packages $business recorded with your number';
+  }
 }

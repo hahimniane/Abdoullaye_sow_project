@@ -36,7 +36,14 @@ class MyPackagesScreen extends StatefulWidget {
     this.phoneSignInClient,
     this.guestTrackingService,
     this.loadTimeout = const Duration(seconds: 20),
+    this.onlyBusinessId = '',
   });
+
+  /// When set, only this business's packages are listed: a Fleet driver
+  /// whose business shows its drivers nothing else of Laawol sees the
+  /// packages that business recorded, never another business's
+  /// (docs/FLEET.md section 13). Empty lists everything, as always.
+  final String onlyBusinessId;
 
   /// For tests: the callable's stand-in.
   final PhoneAccountService? service;
@@ -80,6 +87,13 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
   }
 
   void _setItems(List<MyShipmentItem> items) {
+    final only = widget.onlyBusinessId;
+    if (only.isNotEmpty) {
+      items = [
+        for (final item in items)
+          if (item.businessId == only) item,
+      ];
+    }
     _items = items;
     // Grouped once per answer, never per card.
     _sections = groupMyShipments(items);
@@ -102,6 +116,22 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
         _error = null;
         _state = _State.ready;
       });
+      // One business only: its packages may sit on a later page. Read on, a
+      // few pages at most, rather than say "nothing" too early.
+      for (
+        var page = 0;
+        page < 5 &&
+            widget.onlyBusinessId.isNotEmpty &&
+            _items.isEmpty &&
+            _next != null &&
+            mounted &&
+            generation == _generation;
+        page++
+      ) {
+        final before = _next;
+        await _loadMore();
+        if (identical(_next, before)) break;
+      }
     } catch (error) {
       if (!mounted || generation != _generation) return;
       final reason = error is PhoneAccountFailure ? error.reason : '';

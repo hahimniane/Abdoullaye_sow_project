@@ -13,10 +13,33 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_bottom_nav.dart';
 import '../widgets/fleet_widgets.dart';
 import 'fleet_driver_tabs.dart';
+import 'my_packages_screen.dart';
+import 'package_request_form_screen.dart';
 import 'settings_screen.dart';
 
 Future<bool> _launchOutside(Uri uri) =>
     launchUrl(uri, mode: LaunchMode.externalApplication);
+
+/// The fleet business's own shipping pages a locked driver may open
+/// (docs/FLEET.md section 13). Tests hand in stand-ins.
+class DriverShippingPages {
+  const DriverShippingPages({
+    this.sendPackage = _sendPackage,
+    this.myPackages = _myPackages,
+  });
+
+  /// The request form, with that business chosen by its link name.
+  final Widget Function(String slug) sendPackage;
+
+  /// My packages, that business's only.
+  final Widget Function(String businessId) myPackages;
+
+  static Widget _sendPackage(String slug) =>
+      PackageRequestFormScreen(slug: slug);
+
+  static Widget _myPackages(String businessId) =>
+      MyPackagesScreen(onlyBusinessId: businessId);
+}
 
 /// A Fleet driver's own account (docs/FLEET.md section 11): Home (what they
 /// owe and how to pay), Payments, My plate and, when the business shows its
@@ -32,11 +55,13 @@ class FleetDriverShell extends StatefulWidget {
     this.locked = true,
     this.openLink = _launchOutside,
     this.settings,
+    this.shipping = const DriverShippingPages(),
   });
 
   final FleetDriverController controller;
   final bool locked;
   final DriverLinkOpener openLink;
+  final DriverShippingPages shipping;
 
   /// The Settings tab; tests hand in a stand-in.
   final WidgetBuilder? settings;
@@ -63,6 +88,14 @@ class _FleetDriverShellState extends State<FleetDriverShell> {
     }
     if (widget.locked) return home.lockedFleet;
     return fleets.isEmpty ? null : fleets.first;
+  }
+
+  /// Over the tab bar, like every full-screen flow of the regular home.
+  void _open(Widget page) {
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push(MaterialPageRoute<void>(builder: (_) => page));
   }
 
   @override
@@ -104,6 +137,15 @@ class _FleetDriverShellState extends State<FleetDriverShell> {
         onRefresh: controller.refresh,
         onSeePayments: () => setState(() => _index = 1),
         openLink: widget.openLink,
+        // Locked, this is the driver's only way to the business's shipping;
+        // opened from the regular home, the regular app already has it.
+        onSendPackage:
+            widget.locked && fleet.shipsPackages && fleet.takesPackageRequests
+            ? () => _open(widget.shipping.sendPackage(fleet.sendPackageSlug))
+            : null,
+        onMyPackages: widget.locked && fleet.shipsPackages
+            ? () => _open(widget.shipping.myPackages(fleet.businessId))
+            : null,
         leading: back,
         trailing: switcher,
       ),
@@ -219,6 +261,7 @@ class FleetDriverHost extends StatefulWidget {
     this.controller,
     this.openLink = _launchOutside,
     this.settings,
+    this.shipping = const DriverShippingPages(),
   });
 
   /// The signed-in account; null while signed out.
@@ -235,6 +278,7 @@ class FleetDriverHost extends StatefulWidget {
   final FleetDriverController? controller;
   final DriverLinkOpener openLink;
   final WidgetBuilder? settings;
+  final DriverShippingPages shipping;
 
   @override
   State<FleetDriverHost> createState() => _FleetDriverHostState();
@@ -250,7 +294,15 @@ class _FleetDriverHostState extends State<FleetDriverHost>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    fleetDriverNews.addListener(_onNews);
     _sync();
+  }
+
+  /// A push about the driver's account reached the app: read it again.
+  void _onNews() {
+    if (_controller.uid == null) return;
+    _lastRefresh = DateTime.now();
+    unawaited(_controller.refresh());
   }
 
   @override
@@ -279,6 +331,7 @@ class _FleetDriverHostState extends State<FleetDriverHost>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    fleetDriverNews.removeListener(_onNews);
     if (widget.controller == null) _controller.dispose();
     super.dispose();
   }
@@ -293,6 +346,7 @@ class _FleetDriverHostState extends State<FleetDriverHost>
             controller: _controller,
             openLink: widget.openLink,
             settings: widget.settings,
+            shipping: widget.shipping,
           );
         }
         if (widget.eligible && widget.hold && !_controller.settled) {

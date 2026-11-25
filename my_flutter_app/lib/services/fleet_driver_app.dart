@@ -115,6 +115,8 @@ class DriverFleet {
     this.zelleHandle = '',
     this.driverName = '',
     this.left = false,
+    this.shipsPackages = false,
+    this.sendPackageSlug = '',
     this.balance = const FleetBalance(
       owedCents: 0,
       lateCents: 0,
@@ -131,7 +133,12 @@ class DriverFleet {
     final driver = _map(m['driver']);
     final balance = _map(m['balance']);
     final credit = _i(driver['creditCents']);
+    final shipping = _map(m['shipping']);
     return DriverFleet(
+      shipsPackages: shipping['enabled'] == true,
+      sendPackageSlug: shipping['enabled'] == true
+          ? _s(shipping['sendSlug'])
+          : '',
       businessId: _s(m['businessId']),
       businessName: _s(m['businessName']),
       businessPhone: _s(m['businessPhone']),
@@ -172,6 +179,16 @@ class DriverFleet {
 
   /// The driver has left the business (shown only while they still owe).
   final bool left;
+
+  /// The fleet business also ships packages (docs/FLEET.md Q11: a driver
+  /// sees its Fleet pages and its other services, never another business).
+  final bool shipsPackages;
+
+  /// Its request link's name when it takes package requests from customers;
+  /// '' when it does not.
+  final String sendPackageSlug;
+
+  bool get takesPackageRequests => sendPackageSlug.isNotEmpty;
   final FleetBalance balance;
   final List<DriverPlate> plates;
 
