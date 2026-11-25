@@ -25,7 +25,9 @@ const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
 const BIZ = "fpush-biz";
-const TODAY = "2026-12-01";
+// A day no real clock reaches: another test file may run the real reminder
+// pass over every fleet business, and its message ids carry the real day.
+const TODAY = "2031-03-03";
 const P_AWA = "+16465557101";
 const P_BEN = "+16465557102";
 
@@ -55,7 +57,7 @@ const setBusiness = (whatsapp) =>
 const bill = (id, driverId, extra = {}) =>
   db.collection("fleetBills").doc(id).set({businessId: BIZ, driverId,
     carId: "c", assignmentId: `a-${driverId}`, kind: "rent", label: "Rent",
-    periodFrom: TODAY, periodTo: "2026-12-31", dueDayKey: TODAY,
+    periodFrom: TODAY, periodTo: "2031-03-31", dueDayKey: TODAY,
     amountCents: 40000, paidCents: 0, status: "open", ...extra});
 const payment = (id, driverId, amountCents = 40000) =>
   db.collection("fleetPayments").doc(id).set({businessId: BIZ, driverId,

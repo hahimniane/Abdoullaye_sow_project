@@ -30,6 +30,7 @@ const BIZ_OFF = "fdrv-biz-off";
 const P_AWA = "+16465558101";
 const P_BEN = "+16465558102";
 const P_LEFT = "+16465558103";
+const P_CREDIT = "+16465558104";
 const P_NOBODY = "+16465558199";
 
 const home = (uid, token = {}) => functions.fleetAction.run({
@@ -58,7 +59,12 @@ before(async () => {
       {driversSeeOnlyThisBusiness: false});
   await fleetBusiness(BIZ_OFF, "Off Fleet Co", {}, false);
 
-  await driver("fdrv-awa", BIZ, "Awa Test #12", P_AWA, {creditCents: 1500});
+  await driver("fdrv-awa", BIZ, "Awa Test #12", P_AWA);
+  // Credit sits on a driver with nothing to pay: another test file runs the
+  // real daily job over every fleet business, and it spends a driver's
+  // credit on their open bills.
+  await driver("fdrv-credit", BIZ, "Credit Test", P_CREDIT,
+      {creditCents: 1500});
   await driver("fdrv-ben", BIZ, "Ben Test", P_BEN);
   await driver("fdrv-left", BIZ, "Gone Test", P_LEFT, {status: "left"});
   // The same phone drives for a second fleet, and for one that is off.
@@ -72,7 +78,9 @@ before(async () => {
   await db.collection("fleetAssignments").doc("fdrv-a").set({
     businessId: BIZ, carId: "fdrv-car", driverId: "fdrv-awa",
     startDayKey: "2026-01-10", endDayKey: null, rentCents: 40000,
-    period: "monthly", dueDay: 1});
+    // Nothing is owed before this day, so the daily job (run by another
+    // test file over every fleet business) never bills this plate.
+    billFromDayKey: "2099-01-01", period: "monthly", dueDay: 1});
   await db.collection("fleetAssignments").doc("fdrv-a-old").set({
     businessId: BIZ, carId: "fdrv-car", driverId: "fdrv-awa",
     startDayKey: "2025-01-10", endDayKey: "2025-06-01", rentCents: 35000,
@@ -101,6 +109,8 @@ before(async () => {
     driverId: "fdrv-awa", fromPhone: P_AWA, state: "waiting_bank",
     amountCents: 40000, open: true, createdAtMs: 1000,
     mediaPath: "support_cases/x/whatsapp/p.jpg", payerName: "PAYER-X"});
+  // The daily job has run: what follows holds after it, not only before.
+  await functions.fleetDaily.run({});
 });
 
 describe("driver_home", () => {
@@ -117,7 +127,7 @@ describe("driver_home", () => {
     // This fleet business does not ship packages.
     assert.deepEqual(mine.shipping, {enabled: false, sendSlug: ""});
     assert.equal(mine.driver.name, "Awa Test");
-    assert.equal(mine.driver.creditCents, 1500);
+    assert.equal(mine.driver.creditCents, 0);
     assert.deepEqual(mine.bills.map((b) => b.id),
         ["fdrv-b-open", "fdrv-b-paid"]);
     assert.equal(mine.balance.owedCents, 40000);
@@ -126,6 +136,14 @@ describe("driver_home", () => {
       p.diamondExpiry]), [["T200000C", 40000, "2026-12-20"]]);
     assert.deepEqual(mine.claims, [{id: "fdrv-c1", amountCents: 40000,
       state: "checking", createdAtMs: 1000}]);
+  });
+
+  it("says the credit a driver holds", async () => {
+    const out = await asPhone(P_CREDIT);
+    assert.equal(out.fleets.length, 1);
+    assert.equal(out.fleets[0].driver.creditCents, 1500);
+    assert.equal(out.fleets[0].balance.owedCents, 0);
+    assert.deepEqual(out.fleets[0].bills, []);
   });
 
   it("never carries another driver's records or the office's own notes",
