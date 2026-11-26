@@ -15359,6 +15359,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fltRefusalDriverLeft => 'This driver has left.';
 
   @override
+  String get fltRefusalNotDriver =>
+      'This phone number is not on a driver of this business.';
+
+  @override
+  String get fltRefusalClaimImage =>
+      'This picture cannot be used. Choose a JPG or PNG screenshot, up to 6 MB.';
+
+  @override
+  String get fltRefusalClaimAmount => 'Enter the amount you sent.';
+
+  @override
+  String get fltRefusalClaimTooMany =>
+      'You have reported several payments today. Call the office if something is wrong.';
+
+  @override
   String get fltRefusalStaffOnly =>
       'This staff account is not allowed to manage Fleet.';
 
@@ -23726,7 +23741,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String fdrProofHint(String business) {
-    return 'After you pay, send the screenshot on WhatsApp. Your bill is marked paid when the money shows in $business’s bank account.';
+    return 'After you pay, send the screenshot here. Your bill is marked paid when the money shows in $business’s bank account.';
   }
 
   @override
@@ -23916,4 +23931,77 @@ class AppLocalizationsEn extends AppLocalizations {
   String fdrShipMineHint(String business) {
     return 'The packages $business recorded with your number';
   }
+
+  @override
+  String get fdrProofChoose => 'Choose the screenshot';
+
+  @override
+  String get fdrProofCamera => 'Take a photo instead';
+
+  @override
+  String get fdrProofReplace => 'Choose another picture';
+
+  @override
+  String get fdrProofAmountLabel => 'Amount you sent (\$)';
+
+  @override
+  String get fdrProofSend => 'Send';
+
+  @override
+  String get fdrProofNeedPicture => 'Choose the screenshot first.';
+
+  @override
+  String get fdrProofTooBig =>
+      'This picture is too large. Choose a screenshot instead.';
+
+  @override
+  String get fdrProofWaitingTitle => 'We got it';
+
+  @override
+  String fdrProofWaitingBody(String amount, String business) {
+    return 'We are checking with the bank. Your bill is marked paid when $amount shows in $business’s bank account.';
+  }
+
+  @override
+  String get fdrProofDuplicateTitle => 'Already reported';
+
+  @override
+  String get fdrProofDuplicateBody =>
+      'You already reported this payment. We are still checking with the bank.';
+
+  @override
+  String get fdrProofPaidTitle => 'Already on your account';
+
+  @override
+  String get fdrProofPaidBody =>
+      'This payment was already recorded. You have nothing more to do.';
+
+  @override
+  String fdrProofOfficeTitle(String business) {
+    return '$business will look at it';
+  }
+
+  @override
+  String get fdrProofOfficeRecipient =>
+      'The picture shows a payment to someone else, so we could not check it by ourselves.';
+
+  @override
+  String get fdrProofOfficeOld =>
+      'This payment is too old for us to check by ourselves.';
+
+  @override
+  String get fdrProofOfficeOther => 'We could not check it by ourselves.';
+
+  @override
+  String get fdrProofNotPaymentTitle => 'That is not a payment screenshot';
+
+  @override
+  String get fdrProofNotPaymentBody =>
+      'Choose the picture that shows the amount and who you paid.';
+
+  @override
+  String get fdrProofWhatsApp => 'Send it on WhatsApp instead';
+
+  @override
+  String get fdrProofDone => 'Done';
 }

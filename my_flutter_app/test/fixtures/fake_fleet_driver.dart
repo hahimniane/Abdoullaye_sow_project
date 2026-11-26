@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:my_flutter_app/services/fleet_driver_app.dart';
 import 'package:my_flutter_app/services/fleet_driver_service.dart';
 import 'package:my_flutter_app/services/fleet_requests.dart' show FleetFailure;
 
@@ -143,6 +146,30 @@ class FakeFleetDriverService extends FleetDriverService {
   Object answer;
   int calls = 0;
 
+  /// What `reportPayment` answers: a [DriverClaimResult], a [FleetFailure]
+  /// to throw, or a function returning the result later.
+  Object claimAnswer = const DriverClaimResult(
+    outcome: DriverClaimOutcome.waiting,
+    amountCents: 42500,
+  );
+
+  /// Every report sent: (businessId, picture bytes, cents, language).
+  final List<(String, int, int, String)> claims = [];
+
+  @override
+  Future<DriverClaimResult> reportPayment({
+    required String businessId,
+    required List<int> picture,
+    required int amountCents,
+    required String language,
+  }) async {
+    claims.add((businessId, picture.length, amountCents, language));
+    final a = claimAnswer;
+    if (a is Future<DriverClaimResult> Function()) return a();
+    if (a is FleetFailure) throw a;
+    return a as DriverClaimResult;
+  }
+
   @override
   Future<Map<String, dynamic>> home() async {
     calls += 1;
@@ -168,3 +195,13 @@ class MemoryDriverHomeCache implements DriverHomeCache {
     }
   }
 }
+
+/// A real one-pixel PNG, so a preview has something to draw.
+final Uint8List onePixelPng = Uint8List.fromList(const [
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, //
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+  0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+  0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+]);

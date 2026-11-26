@@ -5,6 +5,7 @@
 // fakes.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,6 +37,23 @@ class FleetDriverService {
   /// read (offline, signed out).
   Future<Map<String, dynamic>> home() =>
       fleet.call(const {'action': 'driver_home'});
+
+  /// `driver_claim`: the Zelle screenshot and the amount the driver sent.
+  /// Throws [FleetFailure] with the server's reason when it is refused.
+  Future<DriverClaimResult> reportPayment({
+    required String businessId,
+    required List<int> picture,
+    required int amountCents,
+    required String language,
+  }) async => DriverClaimResult.fromMap(
+    await fleet.call({
+      'action': 'driver_claim',
+      'businessId': businessId,
+      'imageBase64': base64Encode(picture),
+      'amountCents': amountCents,
+      'lang': language == 'fr' ? 'fr' : 'en',
+    }),
+  );
 }
 
 /// The last answer, kept per account on the phone.
@@ -197,6 +215,24 @@ class FleetDriverController extends ChangeNotifier {
         _notify();
       }
     }
+  }
+
+  /// Reports a payment for [businessId], then reads the account again so
+  /// the report shows on Home. Throws [FleetFailure] when it is refused.
+  Future<DriverClaimResult> reportPayment({
+    required String businessId,
+    required List<int> picture,
+    required int amountCents,
+    required String language,
+  }) async {
+    final result = await service.reportPayment(
+      businessId: businessId,
+      picture: picture,
+      amountCents: amountCents,
+      language: language,
+    );
+    unawaited(refresh());
+    return result;
   }
 
   /// The phone's storage must never break the screen (or a widget test).

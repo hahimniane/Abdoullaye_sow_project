@@ -26525,6 +26525,30 @@ abstract class AppLocalizations {
   /// **'This driver has left.'**
   String get fltRefusalDriverLeft;
 
+  /// No description provided for @fltRefusalNotDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone number is not on a driver of this business.'**
+  String get fltRefusalNotDriver;
+
+  /// No description provided for @fltRefusalClaimImage.
+  ///
+  /// In en, this message translates to:
+  /// **'This picture cannot be used. Choose a JPG or PNG screenshot, up to 6 MB.'**
+  String get fltRefusalClaimImage;
+
+  /// No description provided for @fltRefusalClaimAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount you sent.'**
+  String get fltRefusalClaimAmount;
+
+  /// No description provided for @fltRefusalClaimTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'You have reported several payments today. Call the office if something is wrong.'**
+  String get fltRefusalClaimTooMany;
+
   /// No description provided for @fltRefusalStaffOnly.
   ///
   /// In en, this message translates to:
@@ -40023,7 +40047,7 @@ abstract class AppLocalizations {
   /// No description provided for @fdrProofHint.
   ///
   /// In en, this message translates to:
-  /// **'After you pay, send the screenshot on WhatsApp. Your bill is marked paid when the money shows in {business}’s bank account.'**
+  /// **'After you pay, send the screenshot here. Your bill is marked paid when the money shows in {business}’s bank account.'**
   String fdrProofHint(String business);
 
   /// No description provided for @fdrProofMessage.
@@ -40319,6 +40343,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The packages {business} recorded with your number'**
   String fdrShipMineHint(String business);
+
+  /// No description provided for @fdrProofChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the screenshot'**
+  String get fdrProofChoose;
+
+  /// No description provided for @fdrProofCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo instead'**
+  String get fdrProofCamera;
+
+  /// No description provided for @fdrProofReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose another picture'**
+  String get fdrProofReplace;
+
+  /// No description provided for @fdrProofAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount you sent (\$)'**
+  String get fdrProofAmountLabel;
+
+  /// No description provided for @fdrProofSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get fdrProofSend;
+
+  /// No description provided for @fdrProofNeedPicture.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the screenshot first.'**
+  String get fdrProofNeedPicture;
+
+  /// No description provided for @fdrProofTooBig.
+  ///
+  /// In en, this message translates to:
+  /// **'This picture is too large. Choose a screenshot instead.'**
+  String get fdrProofTooBig;
+
+  /// No description provided for @fdrProofWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We got it'**
+  String get fdrProofWaitingTitle;
+
+  /// No description provided for @fdrProofWaitingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We are checking with the bank. Your bill is marked paid when {amount} shows in {business}’s bank account.'**
+  String fdrProofWaitingBody(String amount, String business);
+
+  /// No description provided for @fdrProofDuplicateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Already reported'**
+  String get fdrProofDuplicateTitle;
+
+  /// No description provided for @fdrProofDuplicateBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You already reported this payment. We are still checking with the bank.'**
+  String get fdrProofDuplicateBody;
+
+  /// No description provided for @fdrProofPaidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Already on your account'**
+  String get fdrProofPaidTitle;
+
+  /// No description provided for @fdrProofPaidBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment was already recorded. You have nothing more to do.'**
+  String get fdrProofPaidBody;
+
+  /// No description provided for @fdrProofOfficeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} will look at it'**
+  String fdrProofOfficeTitle(String business);
+
+  /// No description provided for @fdrProofOfficeRecipient.
+  ///
+  /// In en, this message translates to:
+  /// **'The picture shows a payment to someone else, so we could not check it by ourselves.'**
+  String get fdrProofOfficeRecipient;
+
+  /// No description provided for @fdrProofOfficeOld.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment is too old for us to check by ourselves.'**
+  String get fdrProofOfficeOld;
+
+  /// No description provided for @fdrProofOfficeOther.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not check it by ourselves.'**
+  String get fdrProofOfficeOther;
+
+  /// No description provided for @fdrProofNotPaymentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a payment screenshot'**
+  String get fdrProofNotPaymentTitle;
+
+  /// No description provided for @fdrProofNotPaymentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the picture that shows the amount and who you paid.'**
+  String get fdrProofNotPaymentBody;
+
+  /// No description provided for @fdrProofWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Send it on WhatsApp instead'**
+  String get fdrProofWhatsApp;
+
+  /// No description provided for @fdrProofDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get fdrProofDone;
 }
 
 class _AppLocalizationsDelegate

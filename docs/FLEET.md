@@ -348,10 +348,10 @@ only (Q13) and report a payment by sending the screenshot on WhatsApp
   the front (20 s apart at least). Words: `fdr*` keys, English and French;
   days read "Dec 1, 2026" in English and "1er déc. 2026" in French
   (`driverDayLabel`).
-- **"Send my payment screenshot"** opens the WhatsApp chat with Laawol's
+- **"Send my payment screenshot"** opens the in-app page of section 14.
+  WhatsApp stays as the other way, from that page: the chat with Laawol's
   number (`proofWhatsApp`: `fleet_driver_view.PROOF_WHATSAPP`, or the
-  functions env `WHATSAPP_DISPLAY_NUMBER`) with a line ready to send; the
-  picture the driver then sends is a claim like any other (section 10).
+  functions env `WHATSAPP_DISPLAY_NUMBER`) with a line ready to send.
 - **Not built**: a Messages page, insurance proof upload, city tickets
   (phase 3), card payments (Q13 says Zelle only).
 
@@ -416,3 +416,44 @@ services**, never another business. Owner, 2026-11-25: build it.
   (the customer screens for those list every business), and the list of
   package requests the driver made (the form's own confirmation and the
   WhatsApp messages cover it).
+
+## 14. Reporting a payment from the app (2026-11-26)
+
+Owner, 2026-11-26, on his first real-phone test: "send my payment
+screenshot just redirects me to whatsapp why", then "go ahead" to sending
+it inside the app. The button used to open WhatsApp and leave the driver to
+attach the picture there.
+
+- **App** (`lib/screens/fleet_driver_proof_screen.dart`): choose the
+  screenshot (library, or the camera), see it, check the amount (what is
+  owed is typed in already), Send. The picture is kept for another try when
+  a send fails; Send cannot be tapped twice; a picture over 6 MB is refused
+  on the phone. Then one of five answers in the app's own words: we are
+  checking with the bank / already reported / already on your account /
+  the business will look at it (payment to someone else, or too old) / not
+  a payment screenshot (choose another). "Send it on WhatsApp instead"
+  stays at the bottom.
+- **Server**: `fleetAction {action: "driver_claim", businessId, imageBase64,
+  amountCents, lang}` → `{success, outcome, amountCents, reason}`, outcome
+  `waiting` | `duplicate` | `already_paid` | `office` | `not_a_payment`.
+  The caller's verified phone must be on a driver of THAT business
+  (`fleet_not_driver`); the file must be a JPG, PNG or WebP by its first
+  bytes, up to 6 MB (`fleet_claim_image`); the amount is required
+  (`fleet_claim_amount`); ten reports a day per driver
+  (`fleet_claim_too_many`).
+- **Same claim as WhatsApp**: `driverClaim` runs `pictureFromDriver` with a
+  context of its own, so the reading, the wrong-recipient and too-old rules,
+  the duplicate and already-recorded checks, the bank matching and the
+  timers are the ones of section 10. Differences: the typed amount is used
+  when the picture cannot be read (nothing is asked later); the claim
+  carries `source: "app"` and `fileUrl`; no WhatsApp reply is sent (the app
+  says it). It does not need WhatsApp to drivers to be on.
+- **The picture**: stored by `storeClaimImage` under
+  `fleetClaims/{businessId}/{driverId}/…`, only when a claim is made for it
+  (a repeat or a non-payment keeps nothing), registered in `whatsappMedia`
+  so the 12-month sweep deletes it. The office opens it with `claim_photo`
+  like a WhatsApp one (`hasPhoto`); its address never goes to a phone.
+- `fleetAction` now holds `ANTHROPIC_API_KEY` (the picture reader).
+- Tests: `test/fleet-driver-claim-callables.test.js` (emulator), the
+  screenshot-page cases of `test/fleet_driver_screens_test.dart`.
+

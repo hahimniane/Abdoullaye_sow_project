@@ -15605,6 +15605,21 @@ class AppLocalizationsFr extends AppLocalizations {
   String get fltRefusalDriverLeft => 'Ce chauffeur est parti.';
 
   @override
+  String get fltRefusalNotDriver =>
+      'Ce numéro n’est rattaché à aucun chauffeur de cette entreprise.';
+
+  @override
+  String get fltRefusalClaimImage =>
+      'Cette image ne peut pas être utilisée. Choisissez une capture JPG ou PNG de 6 Mo au plus.';
+
+  @override
+  String get fltRefusalClaimAmount => 'Indiquez le montant envoyé.';
+
+  @override
+  String get fltRefusalClaimTooMany =>
+      'Vous avez signalé plusieurs paiements aujourd’hui. Appelez le bureau en cas de problème.';
+
+  @override
   String get fltRefusalStaffOnly =>
       'Ce compte du personnel n’est pas autorisé à gérer Fleet.';
 
@@ -24097,7 +24112,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String fdrProofHint(String business) {
-    return 'Après avoir payé, envoyez la capture sur WhatsApp. Votre facture est marquée payée quand l’argent apparaît sur le compte bancaire de $business.';
+    return 'Après avoir payé, envoyez la capture ici. Votre facture est marquée payée quand l’argent apparaît sur le compte bancaire de $business.';
   }
 
   @override
@@ -24288,4 +24303,78 @@ class AppLocalizationsFr extends AppLocalizations {
   String fdrShipMineHint(String business) {
     return 'Les colis que $business a enregistrés avec votre numéro';
   }
+
+  @override
+  String get fdrProofChoose => 'Choisir la capture';
+
+  @override
+  String get fdrProofCamera => 'Prendre une photo à la place';
+
+  @override
+  String get fdrProofReplace => 'Choisir une autre image';
+
+  @override
+  String get fdrProofAmountLabel => 'Montant envoyé (\$)';
+
+  @override
+  String get fdrProofSend => 'Envoyer';
+
+  @override
+  String get fdrProofNeedPicture => 'Choisissez d’abord la capture.';
+
+  @override
+  String get fdrProofTooBig =>
+      'Cette image est trop lourde. Choisissez plutôt une capture d’écran.';
+
+  @override
+  String get fdrProofWaitingTitle => 'Bien reçu';
+
+  @override
+  String fdrProofWaitingBody(String amount, String business) {
+    return 'Nous vérifions auprès de la banque. Votre facture sera marquée payée quand $amount apparaîtra sur le compte bancaire de $business.';
+  }
+
+  @override
+  String get fdrProofDuplicateTitle => 'Déjà signalé';
+
+  @override
+  String get fdrProofDuplicateBody =>
+      'Vous avez déjà signalé ce paiement. Nous vérifions toujours auprès de la banque.';
+
+  @override
+  String get fdrProofPaidTitle => 'Déjà sur votre compte';
+
+  @override
+  String get fdrProofPaidBody =>
+      'Ce paiement est déjà enregistré. Vous n’avez rien d’autre à faire.';
+
+  @override
+  String fdrProofOfficeTitle(String business) {
+    return '$business va vérifier';
+  }
+
+  @override
+  String get fdrProofOfficeRecipient =>
+      'L’image montre un paiement à quelqu’un d’autre : nous n’avons pas pu le vérifier nous-mêmes.';
+
+  @override
+  String get fdrProofOfficeOld =>
+      'Ce paiement est trop ancien pour que nous le vérifiions nous-mêmes.';
+
+  @override
+  String get fdrProofOfficeOther =>
+      'Nous n’avons pas pu le vérifier nous-mêmes.';
+
+  @override
+  String get fdrProofNotPaymentTitle => 'Ce n’est pas une capture de paiement';
+
+  @override
+  String get fdrProofNotPaymentBody =>
+      'Choisissez l’image qui montre le montant et la personne payée.';
+
+  @override
+  String get fdrProofWhatsApp => 'L’envoyer plutôt sur WhatsApp';
+
+  @override
+  String get fdrProofDone => 'Terminé';
 }

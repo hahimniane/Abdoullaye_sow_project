@@ -50,6 +50,11 @@ bool showsFleetRow({
 
 /// Every refusal reason the server names for Fleet.
 const fleetRefusalReasons = <String>[
+  // A driver reporting a payment from the app (docs/FLEET.md section 14).
+  'fleet_not_driver',
+  'fleet_claim_image',
+  'fleet_claim_amount',
+  'fleet_claim_too_many',
   'fleet_off',
   'fleet_admin_only',
   'fleet_not_found',

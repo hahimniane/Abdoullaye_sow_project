@@ -104,6 +104,56 @@ class DriverClaim {
   final DriverClaimState state;
 }
 
+/// What became of a payment the driver reported from the app.
+enum DriverClaimOutcome {
+  /// Kept: we wait for the deposit to show in the business's bank.
+  waiting,
+
+  /// The same payment was already reported and is still being checked.
+  duplicate,
+
+  /// The payment is already recorded on the driver's account.
+  alreadyPaid,
+
+  /// A person at the business will look at it (see [DriverClaimResult.reason]).
+  office,
+
+  /// The picture is not a payment screenshot: nothing was kept.
+  notAPayment,
+}
+
+class DriverClaimResult {
+  const DriverClaimResult({
+    required this.outcome,
+    this.amountCents = 0,
+    this.reason = '',
+  });
+
+  factory DriverClaimResult.fromMap(Map<String, dynamic> m) =>
+      DriverClaimResult(
+        outcome: switch (_s(m['outcome'])) {
+          'duplicate' => DriverClaimOutcome.duplicate,
+          'already_paid' => DriverClaimOutcome.alreadyPaid,
+          'office' => DriverClaimOutcome.office,
+          'not_a_payment' => DriverClaimOutcome.notAPayment,
+          _ => DriverClaimOutcome.waiting,
+        },
+        amountCents: _i(m['amountCents']) < 0 ? 0 : _i(m['amountCents']),
+        reason: _s(m['reason']),
+      );
+
+  final DriverClaimOutcome outcome;
+
+  /// The amount we look for in the bank (the picture's when it was read).
+  final int amountCents;
+
+  /// Why the office looks at it: `wrong_recipient`, `too_old`, or ''.
+  final String reason;
+}
+
+/// The largest picture the server takes (6 MB).
+const driverProofMaxBytes = 6 * 1024 * 1024;
+
 /// One fleet business as its driver sees it.
 class DriverFleet {
   const DriverFleet({

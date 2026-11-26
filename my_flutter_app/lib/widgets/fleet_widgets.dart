@@ -17,6 +17,14 @@ String fleetRefusalText(AppLocalizations l10n, FleetFailure failure) {
   switch (failure.reason) {
     case 'fleet_off':
       return l10n.fltRefusalOff;
+    case 'fleet_not_driver':
+      return l10n.fltRefusalNotDriver;
+    case 'fleet_claim_image':
+      return l10n.fltRefusalClaimImage;
+    case 'fleet_claim_amount':
+      return l10n.fltRefusalClaimAmount;
+    case 'fleet_claim_too_many':
+      return l10n.fltRefusalClaimTooMany;
     case 'fleet_admin_only':
       return l10n.fltRefusalAdminOnly;
     case 'fleet_not_found':

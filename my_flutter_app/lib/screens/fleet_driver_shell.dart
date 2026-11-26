@@ -12,6 +12,7 @@ import '../theme/app_spacing.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_bottom_nav.dart';
 import '../widgets/fleet_widgets.dart';
+import 'fleet_driver_proof_screen.dart';
 import 'fleet_driver_tabs.dart';
 import 'my_packages_screen.dart';
 import 'package_request_form_screen.dart';
@@ -56,12 +57,16 @@ class FleetDriverShell extends StatefulWidget {
     this.openLink = _launchOutside,
     this.settings,
     this.shipping = const DriverShippingPages(),
+    this.proofPicker = pickRequestPhoto,
   });
 
   final FleetDriverController controller;
   final bool locked;
   final DriverLinkOpener openLink;
   final DriverShippingPages shipping;
+
+  /// The photo picker of "Send my payment screenshot"; tests hand in one.
+  final RequestPhotoPicker proofPicker;
 
   /// The Settings tab; tests hand in a stand-in.
   final WidgetBuilder? settings;
@@ -136,7 +141,15 @@ class _FleetDriverShellState extends State<FleetDriverShell> {
         stale: controller.failed,
         onRefresh: controller.refresh,
         onSeePayments: () => setState(() => _index = 1),
-        openLink: widget.openLink,
+        onSendProof: () => _open(
+          FleetDriverProofScreen(
+            controller: controller,
+            fleet: fleet,
+            home: home,
+            openLink: widget.openLink,
+            picker: widget.proofPicker,
+          ),
+        ),
         // Locked, this is the driver's only way to the business's shipping;
         // opened from the regular home, the regular app already has it.
         onSendPackage:
@@ -262,6 +275,7 @@ class FleetDriverHost extends StatefulWidget {
     this.openLink = _launchOutside,
     this.settings,
     this.shipping = const DriverShippingPages(),
+    this.proofPicker = pickRequestPhoto,
   });
 
   /// The signed-in account; null while signed out.
@@ -279,6 +293,7 @@ class FleetDriverHost extends StatefulWidget {
   final DriverLinkOpener openLink;
   final WidgetBuilder? settings;
   final DriverShippingPages shipping;
+  final RequestPhotoPicker proofPicker;
 
   @override
   State<FleetDriverHost> createState() => _FleetDriverHostState();
@@ -347,6 +362,7 @@ class _FleetDriverHostState extends State<FleetDriverHost>
             openLink: widget.openLink,
             settings: widget.settings,
             shipping: widget.shipping,
+            proofPicker: widget.proofPicker,
           );
         }
         if (widget.eligible && widget.hold && !_controller.settled) {

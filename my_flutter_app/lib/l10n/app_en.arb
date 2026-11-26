@@ -7402,6 +7402,10 @@
   "fltRefusalNothingOwed": "This driver owes nothing right now.",
   "fltRefusalNoPhone": "This driver has no WhatsApp number. Add one in Edit details.",
   "fltRefusalDriverLeft": "This driver has left.",
+  "fltRefusalNotDriver": "This phone number is not on a driver of this business.",
+  "fltRefusalClaimImage": "This picture cannot be used. Choose a JPG or PNG screenshot, up to 6 MB.",
+  "fltRefusalClaimAmount": "Enter the amount you sent.",
+  "fltRefusalClaimTooMany": "You have reported several payments today. Call the office if something is wrong.",
   "fltRefusalStaffOnly": "This staff account is not allowed to manage Fleet.",
   "fltPeriodWeek": "Week",
   "fltPeriodMonth": "Month",
@@ -13876,7 +13880,7 @@
     }
   },
   "fdrProofButton": "Send my payment screenshot",
-  "fdrProofHint": "After you pay, send the screenshot on WhatsApp. Your bill is marked paid when the money shows in {business}’s bank account.",
+  "fdrProofHint": "After you pay, send the screenshot here. Your bill is marked paid when the money shows in {business}’s bank account.",
   "@fdrProofHint": {
     "placeholders": {
       "business": {
@@ -14078,5 +14082,43 @@
         "type": "String"
       }
     }
-  }
+  },
+  "fdrProofChoose": "Choose the screenshot",
+  "fdrProofCamera": "Take a photo instead",
+  "fdrProofReplace": "Choose another picture",
+  "fdrProofAmountLabel": "Amount you sent ($)",
+  "fdrProofSend": "Send",
+  "fdrProofNeedPicture": "Choose the screenshot first.",
+  "fdrProofTooBig": "This picture is too large. Choose a screenshot instead.",
+  "fdrProofWaitingTitle": "We got it",
+  "fdrProofWaitingBody": "We are checking with the bank. Your bill is marked paid when {amount} shows in {business}’s bank account.",
+  "@fdrProofWaitingBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofDuplicateTitle": "Already reported",
+  "fdrProofDuplicateBody": "You already reported this payment. We are still checking with the bank.",
+  "fdrProofPaidTitle": "Already on your account",
+  "fdrProofPaidBody": "This payment was already recorded. You have nothing more to do.",
+  "fdrProofOfficeTitle": "{business} will look at it",
+  "@fdrProofOfficeTitle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofOfficeRecipient": "The picture shows a payment to someone else, so we could not check it by ourselves.",
+  "fdrProofOfficeOld": "This payment is too old for us to check by ourselves.",
+  "fdrProofOfficeOther": "We could not check it by ourselves.",
+  "fdrProofNotPaymentTitle": "That is not a payment screenshot",
+  "fdrProofNotPaymentBody": "Choose the picture that shows the amount and who you paid.",
+  "fdrProofWhatsApp": "Send it on WhatsApp instead",
+  "fdrProofDone": "Done"
 }

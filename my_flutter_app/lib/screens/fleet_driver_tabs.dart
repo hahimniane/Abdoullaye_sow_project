@@ -256,7 +256,7 @@ class FleetDriverHomeTab extends StatelessWidget {
     required this.stale,
     required this.onRefresh,
     required this.onSeePayments,
-    required this.openLink,
+    required this.onSendProof,
     this.onSendPackage,
     this.onMyPackages,
     this.leading,
@@ -274,35 +274,16 @@ class FleetDriverHomeTab extends StatelessWidget {
   final bool stale;
   final Future<void> Function() onRefresh;
   final VoidCallback onSeePayments;
-  final DriverLinkOpener openLink;
+
+  /// Opens "Send my payment screenshot" (the picture is chosen and sent
+  /// from the app; WhatsApp is offered there as the other way).
+  final VoidCallback onSendProof;
   final Widget? leading, trailing;
 
   Future<void> _toClipboard(BuildContext context, String text) async {
     final l10n = AppLocalizations.of(context)!;
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) showSuccessSnackBar(context, l10n.fdrCopied);
-  }
-
-  Future<void> _sendProof(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final uri = driverProofWhatsAppUri(
-      home.proofWhatsApp,
-      l10n.fdrProofMessage(fleet.businessName),
-    );
-    var opened = false;
-    if (uri != null) {
-      try {
-        opened = await openLink(uri);
-      } catch (_) {
-        opened = false;
-      }
-    }
-    if (!opened && context.mounted) {
-      showErrorSnackBar(
-        context,
-        l10n.fdrProofNoWhatsApp(driverPhoneLabel(home.proofWhatsApp)),
-      );
-    }
   }
 
   @override
@@ -452,7 +433,7 @@ class FleetDriverHomeTab extends StatelessWidget {
                 height: 50,
                 child: FilledButton.icon(
                   key: const Key('fleet-driver-send-proof'),
-                  onPressed: () => _sendProof(context),
+                  onPressed: onSendProof,
                   icon: const Icon(Icons.photo_camera_outlined, size: 20),
                   label: Text(
                     l10n.fdrProofButton,

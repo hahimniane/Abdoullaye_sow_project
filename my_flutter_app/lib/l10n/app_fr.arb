@@ -7401,6 +7401,10 @@
   "fltRefusalNothingOwed": "Ce chauffeur ne doit rien pour l’instant.",
   "fltRefusalNoPhone": "Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier les détails.",
   "fltRefusalDriverLeft": "Ce chauffeur est parti.",
+  "fltRefusalNotDriver": "Ce numéro n’est rattaché à aucun chauffeur de cette entreprise.",
+  "fltRefusalClaimImage": "Cette image ne peut pas être utilisée. Choisissez une capture JPG ou PNG de 6 Mo au plus.",
+  "fltRefusalClaimAmount": "Indiquez le montant envoyé.",
+  "fltRefusalClaimTooMany": "Vous avez signalé plusieurs paiements aujourd’hui. Appelez le bureau en cas de problème.",
   "fltRefusalStaffOnly": "Ce compte du personnel n’est pas autorisé à gérer Fleet.",
   "fltPeriodWeek": "Semaine",
   "fltPeriodMonth": "Mois",
@@ -13866,7 +13870,7 @@
     }
   },
   "fdrProofButton": "Envoyer ma capture de paiement",
-  "fdrProofHint": "Après avoir payé, envoyez la capture sur WhatsApp. Votre facture est marquée payée quand l’argent apparaît sur le compte bancaire de {business}.",
+  "fdrProofHint": "Après avoir payé, envoyez la capture ici. Votre facture est marquée payée quand l’argent apparaît sur le compte bancaire de {business}.",
   "@fdrProofHint": {
     "placeholders": {
       "business": {
@@ -14068,5 +14072,43 @@
         "type": "String"
       }
     }
-  }
+  },
+  "fdrProofChoose": "Choisir la capture",
+  "fdrProofCamera": "Prendre une photo à la place",
+  "fdrProofReplace": "Choisir une autre image",
+  "fdrProofAmountLabel": "Montant envoyé ($)",
+  "fdrProofSend": "Envoyer",
+  "fdrProofNeedPicture": "Choisissez d’abord la capture.",
+  "fdrProofTooBig": "Cette image est trop lourde. Choisissez plutôt une capture d’écran.",
+  "fdrProofWaitingTitle": "Bien reçu",
+  "fdrProofWaitingBody": "Nous vérifions auprès de la banque. Votre facture sera marquée payée quand {amount} apparaîtra sur le compte bancaire de {business}.",
+  "@fdrProofWaitingBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofDuplicateTitle": "Déjà signalé",
+  "fdrProofDuplicateBody": "Vous avez déjà signalé ce paiement. Nous vérifions toujours auprès de la banque.",
+  "fdrProofPaidTitle": "Déjà sur votre compte",
+  "fdrProofPaidBody": "Ce paiement est déjà enregistré. Vous n’avez rien d’autre à faire.",
+  "fdrProofOfficeTitle": "{business} va vérifier",
+  "@fdrProofOfficeTitle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "fdrProofOfficeRecipient": "L’image montre un paiement à quelqu’un d’autre : nous n’avons pas pu le vérifier nous-mêmes.",
+  "fdrProofOfficeOld": "Ce paiement est trop ancien pour que nous le vérifiions nous-mêmes.",
+  "fdrProofOfficeOther": "Nous n’avons pas pu le vérifier nous-mêmes.",
+  "fdrProofNotPaymentTitle": "Ce n’est pas une capture de paiement",
+  "fdrProofNotPaymentBody": "Choisissez l’image qui montre le montant et la personne payée.",
+  "fdrProofWhatsApp": "L’envoyer plutôt sur WhatsApp",
+  "fdrProofDone": "Terminé"
 }

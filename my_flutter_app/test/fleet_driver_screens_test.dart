@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart' show ImageSource;
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/fleet_driver_shell.dart';
+import 'package:my_flutter_app/screens/package_request_form_screen.dart'
+    show PickedRequestPhoto;
 import 'package:my_flutter_app/services/fleet.dart' show fleetMoney;
 import 'package:my_flutter_app/services/fleet_driver_app.dart';
 import 'package:my_flutter_app/services/fleet_driver_service.dart';
@@ -29,6 +32,16 @@ class _Rig {
   final FleetDriverController controller;
   final List<Uri> opened = [];
   bool linkOpens = true;
+
+  /// What the photo picker hands back (null: the driver closed it).
+  Uint8List? picked = onePixelPng;
+  int picks = 0;
+
+  Future<PickedRequestPhoto?> pick(ImageSource source) async {
+    picks += 1;
+    final bytes = picked;
+    return bytes == null ? null : PickedRequestPhoto(bytes);
+  }
 
   Future<bool> open(Uri uri) async {
     opened.add(uri);
@@ -75,6 +88,7 @@ Future<void> _pump(
         controller: rig.controller,
         openLink: rig.open,
         settings: (_) => const Center(child: Text('SETTINGS TAB')),
+        proofPicker: rig.pick,
         shipping: DriverShippingPages(
           sendPackage: (slug) => Scaffold(body: Text('SEND FORM $slug')),
           myPackages: (id) => Scaffold(body: Text('MY PACKAGES $id')),
@@ -182,31 +196,243 @@ void main() {
     expect(find.text('SETTINGS TAB'), findsOneWidget);
   });
 
-  testWidgets('"Send my payment screenshot" opens the WhatsApp chat with '
-      'Laawol; when it cannot, the number is said', (tester) async {
-    final rig = _rig(driverHomeAnswer());
-    await _pump(tester, rig);
+  Future<void> openProof(WidgetTester tester) async {
     final button = find.byKey(const Key('fleet-driver-send-proof'));
     await tester.ensureVisible(button);
+    await tester.pumpAndSettle();
     await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('fleet-driver-proof')), findsOneWidget);
+  }
+
+  Future<void> tapKey(WidgetTester tester, String key) async {
+    final target = find.byKey(Key(key));
+    await tester.ensureVisible(target);
+    await tester.pumpAndSettle();
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('"Send my payment screenshot": pick the picture, check the '
+      'amount, send, and see that we are checking with the bank', (
+    tester,
+  ) async {
+    final rig = _rig(driverHomeAnswer());
+    await _pump(tester, rig);
+    await openProof(tester);
+    // What is owed is already typed in.
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('fleet-driver-proof-amount')))
+          .controller!
+          .text,
+      '425',
+    );
+    // Nothing is sent without a picture.
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(find.text('Choose the screenshot first.'), findsOneWidget);
+    expect(rig.service.claims, isEmpty);
+
+    await tapKey(tester, 'fleet-driver-proof-choose');
+    expect(find.byKey(const Key('fleet-driver-proof-preview')), findsOneWidget);
+    expect(find.text('Choose the screenshot first.'), findsNothing);
+
+    final before = rig.service.calls;
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(rig.service.claims, [('biz-dala', onePixelPng.length, 42500, 'en')]);
+    expect(find.text('We got it'), findsOneWidget);
+    expect(
+      find.text(
+        'We are checking with the bank. Your bill is marked paid when '
+        r'$425.00 shows in Dala Fleet’s bank account.',
+      ),
+      findsOneWidget,
+    );
+    // The account was read again, so Home shows the report.
+    expect(rig.service.calls, before + 1);
+    await tapKey(tester, 'fleet-driver-proof-done');
+    expect(find.byKey(const Key('fleet-driver-proof')), findsNothing);
+    expect(find.byKey(const Key('fleet-driver-home')), findsOneWidget);
+  });
+
+  testWidgets('the amount can be changed, and a missing one is asked for', (
+    tester,
+  ) async {
+    final rig = _rig(driverHomeAnswer());
+    await _pump(tester, rig);
+    await openProof(tester);
+    await tapKey(tester, 'fleet-driver-proof-choose');
+    final amount = find.byKey(const Key('fleet-driver-proof-amount'));
+    await tester.enterText(amount, '');
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(find.text('Enter the amount you sent.'), findsOneWidget);
+    expect(rig.service.claims, isEmpty);
+    await tester.enterText(amount, '400');
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(rig.service.claims.single.$3, 40000);
+  });
+
+  testWidgets('a refusal is said in words and the picture is kept for '
+      'another try; two taps send once', (tester) async {
+    final rig = _rig(driverHomeAnswer());
+    rig.service.claimAnswer = const FleetFailure(
+      code: 'resource-exhausted',
+      reason: 'fleet_claim_too_many',
+    );
+    await _pump(tester, rig);
+    await openProof(tester);
+    await tapKey(tester, 'fleet-driver-proof-choose');
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(
+      find.text(
+        'You have reported several payments today. Call the office if '
+        'something is wrong.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('fleet-driver-proof-preview')), findsOneWidget);
+
+    // Offline: the general words, picture still there.
+    rig.service.claimAnswer = const FleetFailure(code: 'unavailable');
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(find.byKey(const Key('fleet-driver-proof-error')), findsOneWidget);
+    expect(find.byKey(const Key('fleet-driver-proof-preview')), findsOneWidget);
+
+    // A slow send: the second tap does nothing.
+    final gate = Completer<DriverClaimResult>();
+    rig.service.claimAnswer = () => gate.future;
+    rig.service.claims.clear();
+    final send = find.byKey(const Key('fleet-driver-proof-send'));
+    await tester.ensureVisible(send);
+    await tester.tap(send);
     await tester.pump();
+    await tester.tap(send, warnIfMissed: false);
+    await tester.pump();
+    expect(rig.service.claims.length, 1);
+    gate.complete(
+      const DriverClaimResult(
+        outcome: DriverClaimOutcome.duplicate,
+        amountCents: 42500,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Already reported'), findsOneWidget);
+  });
+
+  testWidgets('a picture that is not a payment: said so, and another is '
+      'asked for', (tester) async {
+    final rig = _rig(driverHomeAnswer());
+    rig.service.claimAnswer = const DriverClaimResult(
+      outcome: DriverClaimOutcome.notAPayment,
+    );
+    await _pump(tester, rig);
+    await openProof(tester);
+    await tapKey(tester, 'fleet-driver-proof-choose');
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(
+      find.byKey(const Key('fleet-driver-proof-not-payment')),
+      findsOneWidget,
+    );
+    expect(find.text('That is not a payment screenshot'), findsOneWidget);
+    // Back to choosing: the rejected picture is gone.
+    expect(find.byKey(const Key('fleet-driver-proof-preview')), findsNothing);
+    expect(find.byKey(const Key('fleet-driver-proof-choose')), findsOneWidget);
+  });
+
+  testWidgets('a payment to someone else goes to the office, and an old one '
+      'too', (tester) async {
+    final rig = _rig(driverHomeAnswer());
+    rig.service.claimAnswer = const DriverClaimResult(
+      outcome: DriverClaimOutcome.office,
+      amountCents: 7700,
+      reason: 'wrong_recipient',
+    );
+    await _pump(tester, rig);
+    await openProof(tester);
+    await tapKey(tester, 'fleet-driver-proof-choose');
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(find.text('Dala Fleet will look at it'), findsOneWidget);
+    expect(
+      find.text(
+        'The picture shows a payment to someone else, so we could not '
+        'check it by ourselves.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('closing the picker changes nothing; a picture over 6 MB is '
+      'refused on the phone', (tester) async {
+    final rig = _rig(driverHomeAnswer());
+    await _pump(tester, rig);
+    await openProof(tester);
+    rig.picked = null;
+    await tapKey(tester, 'fleet-driver-proof-choose');
+    expect(find.byKey(const Key('fleet-driver-proof-preview')), findsNothing);
+    expect(find.byKey(const Key('fleet-driver-proof-error')), findsNothing);
+    rig.picked = Uint8List(driverProofMaxBytes + 1);
+    await tapKey(tester, 'fleet-driver-proof-camera');
+    expect(
+      find.text('This picture is too large. Choose a screenshot instead.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('fleet-driver-proof-preview')), findsNothing);
+    expect(rig.picks, 2);
+  });
+
+  testWidgets('WhatsApp stays as the other way; when it cannot open, the '
+      'number is said', (tester) async {
+    final rig = _rig(driverHomeAnswer());
+    await _pump(tester, rig);
+    await openProof(tester);
+    await tapKey(tester, 'fleet-driver-proof-whatsapp');
     expect(
       rig.opened.single.toString(),
       'https://wa.me/16465550199?text=Here+is+my+Zelle+payment+for+Dala+Fleet.',
     );
-    expect(find.textContaining('WhatsApp could not be opened'), findsNothing);
-
+    expect(find.byKey(const Key('fleet-driver-proof-error')), findsNothing);
     rig.linkOpens = false;
-    await tester.tap(button);
-    await tester.pump();
+    await tapKey(tester, 'fleet-driver-proof-whatsapp');
     expect(
       find.text(
-        'WhatsApp could not be opened. Send the screenshot on '
-        'WhatsApp to +1 (646) 555-0199.',
+        'WhatsApp could not be opened. Send the screenshot on WhatsApp to '
+        '+1 (646) 555-0199.',
       ),
       findsOneWidget,
     );
-    await tester.pumpAndSettle(const Duration(seconds: 6));
+  });
+
+  testWidgets('in French on a 320 px phone the screenshot page fits', (
+    tester,
+  ) async {
+    final rig = _rig(driverHomeAnswer());
+    await _pump(
+      tester,
+      rig,
+      locale: const Locale('fr'),
+      size: const Size(320, 640),
+    );
+    // On a small phone the button is further down the page.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('fleet-driver-send-proof')),
+      150,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('fleet-driver-home')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await openProof(tester);
+    expect(find.text('Choisir la capture'), findsOneWidget);
+    expect(find.text('Montant envoyé (\$)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tapKey(tester, 'fleet-driver-proof-choose');
+    await tapKey(tester, 'fleet-driver-proof-send');
+    expect(rig.service.claims.single.$4, 'fr');
+    expect(find.text('Bien reçu'), findsOneWidget);
+    expect(find.text('Terminé'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Copy puts the Zelle address on the clipboard', (tester) async {
