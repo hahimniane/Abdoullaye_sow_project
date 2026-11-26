@@ -58,7 +58,39 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_claim_no_driver: "This report has no driver yet.",
   fleet_bad_name: "That is not a person's name (at least two words, not an " +
     "account or an app).",
+  fleet_not_driver: "This phone number is not on a driver of this business.",
+  fleet_claim_image: "That picture cannot be used (a JPG, PNG or WebP " +
+    "screenshot, up to 6 MB).",
+  fleet_claim_amount: "Enter the amount you sent.",
+  fleet_claim_too_many: "Too many payments reported today. Call the office.",
 });
+
+/** A payment reported from the app (docs/FLEET.md section 14). */
+const CLAIM_IMAGE_MAX_BYTES = 6 * 1024 * 1024;
+const CLAIM_MAX_CENTS = 5000000;
+const CLAIMS_PER_DAY = 10;
+const DAY_MS = 86400000;
+
+/**
+ * What kind of picture a file is, from its first bytes (never from what the
+ * phone says it is).
+ *
+ * @param {Buffer} buffer The file.
+ * @return {string} "image/jpeg" | "image/png" | "image/webp" | "".
+ */
+function sniffImageType(buffer) {
+  if (!buffer || buffer.length < 12) return "";
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return "image/jpeg";
+  }
+  if (buffer.subarray(0, 8).equals(Buffer.from(
+      [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))) return "image/png";
+  if (buffer.subarray(0, 4).toString("latin1") === "RIFF" &&
+      buffer.subarray(8, 12).toString("latin1") === "WEBP") {
+    return "image/webp";
+  }
+  return "";
+}
 
 const text = (v, max = 200) => String(v ?? "").trim().slice(0, max);
 const cents = (v) => {
@@ -1528,7 +1560,7 @@ function createFleetHandlers(deps) {
       amountCents: Number(c.amountCents) > 0 ? Number(c.amountCents) : null,
       state: c.state, reason: c.reason || null,
       createdAtMs: Number(c.createdAtMs) || 0,
-      hasPhoto: Boolean(c.caseId && c.messageId),
+      hasPhoto: Boolean((c.caseId && c.messageId) || c.fileUrl),
       fromPhone: String(c.fromPhone || ""),
       payerName: c.payerName || null,
       toldLateAtMs: Number(c.toldLateAtMs) || null}));
@@ -2242,7 +2274,15 @@ function createFleetHandlers(deps) {
     const claim = await claimIn(businessId, text(data.claimId, 180));
     const caseId = String(claim.get("caseId") || "");
     const wamid = String(claim.get("messageId") || "");
-    if (!caseId || !wamid) return {success: true, url: null, deleted: false};
+    if (!caseId || !wamid) {
+      // Sent from the app: the picture is on the claim itself, kept 12
+      // months like a WhatsApp one (the yearly sweep deletes the file).
+      const fileUrl = String(claim.get("fileUrl") || "");
+      const old = nowMs() - (Number(claim.get("createdAtMs")) || 0) >
+        365 * DAY_MS;
+      return {success: true, url: fileUrl && !old ? fileUrl : null,
+        deleted: Boolean(fileUrl) && old};
+    }
     const message = await db().collection("supportCases").doc(caseId)
         .collection("messages").doc(messageDocId("in", wamid)).get();
     const meta = message.exists ? message.get("metadata") || {} : {};
@@ -2362,6 +2402,9 @@ function createFleetHandlers(deps) {
       read: f.reading ? {...f.reading} : null, payerName: null,
       mediaPath: f.mediaPath || null, caseId: f.caseId || null,
       messageId: f.messageId || null, creditId: null, paymentId: null,
+      // "app": the driver sent the picture from the app, not on WhatsApp.
+      ...(f.source ? {source: f.source} : {}),
+      ...(f.fileUrl ? {fileUrl: f.fileUrl} : {}),
       reason: f.reason || null, createdAtMs: t,
       bankCheckDueAtMs: waiting ? t + fleetClaims.BANK_CHECK_DELAY_MS : null,
       bankCheckedAtMs: null, toldLateAtMs: null,
@@ -2391,11 +2434,18 @@ function createFleetHandlers(deps) {
     const reading = await readPicture(ctx);
     if (reading && reading.isPayment === false) return {handled: false};
     const names = businessNames(business.data);
-    const plan = fleetClaims.planNewClaim({reading,
+    let plan = fleetClaims.planNewClaim({reading,
       recipientOk: reading ? fleetClaims.recipientMatches(reading.recipient,
           names) : null,
       todayKey: deps.dayKeyNow()});
     if (plan.ignore) return {handled: false};
+    // From the app the driver typed the amount with the picture, so there
+    // is nothing to ask when the picture could not be read.
+    if (plan.state === fleetClaims.STATE.ASKING_AMOUNT &&
+        ctx.typedAmountCents > 0) {
+      plan = {state: fleetClaims.STATE.WAITING_BANK, reason: null,
+        amountCents: ctx.typedAmountCents, say: "ack"};
+    }
     const lang = ctx.lang;
     const vars = {amountCents: plan.amountCents, business: business.data.name,
       recipient: reading?.recipient};
@@ -2411,17 +2461,19 @@ function createFleetHandlers(deps) {
         read: reading};
       const open = mine.find((c) => fleetClaims.takesDeposit(c) &&
         Number(c.amountCents) === plan.amountCents &&
-        (!c.read?.dayKey || !reading.dayKey ||
+        (!c.read?.dayKey || !reading?.dayKey ||
           c.read.dayKey === reading.dayKey));
       const payments = await db().collection("fleetPayments")
           .where("driverId", "==", driver.id).get();
       const recorded = payments.docs.find((d) =>
         fleetClaims.isAlreadyRecorded(probe, d.data()));
       if (open) {
-        const kept = await ctx.keep(business.id, {needsReply: false});
+        // The app's picture is only stored with a claim: a repeat has none.
+        const kept = ctx.fromApp ? {caseId: null} :
+          await ctx.keep(business.id, {needsReply: false});
         await ctx.say(fleetClaims.replyText("already_waiting", lang, vars));
         return {handled: true, outcome: "claim_duplicate", notify: false,
-          caseId: kept.caseId};
+          caseId: kept.caseId, amountCents: plan.amountCents};
       }
       if (recorded) {
         state = fleetClaims.STATE.PAID;
@@ -2436,7 +2488,8 @@ function createFleetHandlers(deps) {
       driverId: driver.id, fromPhone: ctx.event.from, state,
       amountCents: plan.amountCents, reading, reason,
       mediaPath: kept.mediaPath, caseId: kept.caseId,
-      messageId: ctx.event.wamid, lang});
+      messageId: ctx.event.wamid, lang, fileUrl: kept.fileUrl,
+      source: ctx.fromApp ? "app" : ""});
     if (paymentId) {
       await claimsCol().doc(claim.id).update({paymentId, open: false,
         paidAtMs: nowMs()});
@@ -2448,7 +2501,84 @@ function createFleetHandlers(deps) {
       await rematchWaiting(business.id);
     }
     return {handled: true, outcome: `claim_${state}`,
-      notify: state === fleetClaims.STATE.OFFICE, claimId: claim.id};
+      notify: state === fleetClaims.STATE.OFFICE, claimId: claim.id,
+      amountCents: plan.amountCents, reason: reason || null};
+  }
+
+  /**
+   * `driver_claim`: a driver reports a Zelle payment from the app, with the
+   * screenshot and the amount (docs/FLEET.md section 14). The same claim as
+   * a picture sent on WhatsApp: the bank deposit is the proof, nothing is
+   * marked paid here.
+   *
+   * @param {object} request The callable request; data {businessId,
+   *   imageBase64, amountCents, lang}.
+   * @return {Promise<object>} {success, outcome, amountCents, reason}:
+   *   outcome `waiting` | `duplicate` | `already_paid` | `office` |
+   *   `not_a_payment`.
+   */
+  async function driverClaim(request) {
+    const data = request.data || {};
+    const businessId = text(data.businessId, 180);
+    if (!businessId) throw refuse("fleet_bad_input", "invalid-argument");
+    const amountCents = cents(data.amountCents);
+    if (!(amountCents > 0) || amountCents > CLAIM_MAX_CENTS) {
+      throw refuse("fleet_claim_amount", "invalid-argument");
+    }
+    const raw = typeof data.imageBase64 === "string" ? data.imageBase64 : "";
+    // Base64 is 4 characters for 3 bytes: refuse before decoding a giant.
+    if (!raw || raw.length > CLAIM_IMAGE_MAX_BYTES * 1.4) {
+      throw refuse("fleet_claim_image", "invalid-argument");
+    }
+    const buffer = Buffer.from(raw, "base64");
+    const mimeType = sniffImageType(buffer);
+    if (!mimeType || buffer.length > CLAIM_IMAGE_MAX_BYTES) {
+      throw refuse("fleet_claim_image", "invalid-argument");
+    }
+    const phone = await deps.callerPhone(request);
+    if (!phone) throw refuse("fleet_not_driver", "permission-denied");
+    const found = await db().collection("fleetDrivers")
+        .where("phone", "==", phone).limit(10).get();
+    const doc = found.docs.find((d) => d.get("businessId") === businessId);
+    if (!doc) throw refuse("fleet_not_driver", "permission-denied");
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const driver = {id: doc.id, ...doc.data()};
+    const today = (await activeClaimsOf(driver.id)).filter((c) =>
+      nowMs() - (Number(c.createdAtMs) || 0) < DAY_MS).length;
+    if (today >= CLAIMS_PER_DAY) {
+      throw refuse("fleet_claim_too_many", "resource-exhausted");
+    }
+    const base64 = buffer.toString("base64");
+    const ctx = {
+      fromApp: true,
+      typedAmountCents: amountCents,
+      event: {from: phone, wamid: ""},
+      lang: data.lang === "fr" ? "fr" : "en",
+      fetchImage: async () => ({base64, mimeType}),
+      // Stored once, and only when a claim is made for it.
+      keep: async () => {
+        const stored = await deps.storeClaimImage({businessId,
+          driverId: driver.id, buffer, mimeType});
+        return {caseId: null, mediaPath: stored.filePath,
+          fileUrl: stored.fileUrl};
+      },
+      // The app says it in its own words from the outcome.
+      say: async () => undefined,
+    };
+    const out = await pictureFromDriver(ctx, driver,
+        {id: businessId, data: business});
+    if (!out.handled) return {success: true, outcome: "not_a_payment"};
+    const outcome = {
+      claim_duplicate: "duplicate",
+      [`claim_${fleetClaims.STATE.WAITING_BANK}`]: "waiting",
+      [`claim_${fleetClaims.STATE.PAID}`]: "already_paid",
+      [`claim_${fleetClaims.STATE.OFFICE}`]: "office",
+    }[out.outcome] || "waiting";
+    return {success: true, outcome,
+      amountCents: Number(out.amountCents) > 0 ? Number(out.amountCents) :
+        amountCents,
+      reason: out.reason || null};
   }
 
   /**
@@ -2948,6 +3078,7 @@ function createFleetHandlers(deps) {
     if (action === "fleet_enable") return setEnabled(uid, data);
     // A driver's own account: the caller's phone decides, not a business id.
     if (action === "driver_home") return driverHome(request);
+    if (action === "driver_claim") return driverClaim(request);
     const handler = ACTIONS[action];
     if (!handler) throw refuse("fleet_bad_input", "invalid-argument");
     const businessId = text(data.businessId, 180);
@@ -3097,4 +3228,4 @@ function createFleetHandlers(deps) {
     fleetBankTick, sendReceipt, remindBusiness};
 }
 
-module.exports = {FLEET_REFUSALS, createFleetHandlers};
+module.exports = {FLEET_REFUSALS, createFleetHandlers, sniffImageType};

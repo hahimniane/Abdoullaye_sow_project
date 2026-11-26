@@ -48927,6 +48927,27 @@ const fleet = createFleetHandlers({
   readPicture: readFleetPaymentPicture,
   sendFleetText: (args) => whatsappConversations().sayInThread(args),
   pushFleetDriver: (p) => fleetDriverPusher(p),
+  // A payment screenshot sent from the app (docs/FLEET.md section 14): kept
+  // like a WhatsApp picture, and deleted by the same 12-month sweep.
+  storeClaimImage: async ({businessId, driverId, buffer, mimeType}) => {
+    const bucket = admin.storage().bucket(storageBucketName());
+    const ext = {"image/jpeg": "jpg", "image/png": "png",
+      "image/webp": "webp"}[mimeType] || "jpg";
+    const filePath = `fleetClaims/${businessId}/${driverId}/` +
+      `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const token = crypto.randomUUID();
+    await bucket.file(filePath).save(buffer, {
+      contentType: mimeType,
+      resumable: false,
+      metadata: {metadata: {firebaseStorageDownloadTokens: token}},
+    });
+    await admin.firestore().collection("whatsappMedia").add({filePath,
+      caseId: "", messageId: "", source: "fleet_claim",
+      createdAtMs: Date.now()});
+    return {filePath, fileUrl: "https://firebasestorage.googleapis.com/v0/b/" +
+      `${bucket.name}/o/${encodeURIComponent(filePath)}` +
+      `?alt=media&token=${token}`};
+  },
   // The driver's own view (docs/FLEET.md section 11): the verified phone of
   // the signed-in account, "" when it has none (then: not a driver).
   callerPhone: async (request) => {
@@ -49035,7 +49056,9 @@ exports.fleetAction = onCall(
     // opens the bank link; payments and tests send WhatsApp.
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 300,
       memory: "512MiB",
-      secrets: [...BANK_SECRETS, ...FLEET_WHATSAPP_SECRETS]},
+      // The picture of a payment a driver reports from the app is read
+      // like one sent on WhatsApp (ANTHROPIC_API_KEY).
+      secrets: [...BANK_SECRETS, ...FLEET_WHATSAPP_SECRETS, anthropicApiKey]},
     fleet.fleetAction);
 exports.fleetDaily = onSchedule(
     {schedule: "15 5 * * *", timeZone: "America/New_York",
