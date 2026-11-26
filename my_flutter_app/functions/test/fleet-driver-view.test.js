@@ -57,7 +57,7 @@ describe("driverFleetView", () => {
     for (const secret of ["office only", "SOMEONE ELSE", "1 Main St",
       "office note", "staff-1", "txn", "matchedBy", "allocations",
       "mediaPath", "support_cases", "fromPhone", "payerName", "VINVINVIN",
-      "premiumCents", "rememberedSenders"]) {
+      "premiumCents", "rememberedSenders", "P-1", "policyNumber"]) {
       assert.equal(flat.includes(secret), false, secret);
     }
     assert.deepEqual(v.payments, [{id: "p1", amountCents: 40000,
@@ -197,8 +197,10 @@ describe("shownPlates", () => {
     assert.deepEqual(rows[1], {assignmentId: "a1", plate: "T100000C",
       vehicleType: "Camry", ownership: "driver",
       registrationExpiry: "2027-03-01", diamondExpiry: "2026-12-20",
-      insurer: "Hereford", policyNumber: "P-1", rentCents: 40000,
+      insurer: "Hereford", rentCents: 40000,
       period: "monthly", dueDay: 1, startDayKey: "2026-01-10"});
+    // The policy number stays with the office.
+    assert.equal(JSON.stringify(rows).includes("P-1"), false);
     assert.equal(rows[0].plate, "");
     assert.equal(rows[0].period, "weekly");
   });

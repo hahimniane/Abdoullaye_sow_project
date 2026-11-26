@@ -24240,9 +24240,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get fdrInsurer => 'Compagnie d’assurance';
 
   @override
-  String get fdrPolicy => 'Numéro de police';
-
-  @override
   String get fdrCarYours => 'La voiture est à vous';
 
   @override

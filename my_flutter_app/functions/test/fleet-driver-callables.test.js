@@ -152,7 +152,8 @@ describe("driver_home", () => {
         for (const secret of ["fdrv-b-ben", "fdrv-p-ben", "77700", "55500",
           "Ben Test", P_BEN, "OFFICE-ONLY-NOTE", "PAYER-NAME-KEPT",
           "OFFICE-PAY-NOTE", "staff-uid", "BANK-TXN", "SECRETVIN",
-          "support_cases", "PAYER-X", "fdrv-b-void", "fdrv-b-stray",
+          "support_cases", "PAYER-X", "P-9", "policyNumber", "fdrv-b-void",
+          "fdrv-b-stray",
           "99900", "fdrv-p-undone"]) {
           assert.equal(flat.includes(secret), false, secret);
         }

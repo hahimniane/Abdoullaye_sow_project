@@ -54,7 +54,6 @@ Map<String, dynamic> driverHomeAnswer({
             'registrationExpiry': '2027-06-01',
             'diamondExpiry': '2026-12-20',
             'insurer': 'Sample Mutual',
-            'policyNumber': 'P-100',
             'rentCents': 40000,
             'period': 'monthly',
             'dueDay': 1,

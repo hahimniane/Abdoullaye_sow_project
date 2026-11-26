@@ -23868,9 +23868,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fdrInsurer => 'Insurance company';
 
   @override
-  String get fdrPolicy => 'Policy number';
-
-  @override
   String get fdrCarYours => 'The car is yours';
 
   @override

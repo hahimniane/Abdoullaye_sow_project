@@ -161,7 +161,8 @@ void main() {
     expect(inPage('Renew soon'), findsOneWidget);
     expect(inPage('Expires Jun 1, 2027'), findsOneWidget);
     expect(inPage('Sample Mutual'), findsOneWidget);
-    expect(inPage('P-100'), findsOneWidget);
+    // The policy number is the office's: no row for it.
+    expect(inPage('Policy number'), findsNothing);
     await tester.scrollUntilVisible(
       find.byKey(const Key('fleet-driver-call')),
       200,

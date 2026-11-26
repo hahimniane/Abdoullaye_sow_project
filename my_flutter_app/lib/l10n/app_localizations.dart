@@ -40248,12 +40248,6 @@ abstract class AppLocalizations {
   /// **'Insurance company'**
   String get fdrInsurer;
 
-  /// No description provided for @fdrPolicy.
-  ///
-  /// In en, this message translates to:
-  /// **'Policy number'**
-  String get fdrPolicy;
-
   /// No description provided for @fdrCarYours.
   ///
   /// In en, this message translates to:

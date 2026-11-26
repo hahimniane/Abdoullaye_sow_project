@@ -38,7 +38,6 @@ class DriverPlate {
     this.registrationExpiry = '',
     this.diamondExpiry = '',
     this.insurer = '',
-    this.policyNumber = '',
     this.rentCents = 0,
     this.period = 'monthly',
     this.dueDay = 1,
@@ -53,7 +52,6 @@ class DriverPlate {
     registrationExpiry: _s(m['registrationExpiry']),
     diamondExpiry: _s(m['diamondExpiry']),
     insurer: _s(m['insurer']),
-    policyNumber: _s(m['policyNumber']),
     rentCents: _i(m['rentCents']),
     period: _s(m['period']) == 'weekly' ? 'weekly' : 'monthly',
     dueDay: _i(m['dueDay']) == 0 ? 1 : _i(m['dueDay']),
@@ -61,7 +59,9 @@ class DriverPlate {
   );
 
   final String assignmentId, plate, vehicleType, period, startDayKey;
-  final String registrationExpiry, diamondExpiry, insurer, policyNumber;
+
+  /// The insurer's name. The policy number is never sent to a driver.
+  final String registrationExpiry, diamondExpiry, insurer;
   final bool driverOwnsCar;
   final int rentCents, dueDay;
 

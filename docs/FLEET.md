@@ -323,7 +323,9 @@ only (Q13) and report a payment by sending the screenshot on WhatsApp
   hold a plate, then is a regular customer again.
 - **Never in the answer**: office notes, the track record, friends who
   drove, remembered payer names, who recorded a payment, bank ids, the
-  screenshot or the name read from it, the VIN, the premium, other drivers.
+  screenshot or the name read from it, the VIN, the premium, the insurance
+  policy number (owner, 2026-11-26; the insurer's name is shown), other
+  drivers.
   Both test files assert it.
 - **Fleet only (Q11)**: `fleet.settings.driversSeeOnlyThisBusiness` (on
   unless the Fleet admin switched it off; the switch is already on the

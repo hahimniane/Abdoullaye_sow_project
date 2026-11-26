@@ -7,7 +7,7 @@
 // The rule that matters: the answer carries the driver's own money and plate
 // and NOTHING the office keeps for itself (notes, the track record, friends
 // who drove, remembered payer names, who recorded a payment, bank ids, the
-// screenshot of a report, other drivers).
+// screenshot of a report, the insurance policy number, other drivers).
 
 const fleetBilling = require("./fleet_billing");
 const fleetClaims = require("./fleet_claims");
@@ -144,8 +144,10 @@ function shownPlates(assignments, carsById) {
           ownership: car.ownership === "driver" ? "driver" : "company",
           registrationExpiry: text(car.registrationExpiry, 10),
           diamondExpiry: text(car.diamondExpiry, 10),
+          // The insurer's name only: the policy number is the office's
+          // (owner, 2026-11-26: "drivers should not have access to their
+          // policy numbers").
           insurer: text(car.insurer, 80),
-          policyNumber: text(car.policyNumber, 60),
           rentCents: whole(a.rentCents),
           period: a.period === "weekly" ? "weekly" : "monthly",
           dueDay: whole(a.dueDay) || 1,

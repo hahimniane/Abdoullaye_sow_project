@@ -771,17 +771,10 @@ class FleetDriverPlateTab extends StatelessWidget {
               ],
             ),
           ),
-          if (plate.insurer.isNotEmpty || plate.policyNumber.isNotEmpty)
+          if (plate.insurer.isNotEmpty)
             FleetCard(
               title: l10n.fdrInsuranceTitle,
-              child: Column(
-                children: [
-                  if (plate.insurer.isNotEmpty)
-                    _Line(label: l10n.fdrInsurer, value: plate.insurer),
-                  if (plate.policyNumber.isNotEmpty)
-                    _Line(label: l10n.fdrPolicy, value: plate.policyNumber),
-                ],
-              ),
+              child: _Line(label: l10n.fdrInsurer, value: plate.insurer),
             ),
         ],
         if (fleet.businessPhone.isNotEmpty)

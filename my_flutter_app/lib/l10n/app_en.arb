@@ -14018,7 +14018,6 @@
   "fdrPaperSoon": "Renew soon",
   "fdrInsuranceTitle": "Insurance",
   "fdrInsurer": "Insurance company",
-  "fdrPolicy": "Policy number",
   "fdrCarYours": "The car is yours",
   "fdrCarBusiness": "The car belongs to {business}",
   "@fdrCarBusiness": {
