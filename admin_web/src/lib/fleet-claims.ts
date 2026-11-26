@@ -104,6 +104,8 @@ export function claimSentence(claim: Pick<FleetClaim, "state" | "reason" | "told
 
 export type ClaimView = {
   id: string;
+  /** The driver it came from ("" when the phone matched nobody). */
+  driverId: string;
   /** Driver's name, else the phone the photo came from. */
   who: string;
   hasDriver: boolean;
@@ -126,6 +128,7 @@ export function openClaimViews(rows: readonly unknown[], driverNames: ReadonlyMa
     const name = claim.driverId ? driverNames.get(claim.driverId) || "" : "";
     out.push({
       id: claim.id,
+      driverId: claim.driverId ?? "",
       who: name || claim.fromPhone || "—",
       hasDriver: Boolean(name),
       amountCents: claim.amountCents,

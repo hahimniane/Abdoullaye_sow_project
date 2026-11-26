@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CarFront, Plus, Search, Undo2, X } from "lucide-react";
 
 import { Panel } from "@/components/panel";
@@ -58,6 +58,8 @@ export function FleetDrivers({
   driverId,
   onOpenDriver,
   onOpenCar,
+  intent = null,
+  onIntentDone,
 }: {
   state: FleetState;
   businessId: string;
@@ -66,9 +68,17 @@ export function FleetDrivers({
   driverId: string;
   onOpenDriver: (id: string) => void;
   onOpenCar: (id: string) => void;
+  /** What the Fleet page's New menu asked for (docs/FLEET.md section 15); done once, then cleared. */
+  intent?: DriverIntent | null;
+  onIntentDone?: () => void;
 }) {
   const [filter, setFilter] = useState<DriverFilter>(emptyDriverFilter);
   const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    if (intent !== "add") return;
+    setAdding(true);
+    onIntentDone?.();
+  }, [intent, onIntentDone]);
   const lang = fleetLang();
   const rows = useMemo(() => driverRows(state.data, state.index, state.todayKey), [state]);
   const shown = useMemo(() => filterDriverRows(rows, filter), [rows, filter]);
@@ -93,6 +103,8 @@ export function FleetDrivers({
       <DriverPage
         businessId={businessId}
         driver={selected}
+        intent={intent && intent !== "add" ? intent : null}
+        onIntentDone={onIntentDone}
         isAdmin={isAdmin}
         onBack={() => onOpenDriver("")}
         onOpenCar={onOpenCar}
@@ -321,6 +333,12 @@ function DriverFormDialog({
 
 type Dialog = "edit" | "give" | "return" | "fee" | "leave" | "payment" | "charge" | { waive: Row } | { undo: Row } | null;
 
+/**
+ * What the Fleet page's New menu or Needs you asked for: Add driver (the
+ * list), or a payment, a charge, or a given plate for the driver being opened.
+ */
+export type DriverIntent = "add" | "payment" | "charge" | { give: string } | { charge: string };
+
 function DriverPage({
   businessId,
   driver,
@@ -329,6 +347,8 @@ function DriverPage({
   state,
   onBack,
   onOpenCar,
+  intent,
+  onIntentDone,
 }: {
   businessId: string;
   driver: Row;
@@ -337,8 +357,27 @@ function DriverPage({
   state: FleetState;
   onBack: () => void;
   onOpenCar: (id: string) => void;
+  intent: Exclude<DriverIntent, "add"> | null;
+  onIntentDone?: () => void;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
+  // The plate a "Give to a driver" picked before this page opened, and the
+  // "What for" a ticket found by the plate search starts with.
+  const [giveCarId, setGiveCarId] = useState("");
+  const [chargeLabel, setChargeLabel] = useState("");
+  useEffect(() => {
+    if (!intent) return;
+    if (typeof intent === "object" && "give" in intent) {
+      setGiveCarId(intent.give);
+      setDialog("give");
+    } else if (typeof intent === "object") {
+      setChargeLabel(intent.charge);
+      setDialog("charge");
+    } else {
+      setDialog(intent);
+    }
+    onIntentDone?.();
+  }, [intent, onIntentDone]);
   // Open bills first by default; every payment by default.
   const [billView, setBillView] = useState<BillView>("open");
   const [paymentView, setPaymentView] = useState<PaymentView>("all");
@@ -595,7 +634,18 @@ function DriverPage({
         />
       )}
       {dialog === "payment" && <PaymentDialog businessId={businessId} driver={driver} todayKey={state.todayKey} onClose={() => setDialog(null)} />}
-      {dialog === "charge" && <ChargeDialog businessId={businessId} driver={driver} todayKey={state.todayKey} onClose={() => setDialog(null)} />}
+      {dialog === "charge" && (
+        <ChargeDialog
+          businessId={businessId}
+          driver={driver}
+          initialLabel={chargeLabel}
+          todayKey={state.todayKey}
+          onClose={() => {
+            setChargeLabel("");
+            setDialog(null);
+          }}
+        />
+      )}
       {dialog === "fee" && current && car && (
         <ChangeFeeDialog
           assignment={current}
@@ -610,7 +660,18 @@ function DriverPage({
       {dialog === "leave" && (
         <DriverLeftDialog businessId={businessId} driver={driver} plate={car ? s(car.plate) : ""} todayKey={state.todayKey} onClose={() => setDialog(null)} />
       )}
-      {dialog === "give" && <GiveCarDialog businessId={businessId} driver={driver} state={state} onClose={() => setDialog(null)} />}
+      {dialog === "give" && (
+        <GiveCarDialog
+          businessId={businessId}
+          driver={driver}
+          initialCarId={giveCarId}
+          state={state}
+          onClose={() => {
+            setGiveCarId("");
+            setDialog(null);
+          }}
+        />
+      )}
       {dialog === "return" && current && (
         <ReturnCarDialog
           assignment={current}
@@ -729,9 +790,21 @@ function PaymentDialog({ businessId, driver, todayKey, onClose }: { businessId: 
   );
 }
 
-function ChargeDialog({ businessId, driver, todayKey, onClose }: { businessId: string; driver: Row; todayKey: string; onClose: () => void }) {
+function ChargeDialog({
+  businessId,
+  driver,
+  todayKey,
+  onClose,
+  initialLabel = "",
+}: {
+  businessId: string;
+  driver: Row;
+  todayKey: string;
+  onClose: () => void;
+  initialLabel?: string;
+}) {
   const [amount, setAmount] = useState("");
-  const [label, setLabel] = useState("");
+  const [label, setLabel] = useState(initialLabel);
   const [due, setDue] = useState(todayKey);
   const { busy, error, setError, run } = useFleetRun(businessId);
 
@@ -786,11 +859,29 @@ function ChargeDialog({ businessId, driver, todayKey, onClose }: { businessId: s
   );
 }
 
-function GiveCarDialog({ businessId, driver, state, onClose }: { businessId: string; driver: Row; state: FleetState; onClose: () => void }) {
+function GiveCarDialog({
+  businessId,
+  driver,
+  state,
+  onClose,
+  initialCarId = "",
+}: {
+  businessId: string;
+  driver: Row;
+  state: FleetState;
+  onClose: () => void;
+  /** A free plate already picked (Needs you, or the plate's own page). */
+  initialCarId?: string;
+}) {
   const free = useMemo(() => freeCars(state.data, state.index), [state]);
-  const [carId, setCarId] = useState("");
+  const [carId, setCarId] = useState(() => (free.some((c) => c.id === initialCarId) ? initialCarId : ""));
   const [start, setStart] = useState(state.todayKey);
-  const [rent, setRent] = useState("");
+  // A plate picked in advance starts with the fee its last driver paid; the office can change it.
+  const [rent, setRent] = useState(() => {
+    if (!initialCarId) return "";
+    const last = [...(state.index.assignmentsByCar.get(initialCarId) ?? [])].sort((x, y) => s(y.startDayKey).localeCompare(s(x.startDayKey)))[0];
+    return last && Number(last.rentCents) > 0 ? centsToInput(last.rentCents) : "";
+  });
   const [period, setPeriod] = useState<"monthly" | "weekly">("monthly");
   const [dueDay, setDueDay] = useState("1");
   const { busy, error, setError, run } = useFleetRun(businessId);

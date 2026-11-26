@@ -102,7 +102,8 @@ import { shipsByAirOf } from "@/lib/package-proof";
 import { useServerTotals } from "@/lib/use-server-totals";
 import { Panel } from "@/components/panel";
 import { TodayView } from "@/components/business/today-view";
-import {FLEET_TABS, FleetPanel} from "@/components/business/fleet-panel";
+import {FleetPanel} from "@/components/business/fleet-panel";
+import {fleetViewForTab, type FleetView} from "@/lib/fleet-home";
 import {useFleetData} from "@/components/business/fleet-data";
 import {FleetTileGroup} from "@/components/business/fleet-payments";
 import {fleetEnabled} from "@/lib/fleet";
@@ -273,6 +274,8 @@ export function BusinessConsole({
   // Which step of the Shipping page is open; "" = the first one this viewer
   // may open (decided once the steps are known, below).
   const [shippingStep, setShippingStep] = useState<ShippingStep | "">("");
+  // Which tab of the Fleet page is open (docs/FLEET.md section 15).
+  const [fleetView, setFleetView] = useState<FleetView>("needs");
   // Every way into a section goes through here: the old shipping tab ids
   // (Containers, Barrels, Freight, Deliveries, Volume - still named by
   // notifications, Today's rows and links) open that step of Shipping.
@@ -281,6 +284,13 @@ export function BusinessConsole({
     if (step) {
       setShippingStep(step);
       setActiveTabState("shipping");
+      return;
+    }
+    // The five old Fleet items are tabs of Fleet now; Fleet itself opens on Needs you.
+    const fleet = fleetViewForTab(tab);
+    if (fleet) {
+      setFleetView(fleet);
+      setActiveTabState("fleet");
       return;
     }
     setActiveTabState(tab);
@@ -1055,15 +1065,15 @@ export function BusinessConsole({
               previewMode={previewMode}
             />
           )}
-          {FLEET_TABS.includes(activeTab) && fleetOn && canOpenFleet && (
+          {activeTab === "fleet" && fleetOn && canOpenFleet && (
             <FleetPanel
               business={business}
               businessId={businessId}
               isAdmin={isFleetAdmin}
               previewMode={previewMode}
-              setTab={setActiveTab}
+              setView={setFleetView}
               state={fleetState}
-              tab={activeTab}
+              view={fleetView}
             />
           )}
           {activeTab === "staffBalances" && (
@@ -1736,6 +1746,7 @@ function tabIcon(tab: BusinessTab) {
     staffBalances: <Scale {...props} />,
     shipping: <Container {...props} />,
     cards: <Contact {...props} />,
+    fleet: <CarFront {...props} />,
     fleetPayments: <Banknote {...props} />,
     fleetDrivers: <Users {...props} />,
     fleetCars: <CarFront {...props} />,

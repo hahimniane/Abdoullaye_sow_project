@@ -30,12 +30,17 @@ import { fleetLang, SaveButton, useFleetRun } from "./fleet-ui";
 const STATUS_TIMEOUT_MS = 20_000;
 
 /** bank_status, with a load that always ends (answer, error or timeout). */
-export function useFleetBank(businessId: string) {
+export function useFleetBank(businessId: string, enabled = true) {
   const [status, setStatus] = useState<FleetBankStatus | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    // Preview mode reads nothing.
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     let live = true;
     let timer = 0;
     setLoading(true);
@@ -58,7 +63,7 @@ export function useFleetBank(businessId: string) {
       live = false;
       window.clearTimeout(timer);
     };
-  }, [businessId, attempt]);
+  }, [businessId, attempt, enabled]);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
   return { status, error, loading, reload };
 }

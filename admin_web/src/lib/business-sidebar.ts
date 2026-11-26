@@ -22,6 +22,9 @@ export type BusinessTab =
   | "staffBalances"
   | "shipping"
   | "cards"
+  | "fleet"
+  // The five Fleet menu items before they became tabs of Fleet (fleetViewForTab):
+  // links and pins may still name them.
   | "fleetPayments"
   | "fleetDrivers"
   | "fleetCars"
@@ -140,13 +143,11 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // Everyone on the team sees every balance (docs/STAFF_BALANCES.md decision 6),
   // so no service gate and no permission.
   {id: "staffBalances", label: "Staff balances", description: "Who holds or owes what", group: "money", keywords: ["Hand over", "Cash", "Handover", "Owes", "Expenses"]},
-  // Fleet (docs/FLEET.md section 6): TLC plate leasing. Shown only when the
-  // business has Fleet on and the person holds "fleet" or "fleet_admin".
-  {id: "fleetPayments", label: "Fleet payments", description: "Who paid each month", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Drivers", "Leasing", "TLC", "Plates"]},
-  {id: "fleetDrivers", label: "Drivers", description: "Drivers, bills and payments", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "TLC"]},
-  {id: "fleetCars", label: "Plates", description: "Plates and who has them", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Plates", "TLC"]},
-  {id: "fleetPaperwork", label: "Paperwork", description: "Registration and diamond dates", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Diamond", "Registration", "Insurance"]},
-  {id: "fleetSettings", label: "Fleet settings", description: "Late fee, rules, import", group: "fleet", service: "fleet", permission: "fleet_admin", keywords: ["Fleet", "Late fee", "Import", "Zelle"]},
+  // Fleet (docs/FLEET.md sections 6 and 15): TLC plate leasing, one page with
+  // tabs (Needs you, Drivers, Plates, Payments, Paperwork) and the settings
+  // gear. Shown only when the business has Fleet on and the person holds
+  // "fleet" or "fleet_admin"; the old item names still find it.
+  {id: "fleet", label: "Fleet", description: "Drivers, plates and payments", group: "overview", service: "fleet", permission: "fleet", keywords: ["Fleet payments", "Drivers", "Plates", "Paperwork", "Fleet settings", "Leasing", "TLC", "Diamond", "Registration", "Insurance", "Late fee", "Import", "Zelle"]},
   {id: "profile", label: "Profile", description: "Identity and verification", group: "business", permission: "profile", keywords: ["Business"]},
   {id: "destinations", label: "Services & coverage", description: "Availability, pickup, rates, and routes", group: "business", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},
@@ -261,6 +262,9 @@ export function shippingStepForTab(tab: string, view = ""): ShippingStep | null 
   }
 }
 
+/** The five Fleet menu items that are tabs of Fleet now; a pin on any of them is a pin on Fleet. */
+export const FLEET_MENU_IDS: readonly string[] = ["fleetPayments", "fleetDrivers", "fleetCars", "fleetPaperwork", "fleetSettings"];
+
 const groupLabels: Record<BusinessSidebarGroupId, string> = {
   overview: "Overview",
   cars: "Cars",
@@ -284,7 +288,7 @@ export function normalizePinnedTabs(
   const available = new Set(availableTabs.map((tab) => tab.id));
   // A pin saved on an old shipping tab (Containers, Barrels...) is a pin on
   // Shipping now; several of them are one pin.
-  const mapped = pinnedTabs.map((id) => (shippingStepForTab(id) ? "shipping" : id));
+  const mapped = pinnedTabs.map((id) => (shippingStepForTab(id) ? "shipping" : FLEET_MENU_IDS.includes(id) ? "fleet" : id));
   return mapped.filter((id, index): id is BusinessTab =>
     available.has(id as BusinessTab) && mapped.indexOf(id) === index,
   );

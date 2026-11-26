@@ -34,7 +34,9 @@ export function FleetSettings({
       <SettingsForm businessId={businessId} settings={settings} />
       <FleetWhatsAppPanel businessId={businessId} settings={settings} drivers={drivers} />
       <FleetBankSchedule businessId={businessId} />
-      <ImportSheet businessId={businessId} />
+      <div id="fleet-import" className="fleet-anchor">
+        <ImportSheet businessId={businessId} />
+      </div>
     </div>
   );
 }

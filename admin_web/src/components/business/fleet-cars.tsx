@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CarFront, FileWarning, Plus, Search, X } from "lucide-react";
 
 import { Panel } from "@/components/panel";
@@ -52,15 +52,28 @@ export function FleetCars({
   carId,
   onOpenCar,
   onOpenDriver,
+  addRequested = false,
+  onAddDone,
+  onGiveToDriver,
 }: {
   state: FleetState;
   businessId: string;
   carId: string;
   onOpenCar: (id: string) => void;
   onOpenDriver: (id: string) => void;
+  /** The Fleet page's New menu asked for "Add plate"; done once, then cleared. */
+  addRequested?: boolean;
+  onAddDone?: () => void;
+  /** A free plate's "Give to a driver": the Fleet page asks which driver, then opens their Give a plate. */
+  onGiveToDriver?: (carId: string) => void;
 }) {
   const [filter, setFilter] = useState<CarFilter>(emptyCarFilter);
   const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    if (!addRequested) return;
+    setAdding(true);
+    onAddDone?.();
+  }, [addRequested, onAddDone]);
   const rows = useMemo(() => carRows(state.data, state.index, state.todayKey), [state]);
   const shown = useMemo(() => filterCarRows(rows, filter), [rows, filter]);
   const counts = useMemo(() => carFilterCounts(rows), [rows]);
@@ -86,6 +99,7 @@ export function FleetCars({
         car={selected}
         onBack={() => onOpenCar("")}
         onOpenDriver={onOpenDriver}
+        onGiveToDriver={onGiveToDriver}
         row={rows.find((r) => r.id === selected.id)}
         state={state}
       />
@@ -368,6 +382,7 @@ function CarPage({
   state,
   onBack,
   onOpenDriver,
+  onGiveToDriver,
 }: {
   businessId: string;
   car: Row;
@@ -375,6 +390,7 @@ function CarPage({
   state: FleetState;
   onBack: () => void;
   onOpenDriver: (id: string) => void;
+  onGiveToDriver?: (carId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const lang = fleetLang();
@@ -401,6 +417,11 @@ function CarPage({
         action={<button className="ghost-button compact" type="button" onClick={() => setEditing(true)}>Edit details</button>}
       >
         <h3 data-no-translate>{s(car.plate)}</h3>
+        {onGiveToDriver && !state.index.currentByCar.has(car.id) && (
+          <div className="fleet-actions">
+            <button className="lst-btn" type="button" onClick={() => onGiveToDriver(car.id)}>Give to a driver</button>
+          </div>
+        )}
         <div className="fleet-facts fleet-facts-wide">
           <div>
             <small>Registration expires</small>

@@ -457,3 +457,36 @@ attach the picture there.
 - Tests: `test/fleet-driver-claim-callables.test.js` (emulator), the
   screenshot-page cases of `test/fleet_driver_screens_test.dart`.
 
+
+## 15. One Fleet page with tabs (2026-11-26)
+
+Owner: "i love this new desing. but please make sure that everything that
+existed in the old one is still accessible in this new one". Approved on a
+Claude Design prototype (canvas FF7Q2ZqXrz9HzeyE6Wqp6z).
+
+- The five sidebar items (Fleet payments, Drivers, Plates, Paperwork, Fleet
+  settings) are one item, **Fleet**, in Overview. The page has tabs
+  **Needs you · Drivers · Plates · Payments · Paperwork**; the gear (Fleet
+  admins only) opens Fleet settings. Each tab is the page that was its own
+  item, unchanged, so every filter, form and button is where it was.
+- Old ids still work: `fleetViewForTab` (lib/fleet-home.ts) sends
+  `fleetPayments`, `fleetDrivers`, `fleetCars`, `fleetPaperwork`,
+  `fleetSettings` to their tab; a pin on any of them is a pin on Fleet.
+- **Needs you** (`needsItems`): bank take-backs, drivers' screenshots the
+  office must act on (state `office`, or waiting on the bank when a deposit
+  of the same amount came in), unmatched deposits, late drivers (WhatsApp
+  reminder button + Record a payment), plates with no driver (days idle and
+  the last fee prorated: "plate fees missed"), diamond/registration expired or
+  within 30 days, and one line for missing dates. Most money first. Every
+  button opens the existing form or tab; nothing new writes.
+- **Search**: drivers (name, phone, plate) and plates (plate, company); a
+  plate and a day ("T712 Oct 3", "10/3", "3 oct") answers who had it that day
+  and the friend who drove it (`plateOnDay`, `whoDroveAt`), with "Charge this
+  ticket" opening that driver's Add a charge, prefilled.
+- **New**: Add driver, Add plate, Record a payment and Add a charge (ask which
+  driver, then open their form), Import from spreadsheet (admins). A free
+  plate's page and Needs you have "Give to a driver": pick a driver with no
+  plate, then their Give a plate opens with the plate and its last fee filled.
+- One `bank_status` read and one open-claims listener per Fleet page, shared
+  by Needs you and Payments. A one-time note tells staff where the items went
+  (`laawol:notice:fleet-one-page-2026-11`, until 2027-02-01).

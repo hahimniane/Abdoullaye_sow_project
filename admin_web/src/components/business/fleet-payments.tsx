@@ -19,7 +19,7 @@ import {
 } from "@/lib/fleet";
 import { moneyText } from "@/lib/invoice-ledger";
 
-import { FleetBankDeposits, useFleetBank } from "./fleet-bank";
+import { FleetBankDeposits, type useFleetBank } from "./fleet-bank";
 import { FleetClaimsPanel } from "./fleet-claims";
 import type { FleetState } from "./fleet-data";
 import { cellStateLabel, fleetLang, Money } from "./fleet-ui";
@@ -59,10 +59,19 @@ export function FleetTileGroup({ state }: { state: FleetState }) {
   );
 }
 
-export function FleetPayments({ businessId, state, onOpenDriver }: { businessId: string; state: FleetState; onOpenDriver: (driverId: string) => void }) {
+export function FleetPayments({
+  businessId,
+  state,
+  bank,
+  onOpenDriver,
+}: {
+  businessId: string;
+  state: FleetState;
+  /** One bank_status read, held by the Fleet page: shared by these panels and Needs you. */
+  bank: ReturnType<typeof useFleetBank>;
+  onOpenDriver: (driverId: string) => void;
+}) {
   const lang = fleetLang();
-  // One bank_status read shared by the reported-payments panel and the deposits panel.
-  const bank = useFleetBank(businessId);
   const [monthCount, setMonthCount] = useState(FIRST_MONTHS);
   const [filter, setFilter] = useState<PaymentsFilter>(emptyPaymentsFilter);
   const months = useMemo(() => monthWindow(monthOf(state.todayKey), monthCount), [state.todayKey, monthCount]);
@@ -87,8 +96,12 @@ export function FleetPayments({ businessId, state, onOpenDriver }: { businessId:
   return (
     <div className="stack fleet-page">
       <FleetTileGroup state={state} />
-      <FleetClaimsPanel businessId={businessId} state={state} bank={bank} />
-      <FleetBankDeposits businessId={businessId} state={state} bank={bank} />
+      <div id="fleet-claims" className="fleet-anchor">
+        <FleetClaimsPanel businessId={businessId} state={state} bank={bank} />
+      </div>
+      <div id="fleet-deposits" className="fleet-anchor">
+        <FleetBankDeposits businessId={businessId} state={state} bank={bank} />
+      </div>
       <Panel
         title="Payments by month"
         icon={<Search size={18} />}

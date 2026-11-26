@@ -33,15 +33,14 @@ function visibleStepIds(
 }
 
 describe("business sidebar navigation", () => {
-  it("has five groups: Overview, Cars, Money, Fleet, Business", () => {
+  it("has four groups: Overview (with Fleet as one page), Cars, Money, Business", () => {
     const groups = buildBusinessSidebarGroups(businessSidebarTabs, [], "");
     assert.deepEqual(
       groups.map((group) => [group.label, group.tabs.map((tab) => tab.id)]),
       [
-        ["Overview", ["today", "shipping"]],
+        ["Overview", ["today", "shipping", "fleet"]],
         ["Cars", ["parking", "ledger", "transport", "listings", "purchases", "viewings"]],
         ["Money", ["invoices", "inventory", "staffBalances"]],
-        ["Fleet", ["fleetPayments", "fleetDrivers", "fleetCars", "fleetPaperwork", "fleetSettings"]],
         ["Business", ["profile", "destinations", "people", "cards", "reviews", "cases", "growth"]],
       ],
     );
@@ -267,18 +266,26 @@ describe("business sidebar navigation", () => {
   });
 });
 
-describe("the Fleet sidebar group", () => {
-  const fleetTabs = ["fleetPayments", "fleetDrivers", "fleetCars", "fleetPaperwork", "fleetSettings"];
-  const only = (ids: string[]) => ids.filter((id) => fleetTabs.includes(id));
+describe("the Fleet page in the sidebar", () => {
+  const only = (ids: string[]) => ids.filter((id) => id === "fleet" || id.startsWith("fleet"));
 
   it("shows nothing when the business does not offer Fleet", () => {
     assert.deepEqual(only(visibleTabIds(["carParking"], "owner")), []);
   });
 
-  it("shows every Fleet page to an owner, and the settings only to Fleet admins", () => {
-    assert.deepEqual(only(visibleTabIds(["fleet"], "owner")), fleetTabs);
-    assert.deepEqual(only(visibleTabIds(["fleet"], ["fleet"])), fleetTabs.slice(0, 4));
-    assert.deepEqual(only(visibleTabIds(["fleet"], ["fleet_admin"])), fleetTabs);
+  it("is one item for owners, Fleet staff and Fleet admins (the settings gear is checked on the page)", () => {
+    assert.deepEqual(only(visibleTabIds(["fleet"], "owner")), ["fleet"]);
+    assert.deepEqual(only(visibleTabIds(["fleet"], ["fleet"])), ["fleet"]);
+    assert.deepEqual(only(visibleTabIds(["fleet"], ["fleet_admin"])), ["fleet"]);
     assert.deepEqual(only(visibleTabIds(["fleet"], ["parking"])), []);
+  });
+
+  it("is found by the old item names, and an old pin is a pin on Fleet", () => {
+    for (const word of ["fleet payments", "plates", "paperwork", "fleet settings", "diamond"]) {
+      const ids = buildBusinessSidebarGroups(businessSidebarTabs, [], word).flatMap((group) => group.tabs.map((tab) => tab.id));
+      assert.ok(ids.includes("fleet"), word);
+    }
+    const pinned = buildBusinessSidebarGroups(businessSidebarTabs, ["fleetDrivers", "fleetCars"], "");
+    assert.deepEqual(pinned[0], { id: "pinned", label: "Pinned", tabs: businessSidebarTabs.filter((tab) => tab.id === "fleet") });
   });
 });

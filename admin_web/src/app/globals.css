@@ -18556,3 +18556,155 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 .rcp-state.ok { background: #ecfdf5; color: #047857; }
 .rcp-state.wait { background: #f3f5f4; color: var(--ink); }
 .rcp-state.bad { background: #fef2f2; color: #b91c1c; }
+
+/* ---------------------------------------------------------------------------
+   Fleet page (docs/FLEET.md section 15): header with search, New and the
+   settings gear, the tab row, and Needs you. Buttons answer the press at once
+   (Apple design: feedback on pointer-down); menus open from the button.
+   --------------------------------------------------------------------------- */
+.press { transition: transform 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out; }
+.press:active:not(:disabled) { transform: scale(0.97); }
+.fleet-anchor { scroll-margin-top: 140px; }
+.fleet-home > .fleet-back { justify-self: start; align-self: start; width: auto; }
+.fleet-home-bar {
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  background: rgba(247, 247, 247, 0.86);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: -4px 0 0;
+  padding: 4px 0 0;
+  position: sticky;
+  top: 0;
+  z-index: 15;
+}
+.fleet-home-head { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; }
+.fleet-home-title { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin: 0 6px 0 0; }
+.fleet-home-search { flex: 1 1 320px; min-width: 0; position: relative; }
+.fleet-home-search-box {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--rule-strong, #b0b0b0);
+  border-radius: 999px;
+  color: var(--muted);
+  display: flex;
+  gap: 10px;
+  height: 46px;
+  padding: 0 8px 0 18px;
+}
+.fleet-home-search-box:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(3, 35, 70, 0.12); }
+.fleet-home-search-box input { background: transparent; border: 0; color: var(--ink); flex: 1; font: inherit; font-size: 15px; min-width: 0; outline: 0; }
+/* Our own clear button is the bigger target; the browser's small one would make two. */
+.fleet-home-search-box input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.fleet-home-clear { align-items: center; background: #eee; border: 0; border-radius: 999px; color: var(--ink); cursor: pointer; display: inline-flex; height: 30px; justify-content: center; width: 30px; }
+.fleet-home-results {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1), 0 24px 48px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  left: 0;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: 8px;
+  position: absolute;
+  right: 0;
+  top: 54px;
+  z-index: 30;
+}
+.fleet-home-answer { background: #f7f7f7; border-radius: 12px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; padding: 14px; }
+.fleet-home-answer small { color: var(--muted); font-size: 13px; font-weight: 600; }
+.fleet-home-answer strong { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.fleet-home-answer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.fleet-home-hit { background: transparent; border: 0; border-radius: 10px; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; font: inherit; gap: 2px; padding: 10px 12px; text-align: left; }
+.fleet-home-hit:hover, .fleet-home-hit:focus-visible { background: #f2f2f2; }
+.fleet-home-hit strong { font-size: 15px; }
+.fleet-home-hit small { color: var(--muted); font-size: 13px; }
+.fleet-home-empty { color: var(--muted); font-size: 14px; margin: 0; padding: 12px; }
+.fleet-home-new { position: relative; }
+.fleet-home-new-btn { align-items: center; background: var(--brand); border: 0; border-radius: 999px; color: #fff; cursor: pointer; display: inline-flex; font: inherit; font-size: 15px; font-weight: 700; gap: 6px; height: 46px; padding: 0 20px; }
+.fleet-home-new-btn:hover { background: #0b2f5b; }
+.fleet-home-menu {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1), 0 24px 48px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  padding: 8px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 54px;
+  transform: scale(0.94);
+  transform-origin: top right;
+  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1), opacity 160ms ease, visibility 0s linear 220ms;
+  visibility: hidden;
+  width: 290px;
+  z-index: 30;
+}
+.fleet-home-menu.open { opacity: 1; pointer-events: auto; transform: scale(1); transition-delay: 0s; visibility: visible; }
+.fleet-home-menu-item { background: transparent; border: 0; border-radius: 10px; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; font: inherit; gap: 2px; padding: 11px 14px; text-align: left; }
+.fleet-home-menu-item:hover, .fleet-home-menu-item:focus-visible { background: #f2f2f2; }
+.fleet-home-menu-item strong { font-size: 15px; }
+.fleet-home-menu-item small { color: var(--muted); font-size: 13px; }
+.fleet-home-menu-rule { background: #eee; height: 1px; margin: 4px 8px; }
+.fleet-home-gear { align-items: center; background: #fff; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink); cursor: pointer; display: inline-flex; height: 46px; justify-content: center; width: 46px; }
+.fleet-home-gear:hover, .fleet-home-gear.on { border-color: var(--ink); }
+.fleet-home-tabs { border-bottom: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 4px 26px; }
+.fleet-home-tab { white-space: nowrap; flex: 0 0 auto; align-items: center; background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); cursor: pointer; display: inline-flex; font: inherit; font-size: 15px; font-weight: 700; gap: 7px; margin-bottom: -1px; padding: 10px 2px 11px; }
+.fleet-home-tab:hover { color: var(--ink); }
+.fleet-home-tab.on { border-bottom-color: var(--ink); color: var(--ink); font-weight: 700; }
+.fleet-home-tab b { background: #eee; border-radius: 999px; color: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums; padding: 1px 8px; }
+.fleet-home-tab b.alert { background: #fdecea; color: #b42318; }
+.fleet-moved { align-items: center; background: #e8edf4; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; padding: 12px 16px; }
+.fleet-moved p { color: var(--brand); flex: 1 1 320px; font-size: 14px; font-weight: 600; margin: 0; }
+.fleet-needs { background: #fff; border: 1px solid var(--rule); border-radius: 16px; padding: 18px 22px 8px; }
+.fleet-needs-head { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; padding-bottom: 8px; }
+.fleet-needs-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+.fleet-needs-head h2 b { color: var(--muted); font-weight: 600; }
+.fleet-needs-head small { color: var(--muted); font-size: 13px; }
+.fleet-needs-note { background: #fff4e0; border-radius: 10px; color: #7a4b00; font-size: 13px; margin: 0 0 8px; padding: 10px 12px; }
+.fleet-needs-list { list-style: none; margin: 0; padding: 0; }
+.fleet-needs-row { align-items: center; border-top: 1px solid #eee; display: flex; flex-wrap: wrap; gap: 14px; padding: 14px 0; }
+.fleet-needs-icon { align-items: center; border-radius: 999px; display: inline-flex; flex: 0 0 auto; height: 40px; justify-content: center; width: 40px; }
+.fleet-needs-icon.bad { background: #fdecea; color: #c13515; }
+.fleet-needs-icon.warn { background: #fff4e0; color: #7a4b00; }
+.fleet-needs-icon.muted { background: #eee; color: var(--ink); }
+.fleet-needs-text { display: flex; flex: 1 1 280px; flex-direction: column; gap: 2px; min-width: 0; }
+.fleet-needs-text strong { font-size: 15px; font-weight: 700; }
+.fleet-needs-text strong b { font-weight: 700; }
+.fleet-needs-text small { color: var(--muted); font-size: 13px; }
+.fleet-needs-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.fleet-needs-actions .fleet-saved, .fleet-needs-actions .lst-form-error { flex-basis: 100%; margin: 0; }
+/* A list of many rows: every button is the quiet one (one strong button per row would be a wall of dark). */
+.fleet-needs-actions .lst-btn { background: #fff; border: 1px solid var(--ink); color: var(--ink); }
+.fleet-needs-actions .lst-btn:hover:not(:disabled) { background: #f2f2f2; }
+.fleet-needs-open { align-items: center; background: transparent; border: 0; border-radius: 8px; color: var(--brand); cursor: pointer; display: inline-flex; font: inherit; font-size: 14px; font-weight: 700; gap: 2px; height: 38px; padding: 0 8px; }
+.fleet-needs-open:hover { background: #f2f2f2; }
+.fleet-needs-done { align-items: center; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 4px; padding: 28px 0 22px; text-align: center; }
+.fleet-needs-done strong { font-size: 18px; }
+.fleet-needs-done span, .fleet-needs-empty { color: var(--muted); font-size: 14px; }
+.fleet-needs-more { margin: 4px 0 10px; }
+.fleet-pick-search { margin-bottom: 10px; width: 100%; }
+.fleet-pick-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.fleet-pick-row { background: #fff; border: 1px solid var(--rule); border-radius: 12px; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; font: inherit; gap: 2px; padding: 10px 14px; text-align: left; }
+.fleet-pick-row:hover, .fleet-pick-row:focus-visible { background: #e8edf4; border-color: var(--brand); }
+.fleet-pick-row small { color: var(--muted); font-size: 13px; }
+@media (max-width: 640px) {
+  .fleet-home-title { font-size: 26px; }
+  .fleet-home-new-btn { padding: 0 16px; }
+  .fleet-home-tabs { gap: 2px 18px; overflow-x: auto; flex-wrap: nowrap; }
+  .fleet-needs { padding: 14px 16px 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .press, .fleet-home-menu { transition: opacity 150ms ease; }
+  .press:active:not(:disabled) { transform: none; }
+  .fleet-home-menu { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .fleet-home-bar { backdrop-filter: none; -webkit-backdrop-filter: none; background: #f7f7f7; }
+}
