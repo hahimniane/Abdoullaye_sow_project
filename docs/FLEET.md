@@ -544,3 +544,44 @@ answer requests that come from Laawol customers, not register packages. So:
   (section 16).
 - Requests reach a business only while it takes requests (Shipping >
   Requests > Request settings) and has a price list for the country.
+
+## 18. Fleet alerts to admins (2026-11-26)
+
+Owner, 2026-11-26: admins hear about Fleet activity they did not do; not too
+many alerts; routine activity grouped (owner picked "grouped", not an evening
+summary).
+
+**Who.** The business owner(s) and people holding `fleet_admin` (full-access
+staff hold it). Never the person who did it (`byUid` / the caller). Events
+with no admin behind them (the bank, a driver's WhatsApp screenshot, the
+daily run) go to every admin. Never another business's people, never a
+blocked account. Push + inbox entry only (never email, never SMS), each in
+the person's own language. Delivered on today's apps (tap routing and the
+setting come with the next store build).
+
+**Setting.** `notificationPreferences.fleetAlerts`: `"all"` (default) |
+`"needs"` (only "Needs you") | `"off"`. Unknown or missing = `"all"`.
+
+**Kinds** (`data.fleetKind`):
+
+| Kind | Level | When | Sent |
+|---|---|---|---|
+| `deposit_waiting` | needs | a bank deposit could not be given to a driver (any waiting reason, incl. possible duplicate); only the first time it starts waiting, never on a re-match of the same deposit | at once |
+| `claim_needs_office` | needs | a driver's screenshot report needs the office to decide | at once |
+| `bank_took_back` | needs | the bank removed a deposit that had paid a driver | at once |
+| `plate_added` | info | a new plate (not an edit) | grouped |
+| `driver_added` | info | a new driver (not an edit) | grouped |
+| `payment_recorded` | info | a payment recorded by a person (not the bank, not the import) | grouped |
+| `bank_matched` | info | the bank paid drivers by itself | one alert per bank check, listing the count, total and first names |
+
+Grouped = the staff-activity pattern (`staff_activity_alerts.js`): per
+(business, kind, actor) a 10-minute window; the first event goes at once, the
+rest are counted and the scheduled flush sends one summary ("Moussa added 3
+more drivers"). Edits, notes, charges, waives, settings: no alert.
+
+**Push data.** `type: "fleet_alert"`, `businessId`, `fleetKind`, `fleetTab`
+(`needs|drivers|plates|payments|paperwork`), and when known `driverId`,
+`carId`, `paymentId`. Tap: needs kinds -> Fleet, Needs you; `plate_added` ->
+that plate; `driver_added` and `payment_recorded` -> that driver (Payments
+when no driver); `bank_matched` -> Fleet, Payments. Drivers never receive
+these, and an alert never carries the insurance policy number.
