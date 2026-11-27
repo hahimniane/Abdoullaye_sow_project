@@ -6887,15 +6887,27 @@ String containerPiecesSummary(AppLocalizations l10n, List<LinePiece> pieces) {
     for (final p in pieces)
       if (p.kind == pieceKind.other) p,
   ];
-  if (items.isNotEmpty) {
-    final names = {for (final p in items) p.description.trim()}.toList();
-    if (names.length == 1 && names.first.isNotEmpty) {
-      parts.add(items.length == 1
-          ? names.first
-          : '${names.first} ${l10n.ctrTimes(items.length)}');
+  // Each kind of item named (owner, 2026-11-27), at most 4; the rest and
+  // any without a description counted.
+  final counts = <String, int>{};
+  var rest = 0;
+  for (final p in items) {
+    final name = p.description.trim();
+    if (name.isEmpty) {
+      rest += 1;
     } else {
-      parts.add(l10n.pcsItemsCount(items.length));
+      counts[name] = (counts[name] ?? 0) + 1;
     }
+  }
+  final named = counts.entries.toList();
+  for (final e in named.take(4)) {
+    parts.add(e.value == 1 ? e.key : '${e.key} ${l10n.ctrTimes(e.value)}');
+  }
+  rest += named.skip(4).fold<int>(0, (s, e) => s + e.value);
+  if (rest > 0) {
+    parts.add(
+      named.isEmpty ? l10n.pcsItemsCount(rest) : l10n.ctrOtherCount(rest),
+    );
   }
   return parts.join(', ');
 }

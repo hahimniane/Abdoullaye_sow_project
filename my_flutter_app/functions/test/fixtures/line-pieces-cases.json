@@ -1506,8 +1506,8 @@
     ],
     "en"
    ],
-   "note": "a mix of items is counted",
-   "expected": "2 items"
+   "note": "each different item is named (owner, 2026-11-27)",
+   "expected": "TV, Bike"
   },
   {
    "fn": "pieceSummaryText",
@@ -1524,8 +1524,8 @@
     ],
     "fr"
    ],
-   "note": "articles",
-   "expected": "2 articles"
+   "note": "named in French too",
+   "expected": "TV, Bike"
   },
   {
    "fn": "pieceSummaryText",
@@ -1547,6 +1547,120 @@
    ],
    "note": "boxes plural",
    "expected": "1 barrel, 2 boxes"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "TV"
+     },
+     {
+      "kind": "other",
+      "description": "Shoes"
+     },
+     {
+      "kind": "other",
+      "description": "TV"
+     }
+    ],
+    "en"
+   ],
+   "note": "repeats counted per name",
+   "expected": "2 × TV, Shoes"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "TV"
+     },
+     {
+      "kind": "other",
+      "description": ""
+     }
+    ],
+    "en"
+   ],
+   "note": "an undescribed piece is counted beside the named",
+   "expected": "TV, 1 other item"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "TV"
+     },
+     {
+      "kind": "other",
+      "description": ""
+     },
+     {
+      "kind": "other",
+      "description": ""
+     }
+    ],
+    "fr"
+   ],
+   "note": "autres articles",
+   "expected": "TV, 2 autres articles"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": ""
+     },
+     {
+      "kind": "other",
+      "description": ""
+     }
+    ],
+    "en"
+   ],
+   "note": "only undescribed pieces are counted",
+   "expected": "2 items"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "A"
+     },
+     {
+      "kind": "other",
+      "description": "B"
+     },
+     {
+      "kind": "other",
+      "description": "C"
+     },
+     {
+      "kind": "other",
+      "description": "D"
+     },
+     {
+      "kind": "other",
+      "description": "E"
+     },
+     {
+      "kind": "other",
+      "description": "F"
+     }
+    ],
+    "en"
+   ],
+   "note": "past four names the rest are counted",
+   "expected": "A, B, C, D, 2 other items"
   },
   {
    "fn": "linePiecesWhat",

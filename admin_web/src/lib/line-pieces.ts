@@ -406,7 +406,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 /**
  * "2 barrels, 1 box" / "2 barils, 1 carton". Items that all say the same thing
- * are named ("2 × TV"); a mix of items is counted.
+ * are named ("2 × TV"); each different item is named too.
  */
 export function pieceSummaryText(pieces: unknown, language: "en" | "fr" = "en"): string {
   const fr = language === "fr";
@@ -419,16 +419,38 @@ export function pieceSummaryText(pieces: unknown, language: "en" | "fr" = "en"):
   if (barrels) parts.push(fr ? plural(barrels, "baril", "barils") : plural(barrels, "barrel", "barrels"));
   const boxes = of(PIECE_KIND.BOX).length;
   if (boxes) parts.push(fr ? plural(boxes, "carton", "cartons") : plural(boxes, "box", "boxes"));
-  const items = of(PIECE_KIND.OTHER);
-  if (items.length) {
-    const names = [...new Set(items.map((p) => text(p.description, MAX_PIECE_DESCRIPTION)))];
-    if (names.length === 1 && names[0]) {
-      parts.push(items.length === 1 ? names[0] : `${items.length} × ${names[0]}`);
-    } else {
-      parts.push(fr ? plural(items.length, "article", "articles") : plural(items.length, "item", "items"));
-    }
-  }
+  parts.push(...otherItemsText(of(PIECE_KIND.OTHER), fr));
   return parts.join(", ");
+}
+
+/** At most this many different "Other" items are named; the rest counted. */
+const MAX_NAMED_ITEMS = 4;
+
+/**
+ * "Other" pieces by what they are: each description named in the order first
+ * seen, "2 × TV" when repeated; past MAX_NAMED_ITEMS, and any piece without a
+ * description, counted ("1 other item"). Same words as the server.
+ */
+function otherItemsText(items: Record<string, unknown>[], fr: boolean): string[] {
+  if (!items.length) return [];
+  const counts = new Map<string, number>();
+  let blank = 0;
+  for (const p of items) {
+    const name = text(p.description, MAX_PIECE_DESCRIPTION);
+    if (!name) {
+      blank += 1;
+      continue;
+    }
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  const named = [...counts.entries()];
+  const shown = named.slice(0, MAX_NAMED_ITEMS).map(([name, n]) => (n === 1 ? name : `${n} × ${name}`));
+  const rest = blank + named.slice(MAX_NAMED_ITEMS).reduce((sum, [, n]) => sum + n, 0);
+  if (rest) {
+    if (!shown.length) shown.push(fr ? plural(rest, "article", "articles") : plural(rest, "item", "items"));
+    else shown.push(fr ? plural(rest, "autre article", "autres articles") : plural(rest, "other item", "other items"));
+  }
+  return shown;
 }
 
 /**

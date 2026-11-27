@@ -141,7 +141,7 @@ test("money and pieces are worded in the page's language", () => {
   // A request's pieces read as phase 1 reads a line's (pieceSummaryText).
   assert.equal(pieceSummaryText([{ kind: "barrel" }, { kind: "barrel" }, { kind: "box" }], "en"), "2 barrels, 1 box");
   assert.equal(pieceSummaryText([{ kind: "barrel" }, { kind: "box", description: "Clothes and shoes" }, { kind: "other", description: "Shoes" }], "en"), "1 barrel, 1 box, Shoes");
-  assert.equal(pieceSummaryText([{ kind: "other", description: "TV" }, { kind: "other", description: "Fan" }], "fr"), "2 articles");
+  assert.equal(pieceSummaryText([{ kind: "other", description: "TV" }, { kind: "other", description: "Fan" }], "fr"), "TV, Fan");
   assert.equal(pieceKindLabel("barrel", "fr"), "Baril");
   assert.equal(readDollars("45"), 4500);
   assert.equal(readDollars("45,50"), 4550);

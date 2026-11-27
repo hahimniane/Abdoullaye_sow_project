@@ -690,8 +690,8 @@ Map<String, Object?> piecesLineFields(Object? raw, [Object? pickupFeeCents]) {
 
 String _plural(int n, String one, String many) => '$n ${n == 1 ? one : many}';
 
-/// "2 barrels, 1 box" / "2 barils, 1 carton". Items that all say the same
-/// thing are named ("2 × TV"); a mix of items is counted. The server's
+/// "2 barrels, 1 box, TV, 2 × rice" / "2 barils, 1 carton, …". Each kind of
+/// item is named ([_otherItemsText]). The server's
 /// words, for WhatsApp and the History; the app's own screens say it in its
 /// catalog (containers_screen.dart `containerPiecesSummary`).
 String pieceSummaryText(Object? pieces, [String language = 'en']) {
@@ -726,22 +726,51 @@ String pieceSummaryText(Object? pieces, [String language = 'en']) {
           : _plural(boxes, 'box', 'boxes'),
     );
   }
-  final items = of(pieceKind.other);
-  if (items.isNotEmpty) {
-    final names = {
-      for (final p in items) _text(p['description'], maxPieceDescription),
-    }.toList();
-    if (names.length == 1 && names[0].isNotEmpty) {
-      parts.add(items.length == 1 ? names[0] : '${items.length} × ${names[0]}');
-    } else {
-      parts.add(
+  parts.addAll(_otherItemsText(of(pieceKind.other), fr));
+  return parts.join(', ');
+}
+
+/// At most this many different "Other" items are named; the rest counted.
+const _maxNamedItems = 4;
+
+/// "Other" pieces by what they are: each description named in the order
+/// first seen, "2 × TV" when repeated; past [_maxNamedItems], and any piece
+/// without a description, counted ("1 other item"). Same words as the server.
+List<String> _otherItemsText(List<Map<Object?, Object?>> items, bool fr) {
+  if (items.isEmpty) return const [];
+  final counts = <String, int>{};
+  var blank = 0;
+  for (final p in items) {
+    final name = _text(p['description'], maxPieceDescription);
+    if (name.isEmpty) {
+      blank += 1;
+      continue;
+    }
+    counts[name] = (counts[name] ?? 0) + 1;
+  }
+  final named = counts.entries.toList();
+  final shown = [
+    for (final e in named.take(_maxNamedItems))
+      e.value == 1 ? e.key : '${e.value} × ${e.key}',
+  ];
+  final rest =
+      blank + named.skip(_maxNamedItems).fold<int>(0, (s, e) => s + e.value);
+  if (rest > 0) {
+    if (shown.isEmpty) {
+      shown.add(
         fr
-            ? _plural(items.length, 'article', 'articles')
-            : _plural(items.length, 'item', 'items'),
+            ? _plural(rest, 'article', 'articles')
+            : _plural(rest, 'item', 'items'),
+      );
+    } else {
+      shown.add(
+        fr
+            ? _plural(rest, 'autre article', 'autres articles')
+            : _plural(rest, 'other item', 'other items'),
       );
     }
   }
-  return parts.join(', ');
+  return shown;
 }
 
 /// The "what" of a message about a line with pieces: when its group has more

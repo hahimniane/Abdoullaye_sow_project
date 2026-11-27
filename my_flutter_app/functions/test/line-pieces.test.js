@@ -309,3 +309,29 @@ describe("a line with a pickup fee (owner decision 2026-10-18)", () => {
     assert.equal(pieces.paidFloorForLine(group, "root"), 1000);
   });
 });
+
+describe("pieceSummaryText names each Other item (owner, 2026-11-27)", () => {
+  const {pieceSummaryText} = require("../line_pieces");
+  const o = (description) => ({kind: "other", description});
+  const box = {kind: "box"};
+  it("two different items are named, not \"2 items\"", () => {
+    assert.equal(pieceSummaryText([box, box, o("TV"), o("Rice bag")]),
+        "2 boxes, TV, Rice bag");
+  });
+  it("repeats are counted per name", () => {
+    assert.equal(pieceSummaryText([o("TV"), o("Shoes"), o("TV")]),
+        "2 × TV, Shoes");
+  });
+  it("a piece with no description is counted beside the named", () => {
+    assert.equal(pieceSummaryText([o("TV"), o("")]), "TV, 1 other item");
+    assert.equal(pieceSummaryText([o("TV"), o("")], "fr"),
+        "TV, 1 autre article");
+  });
+  it("only undescribed pieces read as before", () => {
+    assert.equal(pieceSummaryText([o(""), o("")]), "2 items");
+  });
+  it("past four names the rest are counted", () => {
+    assert.equal(pieceSummaryText(["A", "B", "C", "D", "E", "F"].map(o)),
+        "A, B, C, D, 2 other items");
+  });
+});
