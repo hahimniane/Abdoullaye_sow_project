@@ -47,7 +47,18 @@ class ShippingHomeSection extends StatefulWidget {
     this.factsLoader = loadShippingHomeFacts,
     this.requestServiceBuilder,
     this.opener,
+    this.requestsOnly = false,
+    this.hideRequests = false,
   });
+
+  /// Only the Requests row, always shown (with "No open requests" at zero):
+  /// the block that follows Fleet when Fleet leads the home (docs/FLEET.md
+  /// section 17). No facts are read.
+  final bool requestsOnly;
+
+  /// The full block without its Requests row, when a Requests block already
+  /// leads the home.
+  final bool hideRequests;
 
   final String businessId;
   final String businessName;
@@ -131,6 +142,8 @@ class _ShippingHomeSectionState extends State<ShippingHomeSection> {
   /// Reads the facts once. The state always resolves: a failure, or no
   /// answer within the timeout, is [ShippingHomeFacts.unknown].
   Future<void> _loadFacts() async {
+    // The Requests-only block never shows a row that depends on the facts.
+    if (widget.requestsOnly) return;
     final token = ++_loadToken;
     ShippingHomeFacts facts;
     try {
@@ -198,10 +211,16 @@ class _ShippingHomeSectionState extends State<ShippingHomeSection> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    if (widget.requestsOnly) {
+      return HomeDestinationGroup(
+        key: const Key('home-requests'),
+        rows: [?_row(ShippingHomePlace.requests, l10n)],
+      );
+    }
     final status = widget.approvalStatus;
     final places = shippingHomePlaces(
       facts: _facts,
-      openRequests: _requests.openCount,
+      openRequests: widget.hideRequests ? 0 : _requests.openCount,
       canUseDeliveries: widget.deliveriesRow != null,
     );
     final rows = [for (final place in places) ?_row(place, l10n)];

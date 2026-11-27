@@ -8,6 +8,7 @@ import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/fleet_screen.dart';
 import 'package:my_flutter_app/services/fleet.dart';
 import 'package:my_flutter_app/services/fleet_service.dart';
+import 'package:my_flutter_app/services/fleet_tabs.dart';
 import 'package:my_flutter_app/services/lot_ledger.dart'
     show setMoneyDisplayLanguage;
 
@@ -104,6 +105,8 @@ Future<void> _pump(
   FleetAccess access = _admin,
   String language = 'en',
   double width = 390,
+  // These tests were written for the old first tab, Payments.
+  FleetTab initialTab = FleetTab.payments,
 }) async {
   tester.view.devicePixelRatio = 1;
   // Tall, so the driver page (a lazy list) builds every card.
@@ -120,6 +123,7 @@ Future<void> _pump(
         businessId: 'biz1',
         access: access,
         controller: rig.controller,
+        initialTab: initialTab,
       ),
     ),
   );
@@ -150,7 +154,33 @@ Future<void> _openPhoto(WidgetTester tester, String claimId) async {
   }
 }
 
+/// Opens a tab by its label. The Bank is not a tab: it is a section of
+/// Payments, so 'Bank' opens Payments and then the Bank section.
 Future<void> _openTab(WidgetTester tester, String label) async {
+  const sections = {'Bank', 'Banque', 'Payments', 'Paiements'};
+  if (sections.contains(label)) {
+    // Payments and Bank are the two sections of the Payments tab.
+    await _openTabOnly(
+      tester,
+      label == 'Banque'
+          ? 'Paiements'
+          : label == 'Bank'
+          ? 'Payments'
+          : label,
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('fleet-pay-section')),
+        matching: find.text(label),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return;
+  }
+  await _openTabOnly(tester, label);
+}
+
+Future<void> _openTabOnly(WidgetTester tester, String label) async {
   final tab = find.descendant(
     of: find.byKey(const Key('fleet-tabs')),
     matching: find.text(label),
@@ -466,9 +496,11 @@ void main() {
     expect(rig.backend.of('note_void').single['noteId'], 'n1');
   });
 
-  testWidgets('Settings shows only to a Fleet admin', (tester) async {
+  testWidgets('the Settings gear shows only to a Fleet admin', (tester) async {
     final staffRig = _rig(access: _staff);
     await _pump(tester, staffRig, access: _staff);
+    expect(find.byKey(const Key('fleet-settings-gear')), findsNothing);
+    // Settings is not a tab any more.
     expect(
       find.descendant(
         of: find.byKey(const Key('fleet-tabs')),
@@ -483,7 +515,8 @@ void main() {
   ) async {
     final rig = _rig();
     await _pump(tester, rig);
-    await _openTab(tester, 'Settings');
+    await _tapKey(tester, 'fleet-settings-gear');
+    expect(find.text('Fleet settings'), findsWidgets);
     // The late fee the business saved is in the form.
     expect(
       tester
@@ -586,8 +619,9 @@ void main() {
       await _openTab(tester, 'Plates');
       expect(find.byKey(const Key('fleet-car-row-c1')), findsOneWidget);
       expect(find.byKey(const Key('fleet-car-row-c2')), findsOneWidget);
-      await tester.tap(find.text('Paperwork'));
-      await tester.pumpAndSettle();
+      // Plates and Paperwork are two tabs now, not one switch.
+      expect(find.byKey(const Key('fleet-cars-mode')), findsNothing);
+      await _openTab(tester, 'Paperwork');
       // Paperwork lists the plates with a driver; "Every plate" adds the rest.
       expect(find.byKey(const Key('fleet-car-row-c1')), findsOneWidget);
       expect(find.byKey(const Key('fleet-car-row-c2')), findsNothing);
@@ -703,10 +737,22 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // Every tab.
-    for (final tab in ['Chauffeurs', 'Plaques', 'Banque', 'Réglages']) {
+    for (final tab in [
+      'À traiter',
+      'Chauffeurs',
+      'Plaques',
+      'Banque',
+      'Papiers',
+    ]) {
       await _openTab(tester, tab);
       expect(tester.takeException(), isNull, reason: tab);
     }
+    // Settings behind the gear, in French.
+    await _tapKey(tester, 'fleet-settings-gear');
+    expect(find.text('Réglages de la flotte'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
 
     // A driver's page, and each sheet on it.
     await _openTab(tester, 'Paiements');
@@ -1090,19 +1136,12 @@ void main() {
     await _tapKey(tester, 'fleet-sheet-submit');
     expect(find.text('Nothing was changed.'), findsOneWidget);
     expect(rig.backend.of('assignment_update'), isEmpty);
-    // A bad due day too.
-    await tester.enterText(
-      _field('Due day of the month, optional (1–28)'),
-      '29',
-    );
-    await _tapKey(tester, 'fleet-sheet-submit');
-    expect(find.text('Some details are missing or not valid.'), findsOneWidget);
-
     await tester.enterText(_field(r'New plate fee a month ($)'), '1,000');
-    await tester.enterText(
-      _field('Due day of the month, optional (1–28)'),
-      '10',
-    );
+    // The due day is a list (1-28), not a typed box.
+    await tester.tap(find.byKey(const Key('fleet-fee-dueday')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('10').last);
+    await tester.pumpAndSettle();
     await _tapKey(tester, 'fleet-sheet-submit');
     expect(
       find.textContaining(
@@ -1452,9 +1491,7 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     // Paperwork in French: the two scope chips.
-    await _openTab(tester, 'Plaques');
-    await tester.tap(find.text('Papiers'));
-    await tester.pumpAndSettle();
+    await _openTab(tester, 'Papiers');
     expect(find.text('Plaques avec un chauffeur (1)'), findsOneWidget);
     expect(find.text('Toutes les plaques (2)'), findsOneWidget);
     expect(tester.takeException(), isNull);

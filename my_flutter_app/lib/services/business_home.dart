@@ -182,3 +182,25 @@ bool homeCanShip({
     hasContainersAccess &&
     hasBusiness &&
     services.any(shippingHomeServices.contains);
+
+/// What heads a business home before its usual blocks (docs/FLEET.md
+/// section 17). A plate-leasing business (Landa) works Fleet all day and
+/// takes shipping only as requests from Laawol customers.
+enum HomeLead {
+  /// Fleet's places: Needs you, Drivers, Plates, Payments, Paperwork.
+  fleet,
+
+  /// The Requests row, with how many are open.
+  requests,
+}
+
+/// The blocks that lead the home, top to bottom. Fleet leads whenever this
+/// person may open Fleet (the business has the service and they hold the
+/// access), exactly as on the website, where Fleet heads the menu and the
+/// console opens on it; Requests follows when they may also ship. Everyone
+/// else gets nothing here and their home is unchanged. When this is not
+/// empty, the usual blocks follow folded under "More".
+List<HomeLead> homeLeads({required bool canOpenFleet, required bool canShip}) =>
+    canOpenFleet
+    ? [HomeLead.fleet, if (canShip) HomeLead.requests]
+    : const <HomeLead>[];

@@ -23,6 +23,8 @@ class BusinessHomeColumn extends StatelessWidget {
     required this.shipping,
     required this.services,
     this.todayRow,
+    this.lead = const [],
+    this.foldLabel = '',
   });
 
   final List<HomePart> parts;
@@ -45,10 +47,19 @@ class BusinessHomeColumn extends StatelessWidget {
   /// The quiet Today / Fleet rows that sit under the first block's header.
   final Widget? todayRow;
 
+  /// Blocks that head the home before everything else (see [homeLeads]):
+  /// Fleet, then Requests, for a plate-leasing business. When given, the
+  /// header always comes first and the usual blocks follow, folded under
+  /// [foldLabel] (docs/FLEET.md section 17).
+  final List<Widget> lead;
+  final String foldLabel;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final shopLeads = parts.isNotEmpty && parts.first == HomePart.shop;
+    final leads = lead.isNotEmpty;
+    final shopLeads =
+        !leads && parts.isNotEmpty && parts.first == HomePart.shop;
     final hasServices = parts.contains(HomePart.services);
     final shopFollows = !shopLeads && parts.contains(HomePart.shop);
     final shopBlock = shopFollows
@@ -62,6 +73,23 @@ class BusinessHomeColumn extends StatelessWidget {
             ],
           )
         : null;
+    final blocks = [
+      for (final part in parts)
+        switch (part) {
+          HomePart.shop =>
+            shopLeads || hasServices
+                ? const SizedBox.shrink()
+                : (shopBlock ?? const SizedBox.shrink()),
+          HomePart.shipping => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              shipping(),
+              if (parts.length > 1) const SizedBox(height: AppSpacing.xl),
+            ],
+          ),
+          HomePart.services => services(shopBlock),
+        },
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -72,22 +100,25 @@ class BusinessHomeColumn extends StatelessWidget {
           header,
           const SizedBox(height: 16),
         ],
-        ?todayRow,
-        for (final part in parts)
-          switch (part) {
-            HomePart.shop =>
-              shopLeads || hasServices
-                  ? const SizedBox.shrink()
-                  : (shopBlock ?? const SizedBox.shrink()),
-            HomePart.shipping => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                shipping(),
-                if (parts.length > 1) const SizedBox(height: AppSpacing.xl),
-              ],
+        if (leads) ...[
+          for (final block in lead) ...[
+            block,
+            const SizedBox(height: AppSpacing.lg),
+          ],
+          ?todayRow,
+          if (parts.isNotEmpty)
+            HomeFold(
+              key: const Key('home-more-fold'),
+              label: foldLabel,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: blocks,
+              ),
             ),
-            HomePart.services => services(shopBlock),
-          },
+        ] else ...[
+          ?todayRow,
+          ...blocks,
+        ],
       ],
     );
   }

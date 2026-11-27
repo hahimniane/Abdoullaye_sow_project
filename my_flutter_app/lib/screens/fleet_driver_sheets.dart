@@ -2,15 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/fleet.dart';
+import '../services/fleet_pickers.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../widgets/country_phone_field.dart';
+import '../widgets/fleet_pickers.dart';
 import '../widgets/fleet_widgets.dart';
 
 // The sheets of a driver's page and of the Drivers list (docs/FLEET.md
 // section 6): add or edit a driver, record a payment, add a charge, give a
 // plate, take it back, waive a bill, add a note, add a friend who drove.
 // Each reports a refusal in words inside the sheet and pops true when saved.
+
+/// The phone box looks like the other Fleet boxes.
+final _fleetPhoneDecoration = InputDecoration(
+  isDense: true,
+  border: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+  ),
+);
 
 // ---------------------------------------------------------------------------
 // Add / edit a driver.
@@ -39,7 +50,9 @@ class _FleetDriverFormSheetState extends State<FleetDriverFormSheet>
   late final _tlc = TextEditingController(text: widget.driver?.tlcLicense);
   late final _line1 = TextEditingController(text: widget.driver?.line1);
   late final _city = TextEditingController(text: widget.driver?.city);
-  late final _state = TextEditingController(text: widget.driver?.state);
+  late final _state = TextEditingController(
+    text: fleetStateCode(widget.driver?.state ?? ''),
+  );
   late final _zip = TextEditingController(text: widget.driver?.zip);
   late final _notes = TextEditingController(text: widget.driver?.notes);
   late String _status = widget.driver?.status ?? 'active';
@@ -103,40 +116,25 @@ class _FleetDriverFormSheetState extends State<FleetDriverFormSheet>
           maxLength: 120,
           enabled: !busy,
         ),
-        FleetField(
+        CountryPhoneField(
+          fieldKey: const Key('fleet-driver-phone'),
           controller: _phone,
-          label: l10n.fltFieldPhone,
-          keyboard: TextInputType.phone,
+          labelText: l10n.fltFieldPhone,
           enabled: !busy,
+          decoration: _fleetPhoneDecoration,
         ),
+        const SizedBox(height: AppSpacing.md),
         FleetField(
           controller: _tlc,
           label: l10n.fltFieldTlc,
           maxLength: 20,
           enabled: !busy,
         ),
-        FleetField(
-          controller: _line1,
-          label: l10n.fltFieldStreet,
-          maxLength: 160,
-          enabled: !busy,
-        ),
-        FleetField(
-          controller: _city,
-          label: l10n.fltFieldCity,
-          maxLength: 80,
-          enabled: !busy,
-        ),
-        FleetField(
-          controller: _state,
-          label: l10n.fltFieldState,
-          maxLength: 40,
-          enabled: !busy,
-        ),
-        FleetField(
-          controller: _zip,
-          label: l10n.fltFieldZip,
-          maxLength: 12,
+        FleetAddressFields(
+          line1: _line1,
+          city: _city,
+          state: _state,
+          zip: _zip,
           enabled: !busy,
         ),
         if (widget.driver != null)
@@ -328,6 +326,7 @@ class FleetChargeSheet extends StatefulWidget {
 class _FleetChargeSheetState extends State<FleetChargeSheet> with FleetRun {
   final _label = TextEditingController();
   final _amount = TextEditingController();
+  String _reason = fleetChargeReasons.first;
   late String _due = widget.controller.state.todayKey;
 
   @override
@@ -340,7 +339,8 @@ class _FleetChargeSheetState extends State<FleetChargeSheet> with FleetRun {
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context)!;
     final cents = fleetDollarsToCents(_amount.text);
-    if (cents == null || cents <= 0 || _label.text.trim().isEmpty) {
+    final label = fleetComposeChargeLabel(_reason, _label.text);
+    if (cents == null || cents <= 0 || label.isEmpty) {
       setState(() => error = l10n.fltRefusalBadInput);
       return;
     }
@@ -351,7 +351,7 @@ class _FleetChargeSheetState extends State<FleetChargeSheet> with FleetRun {
         c.businessId,
         driverId: widget.driver.id,
         amountCents: cents,
-        label: _label.text.trim(),
+        label: label,
         dueDayKey: _due,
       ),
     );
@@ -370,11 +370,11 @@ class _FleetChargeSheetState extends State<FleetChargeSheet> with FleetRun {
       onSubmit: _save,
       submitKey: const Key('fleet-charge-submit'),
       children: [
-        FleetField(
-          controller: _label,
-          label: l10n.fltFieldWhatFor,
-          maxLength: 120,
+        FleetChargeReasonFields(
+          reason: _reason,
+          details: _label,
           enabled: !busy,
+          onReason: (r) => setState(() => _reason = r),
         ),
         FleetField(
           controller: _amount,
@@ -858,12 +858,14 @@ class _FleetFriendSheetState extends State<FleetFriendSheet> with FleetRun {
           maxLength: 120,
           enabled: !busy,
         ),
-        FleetField(
+        CountryPhoneField(
+          fieldKey: const Key('fleet-friend-phone'),
           controller: _phone,
-          label: l10n.fltFieldPhone,
-          keyboard: TextInputType.phone,
+          labelText: l10n.fltFieldPhone,
           enabled: !busy,
+          decoration: _fleetPhoneDecoration,
         ),
+        const SizedBox(height: AppSpacing.md),
         FleetField(
           controller: _tlc,
           label: l10n.fltFieldTlc,
@@ -916,7 +918,7 @@ class _FleetPlateFeeSheetState extends State<FleetPlateFeeSheet> with FleetRun {
   late final _amount = TextEditingController(
     text: fleetCentsToInput(widget.assignment.rentCents),
   );
-  final _dueDay = TextEditingController();
+  int? _dueDay;
   String? _appliedFrom;
 
   late final String _estimate = fleetEstimateFeeEffectiveDay(
@@ -930,7 +932,6 @@ class _FleetPlateFeeSheetState extends State<FleetPlateFeeSheet> with FleetRun {
   @override
   void dispose() {
     _amount.dispose();
-    _dueDay.dispose();
     super.dispose();
   }
 
@@ -938,7 +939,7 @@ class _FleetPlateFeeSheetState extends State<FleetPlateFeeSheet> with FleetRun {
     final l10n = AppLocalizations.of(context)!;
     final input = fleetReadPlateFeeInput(
       _amount.text,
-      _dueDay.text,
+      _dueDay == null ? '' : '$_dueDay',
       widget.assignment,
     );
     if (!input.ok) {
@@ -1028,12 +1029,14 @@ class _FleetPlateFeeSheetState extends State<FleetPlateFeeSheet> with FleetRun {
           keyboard: const TextInputType.numberWithOptions(decimal: true),
           enabled: !busy,
         ),
-        FleetField(
-          controller: _dueDay,
-          label: _weekly ? l10n.fltPlateFeeDueWeek : l10n.fltPlateFeeDueMonth,
-          hint: '${widget.assignment.dueDay}',
-          keyboard: TextInputType.number,
+        FleetDueDayField(
+          key: const Key('fleet-fee-dueday'),
+          label: _weekly ? l10n.fltFieldDueWeekday : l10n.fltFieldDueDay,
+          value: _dueDay,
+          weekly: _weekly,
+          emptyLabel: l10n.fltPickKeepDay,
           enabled: !busy,
+          onChanged: (d) => setState(() => _dueDay = d),
         ),
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.md),

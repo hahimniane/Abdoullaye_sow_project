@@ -26279,11 +26279,491 @@ abstract class AppLocalizations {
   /// **'Add at least one piece.'**
   String get pcsErrPiecesRequired;
 
+  /// No description provided for @fltPickNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get fltPickNotSet;
+
+  /// No description provided for @fltPickAddNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Add new…'**
+  String get fltPickAddNew;
+
+  /// No description provided for @fltPickAddSomeone.
+  ///
+  /// In en, this message translates to:
+  /// **'Add someone new…'**
+  String get fltPickAddSomeone;
+
+  /// No description provided for @fltPickAddCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a new company…'**
+  String get fltPickAddCompany;
+
+  /// No description provided for @fltPickAddInsurer.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a new insurer…'**
+  String get fltPickAddInsurer;
+
+  /// No description provided for @fltPickBackToList.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick from the list'**
+  String get fltPickBackToList;
+
+  /// No description provided for @fltPickMake.
+  ///
+  /// In en, this message translates to:
+  /// **'Car make'**
+  String get fltPickMake;
+
+  /// No description provided for @fltPickModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get fltPickModel;
+
+  /// No description provided for @fltPickYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get fltPickYear;
+
+  /// No description provided for @fltPickChooseMake.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a make'**
+  String get fltPickChooseMake;
+
+  /// No description provided for @fltPickChooseModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a model'**
+  String get fltPickChooseModel;
+
+  /// No description provided for @fltPickChooseYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a year'**
+  String get fltPickChooseYear;
+
+  /// No description provided for @fltPickMakeFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the make first'**
+  String get fltPickMakeFirst;
+
+  /// No description provided for @fltPickModelFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the model first'**
+  String get fltPickModelFirst;
+
+  /// No description provided for @fltPickLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get fltPickLoading;
+
+  /// No description provided for @fltPickReadingVin.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the VIN…'**
+  String get fltPickReadingVin;
+
+  /// No description provided for @fltPickVinFilled.
+  ///
+  /// In en, this message translates to:
+  /// **'Filled from the VIN.'**
+  String get fltPickVinFilled;
+
+  /// No description provided for @fltPickVinMakeOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Filled the make from the VIN. Pick the model and year.'**
+  String get fltPickVinMakeOnly;
+
+  /// No description provided for @fltPickVinUnknownMake.
+  ///
+  /// In en, this message translates to:
+  /// **'The VIN is for a make that is not in the list. Pick the closest.'**
+  String get fltPickVinUnknownMake;
+
+  /// No description provided for @fltPickVinUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'This VIN could not be read. Pick the car from the lists.'**
+  String get fltPickVinUnreadable;
+
+  /// No description provided for @fltPickVinOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'The VIN service did not answer. Pick the car from the lists.'**
+  String get fltPickVinOffline;
+
+  /// No description provided for @fltPickSavedAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved as {text}. Pick the make, model and year to replace it.'**
+  String fltPickSavedAs(String text);
+
+  /// No description provided for @fltPickReasonTicket.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket'**
+  String get fltPickReasonTicket;
+
+  /// No description provided for @fltPickReasonToll.
+  ///
+  /// In en, this message translates to:
+  /// **'Toll'**
+  String get fltPickReasonToll;
+
+  /// No description provided for @fltPickReasonDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage repair'**
+  String get fltPickReasonDamage;
+
+  /// No description provided for @fltPickReasonDeductible.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance deductible'**
+  String get fltPickReasonDeductible;
+
+  /// No description provided for @fltPickReasonOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else'**
+  String get fltPickReasonOther;
+
+  /// No description provided for @fltPickDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details (optional)'**
+  String get fltPickDetails;
+
+  /// No description provided for @fltPickSayWhat.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what it is for'**
+  String get fltPickSayWhat;
+
+  /// No description provided for @fltPickTicketHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate, day, ticket number'**
+  String get fltPickTicketHint;
+
+  /// No description provided for @fltPickChooseState.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a state'**
+  String get fltPickChooseState;
+
+  /// No description provided for @fltPickChooseCity.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a city'**
+  String get fltPickChooseCity;
+
+  /// No description provided for @fltPickStateFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the state first'**
+  String get fltPickStateFirst;
+
+  /// No description provided for @fltPickOtherCity.
+  ///
+  /// In en, this message translates to:
+  /// **'Other city'**
+  String get fltPickOtherCity;
+
+  /// No description provided for @fltPickTypeCity.
+  ///
+  /// In en, this message translates to:
+  /// **'City name'**
+  String get fltPickTypeCity;
+
+  /// No description provided for @fltPickKeepDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the current day'**
+  String get fltPickKeepDay;
+
   /// No description provided for @fltTitle.
   ///
   /// In en, this message translates to:
   /// **'Fleet'**
   String get fltTitle;
+
+  /// No description provided for @fltHomeTabNeeds.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs you'**
+  String get fltHomeTabNeeds;
+
+  /// No description provided for @fltHomeTabPaperwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Paperwork'**
+  String get fltHomeTabPaperwork;
+
+  /// No description provided for @fltHomeSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet settings'**
+  String get fltHomeSettings;
+
+  /// No description provided for @fltHomeNeedsSorted.
+  ///
+  /// In en, this message translates to:
+  /// **'Most money first'**
+  String get fltHomeNeedsSorted;
+
+  /// No description provided for @fltHomeNeedsAllClear.
+  ///
+  /// In en, this message translates to:
+  /// **'All caught up'**
+  String get fltHomeNeedsAllClear;
+
+  /// No description provided for @fltHomeNeedsNothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs you right now.'**
+  String get fltHomeNeedsNothing;
+
+  /// No description provided for @fltHomeNeedsBankError.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank could not be read just now, so deposits are not in this list. They are in Payments, under Bank, once it loads.'**
+  String get fltHomeNeedsBankError;
+
+  /// No description provided for @fltHomeNeedsShowAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all {count}'**
+  String fltHomeNeedsShowAll(int count);
+
+  /// No description provided for @fltHomeNeedsDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'See details'**
+  String get fltHomeNeedsDetails;
+
+  /// No description provided for @fltHomeRemovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank took back {amount} that had paid {name}'**
+  String fltHomeRemovedTitle(String amount, String name);
+
+  /// No description provided for @fltHomeRemovedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid on {day}. Keep the payment or undo it.'**
+  String fltHomeRemovedSub(String day);
+
+  /// No description provided for @fltHomeRemovedAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Decide'**
+  String get fltHomeRemovedAction;
+
+  /// No description provided for @fltHomeClaimTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} sent a payment screenshot'**
+  String fltHomeClaimTitle(String name);
+
+  /// No description provided for @fltHomeClaimTitleAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} sent a payment screenshot · {amount}'**
+  String fltHomeClaimTitleAmount(String name, String amount);
+
+  /// No description provided for @fltHomeClaimMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'A deposit of the same amount came in. Give it to them.'**
+  String get fltHomeClaimMatch;
+
+  /// No description provided for @fltHomeClaimLook.
+  ///
+  /// In en, this message translates to:
+  /// **'It needs you to look at it.'**
+  String get fltHomeClaimLook;
+
+  /// No description provided for @fltHomeClaimAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Look at it'**
+  String get fltHomeClaimAction;
+
+  /// No description provided for @fltHomeDepositTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} came in from {name}'**
+  String fltHomeDepositTitle(String amount, String name);
+
+  /// No description provided for @fltHomeDepositSub.
+  ///
+  /// In en, this message translates to:
+  /// **'No driver pays from this name yet.'**
+  String get fltHomeDepositSub;
+
+  /// No description provided for @fltHomeDepositSubDay.
+  ///
+  /// In en, this message translates to:
+  /// **'{day} · No driver pays from this name yet.'**
+  String fltHomeDepositSubDay(String day);
+
+  /// No description provided for @fltHomeDepositAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay a driver'**
+  String get fltHomeDepositAction;
+
+  /// No description provided for @fltHomeLateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · Owed now: {amount}'**
+  String fltHomeLateTitle(String name, String amount);
+
+  /// No description provided for @fltHomeLateSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Late: {late} · {plate}'**
+  String fltHomeLateSub(String late, String plate);
+
+  /// No description provided for @fltHomeLateSubNoPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Late: {late} · No plate now'**
+  String fltHomeLateSubNoPlate(String late);
+
+  /// No description provided for @fltHomeLateSubLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Late: {late} · {plate} · Left the company'**
+  String fltHomeLateSubLeft(String late, String plate);
+
+  /// No description provided for @fltHomeLateSubNoPlateLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Late: {late} · No plate now · Left the company'**
+  String fltHomeLateSubNoPlateLeft(String late);
+
+  /// No description provided for @fltHomeOpenDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Open driver'**
+  String get fltHomeOpenDriver;
+
+  /// No description provided for @fltHomeIdleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate {plate} has no driver'**
+  String fltHomeIdleTitle(String plate);
+
+  /// No description provided for @fltHomeIdleNever.
+  ///
+  /// In en, this message translates to:
+  /// **'No driver has had it yet.'**
+  String get fltHomeIdleNever;
+
+  /// No description provided for @fltHomeIdleDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day idle} other{{days} days idle}}'**
+  String fltHomeIdleDays(int days);
+
+  /// No description provided for @fltHomeIdleMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day idle} other{{days} days idle}} · Plate fees missed, about {amount}'**
+  String fltHomeIdleMissed(int days, String amount);
+
+  /// No description provided for @fltHomeIdleAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the plate'**
+  String get fltHomeIdleAction;
+
+  /// No description provided for @fltHomePaperDiamondSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Diamond runs out · {plate} · {day}'**
+  String fltHomePaperDiamondSoon(String plate, String day);
+
+  /// No description provided for @fltHomePaperDiamondPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Diamond ran out · {plate} · {day}'**
+  String fltHomePaperDiamondPast(String plate, String day);
+
+  /// No description provided for @fltHomePaperRegistrationSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration runs out · {plate} · {day}'**
+  String fltHomePaperRegistrationSoon(String plate, String day);
+
+  /// No description provided for @fltHomePaperRegistrationPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration ran out · {plate} · {day}'**
+  String fltHomePaperRegistrationPast(String plate, String day);
+
+  /// No description provided for @fltHomePaperLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Runs out today} =1{1 day left} other{{days} days left}}'**
+  String fltHomePaperLeft(int days);
+
+  /// No description provided for @fltHomePaperAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day since it ran out} other{{days} days since it ran out}}'**
+  String fltHomePaperAgo(int days);
+
+  /// No description provided for @fltHomePaperDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver: {name}'**
+  String fltHomePaperDriver(String name);
+
+  /// No description provided for @fltHomePaperNoDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'No driver'**
+  String get fltHomePaperNoDriver;
+
+  /// No description provided for @fltHomePaperAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Update the date'**
+  String get fltHomePaperAction;
+
+  /// No description provided for @fltHomeMissingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 paperwork date is missing} other{{count} paperwork dates are missing}}'**
+  String fltHomeMissingTitle(int count);
+
+  /// No description provided for @fltHomeMissingSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the diamond and registration dates so you are warned in time.'**
+  String get fltHomeMissingSub;
+
+  /// No description provided for @fltHomeMissingAction.
+  ///
+  /// In en, this message translates to:
+  /// **'See which'**
+  String get fltHomeMissingAction;
 
   /// No description provided for @fltHomeSubtitle.
   ///
@@ -39605,6 +40085,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Back to the list'**
   String get pcsFromListBack;
+
+  /// No description provided for @hflNeedsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs you'**
+  String get hflNeedsYou;
+
+  /// No description provided for @hflNeedsYouSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments to confirm, late drivers, paperwork'**
+  String get hflNeedsYouSubtitle;
+
+  /// No description provided for @hflDrivers.
+  ///
+  /// In en, this message translates to:
+  /// **'Drivers'**
+  String get hflDrivers;
+
+  /// No description provided for @hflDriversSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Who drives which plate, who owes'**
+  String get hflDriversSubtitle;
+
+  /// No description provided for @hflPlates.
+  ///
+  /// In en, this message translates to:
+  /// **'Plates'**
+  String get hflPlates;
+
+  /// No description provided for @hflPlatesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Company, insurance and the car on each plate'**
+  String get hflPlatesSubtitle;
+
+  /// No description provided for @hflPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get hflPayments;
+
+  /// No description provided for @hflPaymentsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Who paid this week and this month'**
+  String get hflPaymentsSubtitle;
+
+  /// No description provided for @hflPaperwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Paperwork'**
+  String get hflPaperwork;
+
+  /// No description provided for @hflPaperworkSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Papers due soon or missing'**
+  String get hflPaperworkSubtitle;
+
+  /// No description provided for @hflMoreShipping.
+  ///
+  /// In en, this message translates to:
+  /// **'More shipping'**
+  String get hflMoreShipping;
+
+  /// No description provided for @hflMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get hflMore;
 
   /// Business profile, Services panel: label of the list where the owner picks the work the app's home leads with.
   ///

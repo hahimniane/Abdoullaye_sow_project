@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/fleet.dart';
+import '../services/fleet_pickers.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../widgets/fleet_pickers.dart';
 import '../widgets/fleet_widgets.dart';
 
 /// A plate's page (docs/FLEET.md section 6): its papers, the car on it, the
@@ -271,20 +273,18 @@ class FleetCarFormSheet extends StatefulWidget {
 
 class _FleetCarFormSheetState extends State<FleetCarFormSheet> with FleetRun {
   late final _plate = TextEditingController(text: widget.car?.plate);
-  late final _company = TextEditingController(text: widget.car?.company);
+  late String _company = widget.car?.company ?? '';
   late final _type = TextEditingController(text: widget.car?.vehicleType);
   late final _vin = TextEditingController(text: widget.car?.vin);
-  late final _insurer = TextEditingController(text: widget.car?.insurer);
+  late String _insurer = widget.car?.insurer ?? '';
   late final _policy = TextEditingController(text: widget.car?.policyNumber);
   late final _premium = TextEditingController(
     text: fleetCentsToInput(widget.car?.premiumCents),
   );
-  late final _dueDay = TextEditingController(
-    text: (widget.car?.insuranceDueDay ?? 0) > 0
-        ? '${widget.car!.insuranceDueDay}'
-        : '',
-  );
-  late final _paidBy = TextEditingController(text: widget.car?.insurancePaidBy);
+  late int? _dueDay = (widget.car?.insuranceDueDay ?? 0) > 0
+      ? widget.car!.insuranceDueDay
+      : null;
+  late String _paidBy = widget.car?.insurancePaidBy ?? '';
   late String _registration = widget.car?.registrationExpiry ?? '';
   late String _diamond = widget.car?.diamondExpiry ?? '';
   late bool _autopay = widget.car?.insuranceAutopay ?? false;
@@ -298,21 +298,15 @@ class _FleetCarFormSheetState extends State<FleetCarFormSheet> with FleetRun {
 
   @override
   void dispose() {
-    for (final c in [
-      _plate,
-      _company,
-      _type,
-      _vin,
-      _insurer,
-      _policy,
-      _premium,
-      _dueDay,
-      _paidBy,
-    ]) {
+    for (final c in [_plate, _type, _vin, _policy, _premium]) {
       c.dispose();
     }
     super.dispose();
   }
+
+  /// The values this business already saved on its plates for one field.
+  List<String> _known(String Function(FleetCar car) pick) =>
+      fleetKnownValues(widget.controller.state.data.cars.map(pick));
 
   bool get _carEdited {
     final car = widget.car;
@@ -343,17 +337,17 @@ class _FleetCarFormSheetState extends State<FleetCarFormSheet> with FleetRun {
         c.businessId,
         carId: widget.car?.id ?? '',
         plate: _plate.text.trim(),
-        company: _company.text.trim(),
+        company: _company,
         vehicleType: _type.text.trim(),
         vin: _vin.text.trim(),
         registrationExpiry: _registration,
         diamondExpiry: _diamond,
-        insurer: _insurer.text.trim(),
+        insurer: _insurer,
         policyNumber: _policy.text.trim(),
         premiumCents: premium,
-        insuranceDueDay: int.tryParse(_dueDay.text.trim()),
+        insuranceDueDay: _dueDay,
         insuranceAutopay: _autopay,
-        insurancePaidBy: _paidBy.text.trim(),
+        insurancePaidBy: _paidBy,
         ownership: _ownership,
         plateMoved: _carEdited && _change == 'moved',
         movedSinceDayKey: _movedSince,
@@ -379,23 +373,27 @@ class _FleetCarFormSheetState extends State<FleetCarFormSheet> with FleetRun {
           maxLength: 12,
           enabled: !busy,
         ),
-        FleetField(
-          controller: _company,
+        FleetPickOrAdd(
+          key: const Key('fleet-car-company'),
           label: l10n.fltFieldCompany,
-          maxLength: 80,
+          value: _company,
+          known: _known((c) => c.company),
+          addLabel: l10n.fltPickAddCompany,
           enabled: !busy,
-        ),
-        FleetField(
-          controller: _type,
-          label: l10n.fltFieldCarOnPlate,
-          maxLength: 80,
-          enabled: !busy,
+          onChanged: (v) => _company = v,
         ),
         FleetField(
           controller: _vin,
           label: l10n.fltFieldVin,
           maxLength: 17,
           enabled: !busy,
+        ),
+        FleetPlateCarFields(
+          key: const Key('fleet-car-type'),
+          vinController: _vin,
+          vehicleType: widget.car?.vehicleType ?? '',
+          enabled: !busy,
+          onVehicleType: (v) => _type.text = v,
         ),
         FleetDayField(
           label: l10n.fltRegistrationExpires,
@@ -411,11 +409,14 @@ class _FleetCarFormSheetState extends State<FleetCarFormSheet> with FleetRun {
           allowClear: true,
           onChanged: (d) => setState(() => _diamond = d),
         ),
-        FleetField(
-          controller: _insurer,
+        FleetPickOrAdd(
+          key: const Key('fleet-car-insurer'),
           label: l10n.fltFieldInsurer,
-          maxLength: 80,
+          value: _insurer,
+          known: _known((c) => c.insurer),
+          addLabel: l10n.fltPickAddInsurer,
           enabled: !busy,
+          onChanged: (v) => _insurer = v,
         ),
         FleetField(
           controller: _policy,
@@ -429,17 +430,26 @@ class _FleetCarFormSheetState extends State<FleetCarFormSheet> with FleetRun {
           keyboard: const TextInputType.numberWithOptions(decimal: true),
           enabled: !busy,
         ),
-        FleetField(
-          controller: _dueDay,
+        FleetDueDayField(
+          key: const Key('fleet-car-dueday'),
           label: l10n.fltFieldInsuranceDueDay,
-          keyboard: TextInputType.number,
+          value: _dueDay,
+          emptyLabel: l10n.fltPickNotSet,
           enabled: !busy,
+          onChanged: (d) => setState(() => _dueDay = d),
         ),
-        FleetField(
-          controller: _paidBy,
+        FleetPickOrAdd(
+          key: const Key('fleet-car-paidby'),
           label: l10n.fltFieldInsurancePaidBy,
-          maxLength: 80,
+          value: _paidBy,
+          known: _known((c) => c.insurancePaidBy),
+          fixed: [
+            FleetFixedChoice(fleetPayerCompany, l10n.fltOwnerCompany),
+            FleetFixedChoice(fleetPayerDriver, l10n.fltOwnerDriver),
+          ],
+          addLabel: l10n.fltPickAddSomeone,
           enabled: !busy,
+          onChanged: (v) => _paidBy = v,
         ),
         SwitchListTile(
           key: const Key('fleet-car-autopay'),

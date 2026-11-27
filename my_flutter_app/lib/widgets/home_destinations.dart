@@ -202,6 +202,98 @@ class HomeDestinationGroup extends StatelessWidget {
   }
 }
 
+/// Everything a home keeps but does not lead with, folded under one quiet
+/// row (docs/FLEET.md section 17): closed at first, one tap opens it in place
+/// and the same tap closes it. Nothing inside is removed, only folded away.
+class HomeFold extends StatefulWidget {
+  const HomeFold({
+    super.key,
+    required this.label,
+    required this.child,
+    this.initiallyOpen = false,
+  });
+
+  final String label;
+  final Widget child;
+  final bool initiallyOpen;
+
+  @override
+  State<HomeFold> createState() => _HomeFoldState();
+}
+
+class _HomeFoldState extends State<HomeFold> {
+  late bool _open = widget.initiallyOpen;
+
+  void _toggle() {
+    AppHaptics.selection();
+    setState(() => _open = !_open);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          button: true,
+          expanded: _open,
+          child: PressableScale(
+            key: const Key('home-fold-toggle'),
+            onTap: _toggle,
+            scale: 0.99,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 14,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.paper,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.hairline),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _open ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    child: const Icon(
+                      Icons.expand_more,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _open
+              ? Padding(
+                  key: const Key('home-fold-body'),
+                  padding: const EdgeInsets.only(top: AppSpacing.lg),
+                  child: widget.child,
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
 /// The small grey heading over a group on the home: sentence case, quiet.
 class HomeSectionLabel extends StatelessWidget {
   const HomeSectionLabel(this.text, {super.key});

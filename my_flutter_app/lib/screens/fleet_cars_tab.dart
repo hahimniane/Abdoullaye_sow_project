@@ -9,23 +9,30 @@ import '../widgets/fleet_widgets.dart';
 import 'fleet_car_screen.dart';
 
 /// Fleet Plates and Paperwork: the plates with who has them now, and the same
-/// list ordered by the soonest registration / diamond date.
+/// list ordered by the soonest registration / diamond date. The Fleet page
+/// gives each its own tab ([paperwork] picks which); without it the tab shows
+/// both behind a switch, as before.
 class FleetCarsTab extends StatefulWidget {
   const FleetCarsTab({
     super.key,
     required this.controller,
     required this.onOpenCar,
+    this.paperwork,
   });
 
   final FleetController controller;
   final ValueChanged<String> onOpenCar;
+
+  /// True: only the paperwork list. False: only the plates. Null: both, with
+  /// the switch.
+  final bool? paperwork;
 
   @override
   State<FleetCarsTab> createState() => _FleetCarsTabState();
 }
 
 class _FleetCarsTabState extends State<FleetCarsTab> {
-  bool _paperwork = false;
+  late bool _paperwork = widget.paperwork ?? false;
 
   /// Paperwork lists the plates with a driver; "Every plate" is the other
   /// choice.
@@ -100,24 +107,26 @@ class _FleetCarsTabState extends State<FleetCarsTab> {
                             ),
                           ),
                           const SizedBox(height: AppSpacing.md),
-                          SegmentedButton<bool>(
-                            key: const Key('fleet-cars-mode'),
-                            showSelectedIcon: false,
-                            segments: [
-                              ButtonSegment(
-                                value: false,
-                                label: Text(l10n.fltPlatesMode),
-                              ),
-                              ButtonSegment(
-                                value: true,
-                                label: Text(l10n.fltPaperworkMode),
-                              ),
-                            ],
-                            selected: {_paperwork},
-                            onSelectionChanged: (v) =>
-                                setState(() => _paperwork = v.first),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
+                          if (widget.paperwork == null)
+                            SegmentedButton<bool>(
+                              key: const Key('fleet-cars-mode'),
+                              showSelectedIcon: false,
+                              segments: [
+                                ButtonSegment(
+                                  value: false,
+                                  label: Text(l10n.fltPlatesMode),
+                                ),
+                                ButtonSegment(
+                                  value: true,
+                                  label: Text(l10n.fltPaperworkMode),
+                                ),
+                              ],
+                              selected: {_paperwork},
+                              onSelectionChanged: (v) =>
+                                  setState(() => _paperwork = v.first),
+                            ),
+                          if (widget.paperwork == null)
+                            const SizedBox(height: AppSpacing.md),
                           FleetSearchField(
                             fieldKey: const Key('fleet-cars-search'),
                             hint: l10n.fltSearchPlates,

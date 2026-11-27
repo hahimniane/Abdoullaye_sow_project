@@ -21,6 +21,7 @@ import '../theme/app_spacing.dart';
 import '../services/whatsapp_conversations.dart' show showBusinessSupportTab;
 import '../services/business_activity_queries.dart';
 import '../services/fleet.dart' show FleetAccess, showsFleetRow;
+import '../services/fleet_tabs.dart';
 import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
 import '../services/business_today.dart' show todayShowsLedgerAlerts;
@@ -982,16 +983,25 @@ class _HomeMenuState extends State<HomeMenu> {
     // one the home already used; none is re-derived. The two homes that exist
     // for one kind of business (shop only, shipping only) answer first.
     final activityCategories = _enabledActivityCategories();
+    final canShip = homeCanShip(
+      isAdmin: auth.isAdmin,
+      hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
+      hasContainersAccess: auth.hasContainersAccess,
+      hasBusiness: _businessId.isNotEmpty,
+      services: auth.effectiveBusinessServices,
+    );
+    // Fleet, then Requests, head the home of whoever may open Fleet
+    // (docs/FLEET.md section 17); the usual blocks follow, folded.
+    final leads = homeLeads(
+      canOpenFleet: _showsFleetRow(auth),
+      canShip: canShip,
+    );
+    final fleetLeads = leads.contains(HomeLead.fleet);
+    final requestsLead = leads.contains(HomeLead.requests);
     final works = homeWorks(
       canSell: layout != ShopHomeLayout.standard,
       canPark: activityCategories.contains(ServiceCategory.parking),
-      canShip: homeCanShip(
-        isAdmin: auth.isAdmin,
-        hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
-        hasContainersAccess: auth.hasContainersAccess,
-        hasBusiness: _businessId.isNotEmpty,
-        services: auth.effectiveBusinessServices,
-      ),
+      canShip: canShip,
       canSellCars: activityCategories.contains(ServiceCategory.sales),
       canTransport: activityCategories.contains(ServiceCategory.transport),
     );
@@ -1106,10 +1116,27 @@ class _HomeMenuState extends State<HomeMenu> {
                         ),
                         // One quiet row to the Today page; everything else it
                         // shows lives on its own screen, not on this home.
+                        lead: [
+                          if (fleetLeads) _fleetHomeBlock(context, auth, l10n),
+                          if (requestsLead)
+                            Column(
+                              key: const Key('home-requests-block'),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                HomeSectionLabel(l10n.hubShipping),
+                                const SizedBox(height: AppSpacing.sm),
+                                ShippingHomeSection(
+                                  businessId: _businessId,
+                                  requestsOnly: true,
+                                ),
+                              ],
+                            ),
+                        ],
+                        foldLabel: canShip ? l10n.hflMoreShipping : l10n.hflMore,
                         todayRow:
                             _businessId.isNotEmpty &&
                                 (auth.hasBusinessDashboardAccess ||
-                                    _showsFleetRow(auth))
+                                    (_showsFleetRow(auth) && !fleetLeads))
                             ? Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1117,7 +1144,9 @@ class _HomeMenuState extends State<HomeMenu> {
                                     rows: [
                                       if (auth.hasBusinessDashboardAccess)
                                         _todayDestination(context, auth, l10n),
-                                      if (_showsFleetRow(auth))
+                                      // When Fleet leads, its own block
+                                      // above carries it.
+                                      if (_showsFleetRow(auth) && !fleetLeads)
                                         _fleetDestination(context, auth, l10n),
                                     ],
                                   ),
@@ -1167,6 +1196,7 @@ class _HomeMenuState extends State<HomeMenu> {
                                   : '',
                               approvalStatus: simpleShipping ? approval : null,
                               showTail: simpleShipping,
+                              hideRequests: requestsLead,
                               containersRow: _rowKeyed(
                                 shippingRows,
                                 'open-containers',
@@ -1578,6 +1608,79 @@ HomeDestination _fleetDestination(
     );
   },
 );
+
+/// Fleet heading the home (docs/FLEET.md section 17): its five places, each
+/// opening the Fleet page straight on that tab.
+Widget _fleetHomeBlock(
+  BuildContext context,
+  AuthProvider auth,
+  AppLocalizations l10n,
+) {
+  HomeDestination row(
+    FleetTab tab,
+    IconData icon,
+    String title,
+    String subtitle,
+  ) => HomeDestination(
+    rowKey: Key('open-fleet-${tab.name}'),
+    icon: icon,
+    title: title,
+    subtitle: subtitle,
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => FleetScreen(
+            businessId: auth.businessId ?? '',
+            access: _fleetAccessOf(auth),
+            initialTab: tab,
+          ),
+        ),
+      );
+    },
+  );
+  return Column(
+    key: const Key('home-fleet-block'),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      HomeSectionLabel(l10n.fltTitle),
+      const SizedBox(height: AppSpacing.sm),
+      HomeDestinationGroup(
+        rows: [
+          row(
+            FleetTab.needs,
+            Icons.notifications_active_outlined,
+            l10n.hflNeedsYou,
+            l10n.hflNeedsYouSubtitle,
+          ),
+          row(
+            FleetTab.drivers,
+            Icons.badge_outlined,
+            l10n.hflDrivers,
+            l10n.hflDriversSubtitle,
+          ),
+          row(
+            FleetTab.plates,
+            Icons.local_taxi_outlined,
+            l10n.hflPlates,
+            l10n.hflPlatesSubtitle,
+          ),
+          row(
+            FleetTab.payments,
+            Icons.payments_outlined,
+            l10n.hflPayments,
+            l10n.hflPaymentsSubtitle,
+          ),
+          row(
+            FleetTab.paperwork,
+            Icons.description_outlined,
+            l10n.hflPaperwork,
+            l10n.hflPaperworkSubtitle,
+          ),
+        ],
+      ),
+    ],
+  );
+}
 
 /// The Today row: this month, what is waiting and the money, on its own
 /// screen (the server cuts it to this person's services and permissions).

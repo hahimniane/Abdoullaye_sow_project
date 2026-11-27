@@ -7,6 +7,8 @@ import '../services/fleet.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../widgets/country_phone_field.dart';
+import '../widgets/fleet_pickers.dart';
 import '../widgets/fleet_widgets.dart';
 
 /// Fleet settings (Fleet admin only, docs/FLEET.md): the late fee and the
@@ -54,7 +56,7 @@ class _SettingsForm extends StatefulWidget {
 
 class _SettingsFormState extends State<_SettingsForm> with FleetRun {
   final _fee = TextEditingController();
-  final _day = TextEditingController(text: '5');
+  int _day = 5;
   final _first = TextEditingController();
   final _zelleName = TextEditingController();
   final _zelleHandle = TextEditingController();
@@ -79,7 +81,7 @@ class _SettingsFormState extends State<_SettingsForm> with FleetRun {
     _seeded = true;
     final s = c.state.settings;
     _fee.text = fleetCentsToInput(s.lateFeeCents);
-    _day.text = '${s.lateFeeDay}';
+    _day = s.lateFeeDay;
     _first.text = s.lateFeeFirstMonth;
     _zelleName.text = s.zelleName;
     _zelleHandle.text = s.zelleHandle;
@@ -91,7 +93,7 @@ class _SettingsFormState extends State<_SettingsForm> with FleetRun {
   @override
   void dispose() {
     c.removeListener(_seed);
-    for (final t in [_fee, _day, _first, _zelleName, _zelleHandle]) {
+    for (final t in [_fee, _first, _zelleName, _zelleHandle]) {
       t.dispose();
     }
     super.dispose();
@@ -101,11 +103,10 @@ class _SettingsFormState extends State<_SettingsForm> with FleetRun {
     final l10n = AppLocalizations.of(context)!;
     setState(() => _saved = false);
     final cents = _fee.text.trim().isEmpty ? 0 : fleetDollarsToCents(_fee.text);
-    final day = int.tryParse(_day.text.trim());
+    final day = _day;
     final first = _first.text.trim();
     if (cents == null ||
         cents < 0 ||
-        day == null ||
         day < 1 ||
         day > 28 ||
         (first.isNotEmpty && !RegExp(r'^\d{4}-\d{2}$').hasMatch(first))) {
@@ -151,11 +152,12 @@ class _SettingsFormState extends State<_SettingsForm> with FleetRun {
             keyboard: const TextInputType.numberWithOptions(decimal: true),
             enabled: !busy,
           ),
-          FleetField(
-            controller: _day,
+          FleetDueDayField(
+            key: const Key('fleet-settings-late-day'),
             label: l10n.fltSettingLateFeeDay,
-            keyboard: TextInputType.number,
+            value: _day,
             enabled: !busy,
+            onChanged: (d) => setState(() => _day = d ?? 5),
           ),
           FleetField(
             controller: _first,
@@ -469,12 +471,19 @@ class _WhatsAppCardState extends State<_WhatsAppCard> with FleetRun {
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
-          FleetField(
+          CountryPhoneField(
+            fieldKey: const Key('fleet-wa-test-phone'),
             controller: _phone,
-            label: l10n.fltWaTestPhone,
-            keyboard: TextInputType.phone,
+            labelText: l10n.fltWaTestPhone,
             enabled: !busy,
+            decoration: InputDecoration(
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+            ),
           ),
+          const SizedBox(height: AppSpacing.md),
           OutlinedButton(
             key: const Key('fleet-wa-test'),
             onPressed: busy ? null : _sendTest,

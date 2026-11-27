@@ -15226,7 +15226,333 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pcsErrPiecesRequired => 'Add at least one piece.';
 
   @override
+  String get fltPickNotSet => 'Not set';
+
+  @override
+  String get fltPickAddNew => 'Add new…';
+
+  @override
+  String get fltPickAddSomeone => 'Add someone new…';
+
+  @override
+  String get fltPickAddCompany => 'Add a new company…';
+
+  @override
+  String get fltPickAddInsurer => 'Add a new insurer…';
+
+  @override
+  String get fltPickBackToList => 'Pick from the list';
+
+  @override
+  String get fltPickMake => 'Car make';
+
+  @override
+  String get fltPickModel => 'Model';
+
+  @override
+  String get fltPickYear => 'Year';
+
+  @override
+  String get fltPickChooseMake => 'Choose a make';
+
+  @override
+  String get fltPickChooseModel => 'Choose a model';
+
+  @override
+  String get fltPickChooseYear => 'Choose a year';
+
+  @override
+  String get fltPickMakeFirst => 'Choose the make first';
+
+  @override
+  String get fltPickModelFirst => 'Choose the model first';
+
+  @override
+  String get fltPickLoading => 'Loading…';
+
+  @override
+  String get fltPickReadingVin => 'Reading the VIN…';
+
+  @override
+  String get fltPickVinFilled => 'Filled from the VIN.';
+
+  @override
+  String get fltPickVinMakeOnly =>
+      'Filled the make from the VIN. Pick the model and year.';
+
+  @override
+  String get fltPickVinUnknownMake =>
+      'The VIN is for a make that is not in the list. Pick the closest.';
+
+  @override
+  String get fltPickVinUnreadable =>
+      'This VIN could not be read. Pick the car from the lists.';
+
+  @override
+  String get fltPickVinOffline =>
+      'The VIN service did not answer. Pick the car from the lists.';
+
+  @override
+  String fltPickSavedAs(String text) {
+    return 'Saved as $text. Pick the make, model and year to replace it.';
+  }
+
+  @override
+  String get fltPickReasonTicket => 'Ticket';
+
+  @override
+  String get fltPickReasonToll => 'Toll';
+
+  @override
+  String get fltPickReasonDamage => 'Damage repair';
+
+  @override
+  String get fltPickReasonDeductible => 'Insurance deductible';
+
+  @override
+  String get fltPickReasonOther => 'Something else';
+
+  @override
+  String get fltPickDetails => 'Details (optional)';
+
+  @override
+  String get fltPickSayWhat => 'Say what it is for';
+
+  @override
+  String get fltPickTicketHint => 'Plate, day, ticket number';
+
+  @override
+  String get fltPickChooseState => 'Choose a state';
+
+  @override
+  String get fltPickChooseCity => 'Choose a city';
+
+  @override
+  String get fltPickStateFirst => 'Choose the state first';
+
+  @override
+  String get fltPickOtherCity => 'Other city';
+
+  @override
+  String get fltPickTypeCity => 'City name';
+
+  @override
+  String get fltPickKeepDay => 'Keep the current day';
+
+  @override
   String get fltTitle => 'Fleet';
+
+  @override
+  String get fltHomeTabNeeds => 'Needs you';
+
+  @override
+  String get fltHomeTabPaperwork => 'Paperwork';
+
+  @override
+  String get fltHomeSettings => 'Fleet settings';
+
+  @override
+  String get fltHomeNeedsSorted => 'Most money first';
+
+  @override
+  String get fltHomeNeedsAllClear => 'All caught up';
+
+  @override
+  String get fltHomeNeedsNothing => 'Nothing needs you right now.';
+
+  @override
+  String get fltHomeNeedsBankError =>
+      'The bank could not be read just now, so deposits are not in this list. They are in Payments, under Bank, once it loads.';
+
+  @override
+  String fltHomeNeedsShowAll(int count) {
+    return 'Show all $count';
+  }
+
+  @override
+  String get fltHomeNeedsDetails => 'See details';
+
+  @override
+  String fltHomeRemovedTitle(String amount, String name) {
+    return 'The bank took back $amount that had paid $name';
+  }
+
+  @override
+  String fltHomeRemovedSub(String day) {
+    return 'Paid on $day. Keep the payment or undo it.';
+  }
+
+  @override
+  String get fltHomeRemovedAction => 'Decide';
+
+  @override
+  String fltHomeClaimTitle(String name) {
+    return '$name sent a payment screenshot';
+  }
+
+  @override
+  String fltHomeClaimTitleAmount(String name, String amount) {
+    return '$name sent a payment screenshot · $amount';
+  }
+
+  @override
+  String get fltHomeClaimMatch =>
+      'A deposit of the same amount came in. Give it to them.';
+
+  @override
+  String get fltHomeClaimLook => 'It needs you to look at it.';
+
+  @override
+  String get fltHomeClaimAction => 'Look at it';
+
+  @override
+  String fltHomeDepositTitle(String amount, String name) {
+    return '$amount came in from $name';
+  }
+
+  @override
+  String get fltHomeDepositSub => 'No driver pays from this name yet.';
+
+  @override
+  String fltHomeDepositSubDay(String day) {
+    return '$day · No driver pays from this name yet.';
+  }
+
+  @override
+  String get fltHomeDepositAction => 'Pay a driver';
+
+  @override
+  String fltHomeLateTitle(String name, String amount) {
+    return '$name · Owed now: $amount';
+  }
+
+  @override
+  String fltHomeLateSub(String late, String plate) {
+    return 'Late: $late · $plate';
+  }
+
+  @override
+  String fltHomeLateSubNoPlate(String late) {
+    return 'Late: $late · No plate now';
+  }
+
+  @override
+  String fltHomeLateSubLeft(String late, String plate) {
+    return 'Late: $late · $plate · Left the company';
+  }
+
+  @override
+  String fltHomeLateSubNoPlateLeft(String late) {
+    return 'Late: $late · No plate now · Left the company';
+  }
+
+  @override
+  String get fltHomeOpenDriver => 'Open driver';
+
+  @override
+  String fltHomeIdleTitle(String plate) {
+    return 'Plate $plate has no driver';
+  }
+
+  @override
+  String get fltHomeIdleNever => 'No driver has had it yet.';
+
+  @override
+  String fltHomeIdleDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days idle',
+      one: '1 day idle',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fltHomeIdleMissed(int days, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days idle',
+      one: '1 day idle',
+    );
+    return '$_temp0 · Plate fees missed, about $amount';
+  }
+
+  @override
+  String get fltHomeIdleAction => 'Open the plate';
+
+  @override
+  String fltHomePaperDiamondSoon(String plate, String day) {
+    return 'Diamond runs out · $plate · $day';
+  }
+
+  @override
+  String fltHomePaperDiamondPast(String plate, String day) {
+    return 'Diamond ran out · $plate · $day';
+  }
+
+  @override
+  String fltHomePaperRegistrationSoon(String plate, String day) {
+    return 'Registration runs out · $plate · $day';
+  }
+
+  @override
+  String fltHomePaperRegistrationPast(String plate, String day) {
+    return 'Registration ran out · $plate · $day';
+  }
+
+  @override
+  String fltHomePaperLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days left',
+      one: '1 day left',
+      zero: 'Runs out today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fltHomePaperAgo(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days since it ran out',
+      one: '1 day since it ran out',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fltHomePaperDriver(String name) {
+    return 'Driver: $name';
+  }
+
+  @override
+  String get fltHomePaperNoDriver => 'No driver';
+
+  @override
+  String get fltHomePaperAction => 'Update the date';
+
+  @override
+  String fltHomeMissingTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count paperwork dates are missing',
+      one: '1 paperwork date is missing',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fltHomeMissingSub =>
+      'Add the diamond and registration dates so you are warned in time.';
+
+  @override
+  String get fltHomeMissingAction => 'See which';
 
   @override
   String get fltHomeSubtitle => 'Payments, drivers, plates and bank';
@@ -23450,6 +23776,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pcsFromListBack => 'Back to the list';
+
+  @override
+  String get hflNeedsYou => 'Needs you';
+
+  @override
+  String get hflNeedsYouSubtitle =>
+      'Payments to confirm, late drivers, paperwork';
+
+  @override
+  String get hflDrivers => 'Drivers';
+
+  @override
+  String get hflDriversSubtitle => 'Who drives which plate, who owes';
+
+  @override
+  String get hflPlates => 'Plates';
+
+  @override
+  String get hflPlatesSubtitle =>
+      'Company, insurance and the car on each plate';
+
+  @override
+  String get hflPayments => 'Payments';
+
+  @override
+  String get hflPaymentsSubtitle => 'Who paid this week and this month';
+
+  @override
+  String get hflPaperwork => 'Paperwork';
+
+  @override
+  String get hflPaperworkSubtitle => 'Papers due soon or missing';
+
+  @override
+  String get hflMoreShipping => 'More shipping';
+
+  @override
+  String get hflMore => 'More';
 
   @override
   String get nhmMainWorkTitle => 'Main work';

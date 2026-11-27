@@ -529,11 +529,18 @@ answer requests that come from Laawol customers, not register packages. So:
   notification that opened another section is left alone. Staff without Fleet
   keep the usual order and Today. Pure rules: `fleetLeads`, `fleetFirstTabs`,
   `landingBusinessTab` in `admin_web/src/lib/business-sidebar.ts` (tested).
-- **App.** Fleet is a main work (`businesses/{id}.mainWork = "fleet"`); a
-  business with Fleet on that never chose a main work leads with it. The home
-  opens with the Fleet block (Needs you, Drivers, Plates, Payments), then a
-  Requests row with the count waiting for a price, then everything else under
-  a folded "More shipping". Nothing is removed (owner rule: a redesign keeps
-  everything reachable).
+- **App.** Same rule as the website, no server change: whoever may open Fleet
+  gets a home that starts with the Fleet block (Needs you, Drivers, Plates,
+  Payments, Paperwork, each opening the Fleet page on that tab), then the
+  Requests row (always shown, with the open count; only for someone who may
+  ship), then Today, then every usual block folded under "More shipping"
+  (`HomeFold`, closed at first). The folded shipping block drops its own
+  Requests row so it is never shown twice. The `mainWork` setting is not
+  used for this (the server accepts only the works it knows). Pure rule:
+  `homeLeads` in `lib/services/business_home.dart`; tests in
+  `test/home_fleet_leads_test.dart`. The Fleet page itself now opens on
+  Needs you with tabs Drivers, Plates, Payments, Paperwork and the gear for
+  settings, like the website, and its forms use the same pick lists
+  (section 16).
 - Requests reach a business only while it takes requests (Shipping >
   Requests > Request settings) and has a price list for the country.
