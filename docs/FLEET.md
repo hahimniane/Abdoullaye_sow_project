@@ -545,6 +545,14 @@ answer requests that come from Laawol customers, not register packages. So:
 - Requests reach a business only while it takes requests (Shipping >
   Requests > Request settings) and has a price list for the country.
 
+**Each person's copy of the services (2026-11-27).** The app reads
+`users/{uid}.businessServices`, the website reads the business. The switch
+used to write only the business, so Landa's team never saw Fleet lead in the
+app. Now `fleet_enable` copies the services (Fleet as the switch says) to every
+owner and staff member, the 15-minute Fleet tick repairs any copy that drifted,
+and `updateBusinessProfile` keeps Fleet exactly as it was
+(`fleet_member_services.js`).
+
 ## 18. Fleet alerts to admins (2026-11-26)
 
 Owner, 2026-11-26: admins hear about Fleet activity they did not do; not too

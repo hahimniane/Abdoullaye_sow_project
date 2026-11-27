@@ -604,6 +604,7 @@ const {
   renderContainerLabels,
 } = require("./container_labels");
 const inventory = require("./inventory");
+const fleetMemberServices = require("./fleet_member_services");
 const businessMainWork = require("./business_main_work");
 // Staff activity alerts: a car parked / a package saved, told to the others
 // (namespaced: its pure rules share names like toMillis with this file).
@@ -12483,13 +12484,17 @@ exports.updateBusinessProfile = onCall(
       }
       // The owner switches Inventory here like any other service
       // (2026-10-21); the public application still only requests it.
-      const normalizedServices = inventory.ownerEditableServices(
-          normalizeBusinessServices(
-              enabledServices,
-              current.enabledServices || DEFAULT_BUSINESS_SERVICES,
+      // Fleet is a platform-admin switch: a profile save keeps it as it was.
+      const normalizedServices = fleetMemberServices.keepFleetOnProfileSave(
+          inventory.ownerEditableServices(
+              normalizeBusinessServices(
+                  enabledServices,
+                  current.enabledServices || DEFAULT_BUSINESS_SERVICES,
+              ),
+              current.enabledServices, user.role === "admin",
+              VALID_BUSINESS_SERVICES, {ownerMayToggle: true},
           ),
-          current.enabledServices, user.role === "admin",
-          VALID_BUSINESS_SERVICES, {ownerMayToggle: true},
+          current,
       );
       const holdMode = carHoldPricingMode === "per_day" ? "per_day" : "flat";
       const holdFlatFee = numberOrFallback(carHoldFlatFee, 500);

@@ -12,6 +12,7 @@ const fleetWhatsApp = require("./fleet_whatsapp");
 const fleetClaims = require("./fleet_claims");
 const fleetDriverView = require("./fleet_driver_view");
 const fleetDriverPush = require("./fleet_driver_push");
+const fleetMembers = require("./fleet_member_services");
 const {messageDocId} = require("./whatsapp_conversations");
 const {parseFleetSheet, previousMonth} = require("./fleet_import");
 
@@ -185,6 +186,37 @@ function createFleetHandlers(deps) {
 
   // ---- settings and the switch -----------------------------------------
 
+  /**
+   * Brings every owner's and staff member's copy of the business's services
+   * (users/{uid}.businessServices, what the app reads) in step with the
+   * business, Fleet as its switch says (docs/FLEET.md section 17). Writes
+   * only the copies that differ.
+   *
+   * @param {string} businessId The business.
+   * @param {object} business Its doc data.
+   * @return {Promise<number>} How many copies were rewritten.
+   */
+  async function syncMemberServices(businessId, business) {
+    const want = fleetMembers.servicesWithFleet(
+        deps.normalizeBusinessServices(business.enabledServices),
+        fleetOn(business));
+    const users = await db().collection("users")
+        .where("businessId", "==", businessId)
+        .where("role", "in", ["staff", "businessOwner"]).get();
+    const stale = users.docs.filter((d) =>
+      fleetMembers.memberServicesStale(d.get("businessServices"), want));
+    if (!stale.length) return 0;
+    const batch = db().batch();
+    for (const d of stale) {
+      batch.set(d.ref, {businessServices: want,
+        updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    }
+    await batch.commit();
+    deps.logger.info("Fleet: team services brought in step",
+        {businessId, count: stale.length});
+    return stale.length;
+  }
+
   async function setEnabled(uid, data) {
     const user = await deps.getUserProfile(uid);
     deps.requireAdminCapability(user, "businesses",
@@ -203,6 +235,9 @@ function createFleetHandlers(deps) {
       fleet: {enabled: data.enabled},
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    await syncMemberServices(businessId,
+        {...business, enabledServices: services,
+          fleet: {...(business.fleet || {}), enabled: data.enabled}});
     await audit(businessId, uid, "fleet_settings", businessId,
         data.enabled ? "fleet_enabled" : "fleet_disabled",
         data.enabled ? "Fleet switched on" : "Fleet switched off");
@@ -1836,6 +1871,14 @@ function createFleetHandlers(deps) {
     // Drivers' payment reports against the clock, and (once an hour) a sweep
     // for deposits nobody looked at.
     for (const b of businesses.docs) {
+      // Each team member's copy of the services, so Fleet leads their app
+      // (a no-op read once in step; never blocks the rest of the tick).
+      try {
+        await syncMemberServices(b.id, b.data() || {});
+      } catch (error) {
+        deps.logger.warn("Fleet team services check failed",
+            {businessId: b.id, error: String(error?.message || error)});
+      }
       try {
         await runClaimTimers(b.id, b.data() || {}, nowMs);
         if (now.minute < 15) await sweepDeposits(b.id, b.data() || {});
@@ -3347,7 +3390,7 @@ function createFleetHandlers(deps) {
   return {fleetAction, fleetDaily, runFleetDay, matchBankDeposits,
     handleClaimInbound, runClaimTimers, rematchWaiting, sweepDeposits,
     noteRemovedDeposits,
-    fleetBankTick, sendReceipt, remindBusiness};
+    fleetBankTick, sendReceipt, remindBusiness, syncMemberServices};
 }
 
 module.exports = {FLEET_REFUSALS, createFleetHandlers, sniffImageType};

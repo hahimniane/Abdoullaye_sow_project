@@ -73,6 +73,24 @@ before(async () => {
   await act(PLATFORM, "fleet_enable", {enabled: true});
 });
 
+describe("Fleet in each team member's services (FLEET.md section 17)", () => {
+  const services = async (uid) =>
+    (await db.collection("users").doc(uid).get()).get("businessServices");
+
+  it("switching Fleet on reaches every owner and staff member", async () => {
+    for (const uid of [OWNER, ADMIN, STAFF, PARKING]) {
+      assert.ok((await services(uid)).includes("fleet"), uid);
+    }
+  });
+
+  it("a stale copy is brought back by the switch", async () => {
+    await db.collection("users").doc(STAFF).set(
+        {businessServices: ["barrelShipping"]}, {merge: true});
+    await act(PLATFORM, "fleet_enable", {enabled: true});
+    assert.deepEqual(await services(STAFF), ["barrelShipping", "fleet"]);
+  });
+});
+
 describe("Fleet alerts to admins", () => {
   let carId = "";
 
