@@ -18566,6 +18566,8 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 .press:active:not(:disabled) { transform: scale(0.97); }
 .fleet-anchor { scroll-margin-top: 140px; }
 .fleet-home > .fleet-back { justify-self: start; align-self: start; width: auto; }
+/* A scrolling tab row must never widen the page on a phone. */
+.fleet-home > *, .fleet-home-bar > * { min-width: 0; }
 .fleet-home-bar {
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -18708,3 +18710,15 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 @media (prefers-reduced-transparency: reduce) {
   .fleet-home-bar { backdrop-filter: none; -webkit-backdrop-filter: none; background: #f7f7f7; }
 }
+
+/* Fleet form pick lists (docs/FLEET.md section 16): the shared address,
+   phone and pick-or-add fields dressed like the other Fleet form fields. */
+.fleet-pick-add { display: flex; flex-direction: column; gap: 6px; }
+.fleet-pick-back { align-self: flex-start; font-size: 13px; padding: 4px 10px; }
+.lst-field.fleet-address-street .customer-address-field > label,
+.lst-field.fleet-phone .customer-phone-label > label { color: var(--ink-soft, #0b2f5b); font-size: 13px; font-weight: 700; }
+.lst-field.fleet-address-street .customer-address-control { border: 1.5px solid var(--rule); border-radius: 12px; }
+.lst-field.fleet-address-street .customer-address-control input { padding: 11px 8px; }
+.lst-field.fleet-phone .customer-phone-label { display: flex; flex-direction: column; gap: 6px; }
+.fleet-car-note { grid-column: 1 / -1; margin: 0; }
+.lst-field.fleet-phone .customer-phone-control { border: 1.5px solid var(--rule); border-radius: 12px; }

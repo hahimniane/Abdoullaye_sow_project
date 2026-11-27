@@ -27,6 +27,7 @@ import {
 import { moneyText } from "@/lib/invoice-ledger";
 
 import type { FleetState } from "./fleet-data";
+import { FleetAddressFields, FleetPhoneField } from "./fleet-pickers";
 import { fleetLang, FleetModal, SaveButton, useFleetRun } from "./fleet-ui";
 
 type Row = Record<string, unknown> & { id: string };
@@ -589,30 +590,17 @@ function FriendDialog({ businessId, driver, state, onClose }: { businessId: stri
           <span>Friend&apos;s full name</span>
           <input autoFocus data-no-translate disabled={busy} maxLength={120} value={draft.name} onChange={set("name")} />
         </label>
-        <label className="lst-field">
-          <span>Phone</span>
-          <input data-no-translate disabled={busy} inputMode="tel" value={draft.phone} onChange={set("phone")} />
-        </label>
+        <FleetPhoneField id="fleet-friend-phone" value={draft.phone} onChange={(phone) => setDraft((d) => ({ ...d, phone }))} disabled={busy} />
         <label className="lst-field">
           <span>TLC licence</span>
           <input data-no-translate disabled={busy} maxLength={20} value={draft.tlcLicense} onChange={set("tlcLicense")} />
         </label>
-        <label className="lst-field wide">
-          <span>Street address</span>
-          <input data-no-translate disabled={busy} maxLength={160} value={draft.line1} onChange={set("line1")} />
-        </label>
-        <label className="lst-field">
-          <span>City</span>
-          <input data-no-translate disabled={busy} maxLength={80} value={draft.city} onChange={set("city")} />
-        </label>
-        <label className="lst-field">
-          <span>State</span>
-          <input data-no-translate disabled={busy} maxLength={40} value={draft.state} onChange={set("state")} />
-        </label>
-        <label className="lst-field">
-          <span>ZIP code</span>
-          <input data-no-translate disabled={busy} maxLength={12} value={draft.zip} onChange={set("zip")} />
-        </label>
+        <FleetAddressFields
+          idPrefix="fleet-friend"
+          value={{ line1: draft.line1, city: draft.city, state: draft.state, zip: draft.zip }}
+          onChange={(a) => setDraft((d) => ({ ...d, ...a }))}
+          disabled={busy}
+        />
         <label className="lst-field">
           <span>First day</span>
           <input disabled={busy} type="date" value={draft.from} onChange={set("from")} />

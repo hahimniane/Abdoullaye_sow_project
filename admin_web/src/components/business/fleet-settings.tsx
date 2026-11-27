@@ -18,6 +18,7 @@ import { moneyText } from "@/lib/invoice-ledger";
 import { FleetBankSchedule } from "./fleet-bank";
 import { FleetWhatsAppPanel, type WhatsAppDriver } from "./fleet-whatsapp";
 import { callFleet } from "./fleet-data";
+import { DueDaySelect } from "./fleet-pickers";
 import { fleetLang, SaveButton, useFleetRun } from "./fleet-ui";
 
 export function FleetSettings({
@@ -86,10 +87,7 @@ function SettingsForm({ businessId, settings }: { businessId: string; settings: 
           <span>Late fee ($, 0 for none)</span>
           <input data-no-translate disabled={busy} inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} />
         </label>
-        <label className="lst-field">
-          <span>Late fee applies on day of the month (1–28)</span>
-          <input data-no-translate disabled={busy} inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} />
-        </label>
+        <DueDaySelect label="Late fee applies on day of the month" value={day} onChange={setDay} disabled={busy} />
         <label className="lst-field">
           <span>First month the late fee applies</span>
           <input disabled={busy} type="month" value={first} onChange={(e) => setFirst(e.target.value)} />

@@ -490,3 +490,29 @@ Claude Design prototype (canvas FF7Q2ZqXrz9HzeyE6Wqp6z).
 - One `bank_status` read and one open-claims listener per Fleet page, shared
   by Needs you and Payments. A one-time note tells staff where the items went
   (`laawol:notice:fleet-one-page-2026-11`, until 2027-02-01).
+
+## 16. Pick lists on every Fleet form (2026-11-26)
+
+Owner rule: anything that can be chosen from a list is a list, not a typed
+box. Components in `admin_web/src/components/business/fleet-pickers.tsx`,
+pure helpers (tested) in `admin_web/src/lib/fleet-pickers.ts`.
+
+- **Plate:** Company, Insurer and Insurance paid by are pick-or-add lists of
+  the values the business already uses (case and spacing folded, so typing
+  "dala cars inc" picks "Dala Cars Inc"); "paid by" always offers The company
+  and The driver. The car is make / model / year from the canonical catalog
+  (`car-catalog.ts`), still saved as one `vehicleType` line ("Toyota Camry
+  2021"); a full VIN fills them (`lib/vin-decode.ts`, shared with the car
+  listing form). A saved line the catalog cannot read is kept until a make is
+  picked. Insurance due day is 1–28.
+- **Driver and friend who drove:** phone uses the shared calling-code field;
+  the street is the Google address lookup (`AddressAutocomplete`) and fills
+  city, state and ZIP; state is the full US list (saved as the 2-letter code),
+  city is that state's list with "Other city" for anything else.
+- **Days:** the rent due day, a fee change's due day and the late-fee day are
+  1–28 lists; weekly rent picks Monday … Sunday (stored 1–7).
+- **Charge:** the reason is a list (Ticket, Toll, Damage repair, Insurance
+  deductible, Something else) plus details; saved as one label "Ticket ·
+  T712000C · Oct 3". "Charge this ticket" from the search arrives split.
+- Kept typed on purpose: names, plate, VIN, TLC licence, policy number,
+  amounts, ZIP, notes and Zelle details (free values by nature).

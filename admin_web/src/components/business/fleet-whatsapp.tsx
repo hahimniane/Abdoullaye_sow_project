@@ -11,6 +11,7 @@ import { MessageCircle, X } from "lucide-react";
 import { Panel } from "@/components/panel";
 import type { FleetSettingsView } from "@/lib/fleet";
 
+import { FleetPhoneField } from "./fleet-pickers";
 import { fleetLang, SaveButton, useFleetRun } from "./fleet-ui";
 
 type TestAnswer = { receipt?: string; reminder?: string };
@@ -179,17 +180,7 @@ export function FleetWhatsAppPanel({
       </fieldset>
 
       <div className="lst-form-grid">
-        <label className="lst-field">
-          <span>Your phone for a test</span>
-          <input
-            data-no-translate
-            disabled={busy}
-            inputMode="tel"
-            placeholder="+1 718 555 0100"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </label>
+        <FleetPhoneField id="fleet-whatsapp-test-phone" label="Your phone for a test" value={phone} onChange={setPhone} disabled={busy} />
       </div>
       {testResult && <p className="fleet-saved" role="status">{testResult}</p>}
       <div className="fleet-actions">

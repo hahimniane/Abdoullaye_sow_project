@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CarFront, FileWarning, Plus, Search, X } from "lucide-react";
 
 import { Panel } from "@/components/panel";
@@ -24,12 +24,17 @@ import {
   filterCarRows,
   type CarFilter,
 } from "@/lib/fleet";
+import { knownValues } from "@/lib/fleet-pickers";
 import { moneyText } from "@/lib/invoice-ledger";
 
 import type { FleetState } from "./fleet-data";
+import { DueDaySelect, PickOrAdd, PlateCarFields } from "./fleet-pickers";
 import { ExpiryChip, fleetLang, FleetModal, SaveButton, useFleetRun } from "./fleet-ui";
 
 type Row = Record<string, unknown> & { id: string };
+
+// Who usually pays a plate's insurance; any other payer is added once.
+const INSURANCE_PAYERS = ["The company", "The driver"];
 const s = (v: unknown) => String(v ?? "").trim();
 
 /** A date that reads red when it is past. */
@@ -202,6 +207,7 @@ export function FleetCars({
         <CarFormDialog
           businessId={businessId}
           car={null}
+          cars={state.data.cars}
           onClose={() => setAdding(false)}
           onSaved={(id) => {
             setAdding(false);
@@ -216,11 +222,13 @@ export function FleetCars({
 function CarFormDialog({
   businessId,
   car,
+  cars,
   onClose,
   onSaved,
 }: {
   businessId: string;
   car: Row | null;
+  cars: readonly Row[];
   onClose: () => void;
   onSaved: (carId: string) => void;
 }) {
@@ -247,6 +255,12 @@ function CarFormDialog({
   const carEdited = hadCar && (d.vin.trim().toUpperCase() !== s(car?.vin).toUpperCase() || d.vehicleType.trim() !== s(car?.vehicleType));
   const { busy, error, setError, run } = useFleetRun(businessId);
   const set = (key: keyof typeof d) => (event: { target: { value: string } }) => setD((x) => ({ ...x, [key]: event.target.value }));
+  const put = (key: keyof typeof d) => (value: string) => setD((x) => ({ ...x, [key]: value }));
+  const setVehicleType = useCallback((vehicleType: string) => setD((x) => ({ ...x, vehicleType })), []);
+  // What this business already uses, so the same company is never typed twice.
+  const companies = useMemo(() => knownValues(cars, "company"), [cars]);
+  const insurers = useMemo(() => knownValues(cars, "insurer"), [cars]);
+  const payers = useMemo(() => knownValues(cars, "insurancePaidBy"), [cars]);
 
   async function save() {
     const premium = d.premium.trim() ? dollarsToCents(d.premium) : 0;
@@ -299,18 +313,12 @@ function CarFormDialog({
           <span>Plate</span>
           <input autoFocus data-no-translate disabled={busy} maxLength={12} value={d.plate} onChange={set("plate")} />
         </label>
-        <label className="lst-field">
-          <span>Company</span>
-          <input data-no-translate disabled={busy} maxLength={80} value={d.company} onChange={set("company")} />
-        </label>
-        <label className="lst-field">
-          <span>Car on this plate</span>
-          <input data-no-translate disabled={busy} maxLength={80} value={d.vehicleType} onChange={set("vehicleType")} />
-        </label>
+        <PickOrAdd label="Company" value={d.company} known={companies} onChange={put("company")} disabled={busy} addLabel="Add a new company…" />
         <label className="lst-field">
           <span>VIN</span>
           <input data-no-translate disabled={busy} maxLength={17} value={d.vin} onChange={set("vin")} />
         </label>
+        <PlateCarFields vehicleType={d.vehicleType} vin={d.vin} onVehicleType={setVehicleType} disabled={busy} />
         <label className="lst-field">
           <span>Registration expires</span>
           <input disabled={busy} type="date" value={d.registrationExpiry} onChange={set("registrationExpiry")} />
@@ -319,10 +327,7 @@ function CarFormDialog({
           <span>Diamond expires</span>
           <input disabled={busy} type="date" value={d.diamondExpiry} onChange={set("diamondExpiry")} />
         </label>
-        <label className="lst-field">
-          <span>Insurer</span>
-          <input data-no-translate disabled={busy} maxLength={80} value={d.insurer} onChange={set("insurer")} />
-        </label>
+        <PickOrAdd label="Insurer" value={d.insurer} known={insurers} onChange={put("insurer")} disabled={busy} addLabel="Add a new insurer…" />
         <label className="lst-field">
           <span>Policy number</span>
           <input data-no-translate disabled={busy} maxLength={40} value={d.policyNumber} onChange={set("policyNumber")} />
@@ -331,14 +336,8 @@ function CarFormDialog({
           <span>Monthly premium ($)</span>
           <input data-no-translate disabled={busy} inputMode="decimal" value={d.premium} onChange={set("premium")} />
         </label>
-        <label className="lst-field">
-          <span>Insurance due day</span>
-          <input data-no-translate disabled={busy} inputMode="numeric" value={d.insuranceDueDay} onChange={set("insuranceDueDay")} />
-        </label>
-        <label className="lst-field">
-          <span>Insurance paid by</span>
-          <input data-no-translate disabled={busy} maxLength={80} value={d.insurancePaidBy} onChange={set("insurancePaidBy")} />
-        </label>
+        <DueDaySelect label="Insurance due day" value={d.insuranceDueDay} onChange={put("insuranceDueDay")} disabled={busy} emptyLabel="Not set" />
+        <PickOrAdd label="Insurance paid by" value={d.insurancePaidBy} known={payers} fixed={INSURANCE_PAYERS} onChange={put("insurancePaidBy")} disabled={busy} addLabel="Add someone new…" />
         <label className="lst-field">
           <span>Who owns the car</span>
           <select disabled={busy} value={d.ownership} onChange={set("ownership")}>
@@ -519,7 +518,7 @@ function CarPage({
           </div>
         )}
       </Panel>
-      {editing && <CarFormDialog businessId={businessId} car={car} onClose={() => setEditing(false)} onSaved={() => setEditing(false)} />}
+      {editing && <CarFormDialog businessId={businessId} car={car} cars={state.data.cars} onClose={() => setEditing(false)} onSaved={() => setEditing(false)} />}
     </div>
   );
 }

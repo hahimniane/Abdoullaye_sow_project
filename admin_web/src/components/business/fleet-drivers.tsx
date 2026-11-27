@@ -29,6 +29,7 @@ import {
   type FleetSettingsView,
 } from "@/lib/fleet";
 import { driverBalance, type FleetBill } from "@/lib/fleet-billing";
+import { CHARGE_REASONS, composeChargeLabel, splitChargeLabel } from "@/lib/fleet-pickers";
 import { moneyText } from "@/lib/invoice-ledger";
 import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 
@@ -36,6 +37,7 @@ import type { FleetState } from "./fleet-data";
 import { FriendsPanel, NotesPanel, ProfileTenureFacts, TrackRecordPanel } from "./fleet-profile";
 import { fleetLang, FleetModal, Money, SaveButton, useFleetRun } from "./fleet-ui";
 import { FleetPayerNames } from "./fleet-payer-names";
+import { ChargeReasonFields, DueDaySelect, FleetAddressFields, FleetPhoneField } from "./fleet-pickers";
 import { FleetRemindButton } from "./fleet-whatsapp";
 
 type Row = Record<string, unknown> & { id: string };
@@ -285,30 +287,17 @@ function DriverFormDialog({
           <span>Full name</span>
           <input autoFocus data-no-translate disabled={busy} maxLength={120} value={draft.name} onChange={set("name")} />
         </label>
-        <label className="lst-field">
-          <span>Phone</span>
-          <input data-no-translate disabled={busy} inputMode="tel" value={draft.phone} onChange={set("phone")} />
-        </label>
+        <FleetPhoneField id="fleet-driver-phone" value={draft.phone} onChange={(phone) => setDraft((d) => ({ ...d, phone }))} disabled={busy} />
         <label className="lst-field">
           <span>TLC licence</span>
           <input data-no-translate disabled={busy} maxLength={20} value={draft.tlcLicense} onChange={set("tlcLicense")} />
         </label>
-        <label className="lst-field wide">
-          <span>Street address</span>
-          <input data-no-translate disabled={busy} maxLength={160} value={draft.line1} onChange={set("line1")} />
-        </label>
-        <label className="lst-field">
-          <span>City</span>
-          <input data-no-translate disabled={busy} maxLength={80} value={draft.city} onChange={set("city")} />
-        </label>
-        <label className="lst-field">
-          <span>State</span>
-          <input data-no-translate disabled={busy} maxLength={40} value={draft.state} onChange={set("state")} />
-        </label>
-        <label className="lst-field">
-          <span>ZIP code</span>
-          <input data-no-translate disabled={busy} maxLength={12} value={draft.zip} onChange={set("zip")} />
-        </label>
+        <FleetAddressFields
+          idPrefix="fleet-driver"
+          value={{ line1: draft.line1, city: draft.city, state: draft.state, zip: draft.zip }}
+          onChange={(a) => setDraft((d) => ({ ...d, ...a }))}
+          disabled={busy}
+        />
         {driver && (
           <label className="lst-field">
             <span>Status</span>
@@ -804,7 +793,10 @@ function ChargeDialog({
   initialLabel?: string;
 }) {
   const [amount, setAmount] = useState("");
-  const [label, setLabel] = useState(initialLabel);
+  // A ticket from the search arrives as "Ticket · T712000C · Oct 3".
+  const [reason, setReason] = useState(() => (initialLabel ? splitChargeLabel(initialLabel).reason : CHARGE_REASONS[0]));
+  const [details, setDetails] = useState(() => splitChargeLabel(initialLabel).details);
+  const label = composeChargeLabel(reason, details);
   const [due, setDue] = useState(todayKey);
   const { busy, error, setError, run } = useFleetRun(businessId);
 
@@ -842,13 +834,10 @@ function ChargeDialog({
     >
       {error && <div className="lst-form-error" role="alert">{error}</div>}
       <div className="lst-form-grid">
-        <label className="lst-field wide">
-          <span>What for</span>
-          <input autoFocus data-no-translate disabled={busy} maxLength={120} value={label} onChange={(e) => setLabel(e.target.value)} />
-        </label>
+        <ChargeReasonFields reason={reason} details={details} onReason={setReason} onDetails={setDetails} disabled={busy} />
         <label className="lst-field">
           <span>Amount ($)</span>
-          <input data-no-translate disabled={busy} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input autoFocus={Boolean(reason)} data-no-translate disabled={busy} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </label>
         <label className="lst-field">
           <span>Due on</span>
@@ -957,10 +946,13 @@ function GiveCarDialog({
             <option value="weekly">Weekly</option>
           </select>
         </label>
-        <label className="lst-field">
-          <span>{period === "weekly" ? "Due weekday (1 = Monday … 7 = Sunday)" : "Due day of the month (1–28)"}</span>
-          <input data-no-translate disabled={busy} inputMode="numeric" value={dueDay} onChange={(e) => setDueDay(e.target.value)} />
-        </label>
+        <DueDaySelect
+          label={period === "weekly" ? "Due weekday" : "Due day of the month"}
+          weekly={period === "weekly"}
+          value={dueDay}
+          onChange={setDueDay}
+          disabled={busy}
+        />
       </div>
     </FleetModal>
   );
@@ -1120,10 +1112,14 @@ function ChangeFeeDialog({
               <span>{weekly ? "New plate fee a week ($)" : "New plate fee a month ($)"}</span>
               <input autoFocus data-no-translate disabled={busy} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </label>
-            <label className="lst-field">
-              <span>{weekly ? "Due weekday, optional (1 = Monday … 7 = Sunday)" : "Due day of the month, optional (1–28)"}</span>
-              <input data-no-translate disabled={busy} inputMode="numeric" placeholder={String(assignment.dueDay ?? "")} value={dueDay} onChange={(e) => setDueDay(e.target.value)} />
-            </label>
+            <DueDaySelect
+              label={weekly ? "Due weekday" : "Due day of the month"}
+              weekly={weekly}
+              value={dueDay}
+              onChange={setDueDay}
+              disabled={busy}
+              emptyLabel="Keep the same day"
+            />
           </div>
           <p className="lst-hint">
             <span>Applies from</span> <span data-no-translate>{formatDayKey(estimate, lang)}</span>. <span>Bills already made are not changed.</span>

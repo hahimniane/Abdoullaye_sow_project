@@ -335,6 +335,7 @@ import {
 } from "@/lib/transport-fulfillment";
 import { canonicalMake, canonicalModel, getMakes, getModels, getYears, loadCarCatalog } from "@/lib/car-catalog";
 import { useCarCatalog } from "@/lib/use-car-catalog";
+import { decodeVinForCatalog } from "@/lib/vin-decode";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
@@ -1834,30 +1835,18 @@ export function ListingsPanel({
     setVinBusy(true);
     setVinNote("");
     try {
-      const res = await fetch(
-        `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
-      );
-      const data = await res.json();
-      const r = (data?.Results?.[0] ?? {}) as Record<string, unknown>;
-      const dMake = text(r.Make, "");
-      const dModel = text(r.Model, "");
-      const dYear = text(r.ModelYear, "");
-      await loadCarCatalog();
-      const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
-      let model = "";
-      let year = "";
-      if (make) {
-        const canon = canonicalModel(make, dModel);
-        model = getModels(make).find((m) => m.toLowerCase() === (canon || dModel).toLowerCase()) ?? "";
-        if (model) year = getYears(make, model).find((y) => String(y) === dYear) ?? "";
+      const decoded = await decodeVinForCatalog(vin);
+      if (decoded.kind === "offline") {
+        setVinNote("Couldn't reach the VIN service. Enter the vehicle by hand.");
+        return;
       }
-      if (!make) {
-        const seen = [dYear, dMake, dModel].filter(Boolean).join(" ");
-        setVinNote(seen
-          ? `VIN reads ${seen} — we don't carry that make; pick the closest.`
+      if (decoded.kind !== "filled") {
+        setVinNote(decoded.kind === "unknownMake"
+          ? `VIN reads ${decoded.seen} — we don't carry that make; pick the closest.`
           : "Couldn't read that VIN. Enter the vehicle by hand.");
         return;
       }
+      const { make, model, year } = decoded;
       setDraft((value) => ({
         ...value,
         make,
