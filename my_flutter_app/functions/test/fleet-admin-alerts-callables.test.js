@@ -36,7 +36,12 @@ const run = (name, uid, data) => functions[name].run({
 const act = (uid, action, data = {}) =>
   run("fleetAction", uid, {action, businessId: BIZ, ...data});
 
-/** The Fleet alerts in a person's inbox, oldest first. */
+/**
+ * The Fleet alerts in a person's inbox, oldest first.
+ *
+ * @param {string} uid The person.
+ * @return {Promise<Array<object>>} Their Fleet inbox entries.
+ */
 async function inbox(uid) {
   const snap = await db.collection("users").doc(uid)
       .collection("notifications").get();
@@ -71,7 +76,7 @@ before(async () => {
 describe("Fleet alerts to admins", () => {
   let carId = "";
 
-  it("a new plate tells the owner and Fleet admins, never the one who saved it", async () => {
+  it("a new plate tells owners and Fleet admins, not the saver", async () => {
     carId = (await act(STAFF, "car_save", {car: {plate: "t900001c",
       company: "Alert Base"}})).carId;
     assert.deepEqual(await kinds(OWNER), ["plate_added"]);
