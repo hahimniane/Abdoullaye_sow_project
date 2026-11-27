@@ -172,3 +172,25 @@ export const platformActivityNotificationPreferenceFields: Array<{
     hint: "A push when a car is parked, a package saved or a shop sale is made in any business (grouped every 10 minutes)",
   },
 ];
+
+/**
+ * "Fleet alerts" (docs/FLEET.md section 18): the owner and Fleet admins hear
+ * about plates, drivers and payments they did not handle. Three choices, so it
+ * is kept apart from the on/off switches above. Unknown or missing = "all".
+ */
+export type FleetAlertsLevel = "all" | "needs" | "off";
+
+export const fleetAlertsChoices: Array<{ value: FleetAlertsLevel; label: string }> = [
+  { value: "all", label: "Everything" },
+  { value: "needs", label: "Only what needs me" },
+  { value: "off", label: "Off" },
+];
+
+export const fleetAlertsLabel = "Fleet alerts";
+export const fleetAlertsHint =
+  "New plates, drivers and payments, grouped; anything that needs you at once.";
+
+export function fleetAlertsLevel(saved?: Record<string, unknown> | null): FleetAlertsLevel {
+  const raw = saved?.fleetAlerts;
+  return raw === "needs" || raw === "off" ? raw : "all";
+}

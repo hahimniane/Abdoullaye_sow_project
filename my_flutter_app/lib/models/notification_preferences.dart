@@ -1,3 +1,20 @@
+/// The three choices of "Fleet alerts" (docs/FLEET.md section 18).
+class FleetAlertsLevel {
+  const FleetAlertsLevel._();
+
+  /// New plates, drivers and payments (grouped), and what needs the person.
+  static const all = 'all';
+
+  /// Only what is in "Needs you".
+  static const needs = 'needs';
+  static const off = 'off';
+  static const values = [all, needs, off];
+
+  /// Unknown or missing = [all].
+  static String parse(Object? raw) =>
+      raw is String && values.contains(raw) ? raw : all;
+}
+
 class NotificationPreferences {
   const NotificationPreferences({
     this.pushNotifications = true,
@@ -17,6 +34,7 @@ class NotificationPreferences {
     this.parkedCarAlerts = true,
     this.packageAlerts = true,
     this.platformActivity = true,
+    this.fleetAlerts = FleetAlertsLevel.all,
     this.whatsappMessages,
   });
 
@@ -61,6 +79,10 @@ class NotificationPreferences {
   /// as staff. On unless switched off.
   final bool platformActivity;
 
+  /// "Fleet alerts" (Fleet admins only): [FleetAlertsLevel.all] (default),
+  /// [FleetAlertsLevel.needs] (only "Needs you") or [FleetAlertsLevel.off].
+  final String fleetAlerts;
+
   /// "WhatsApp messages": a push when a customer writes on WhatsApp. Null
   /// until the person chooses: then owners (and Laawol admins) hear, staff
   /// do not - so it is never written until it is set, or saving the profile
@@ -94,6 +116,7 @@ class NotificationPreferences {
       parkedCarAlerts: data['parkedCarAlerts'] != false,
       packageAlerts: data['packageAlerts'] != false,
       platformActivity: data['platformActivity'] != false,
+      fleetAlerts: FleetAlertsLevel.parse(data['fleetAlerts']),
       whatsappMessages: data['whatsappMessages'] is bool
           ? data['whatsappMessages'] as bool
           : null,
@@ -119,6 +142,7 @@ class NotificationPreferences {
       'parkedCarAlerts': parkedCarAlerts,
       'packageAlerts': packageAlerts,
       'platformActivity': platformActivity,
+      'fleetAlerts': fleetAlerts,
       'whatsappMessages': ?whatsappMessages,
     };
   }
@@ -141,6 +165,7 @@ class NotificationPreferences {
     bool? parkedCarAlerts,
     bool? packageAlerts,
     bool? platformActivity,
+    String? fleetAlerts,
     bool? whatsappMessages,
   }) {
     return NotificationPreferences(
@@ -161,6 +186,7 @@ class NotificationPreferences {
       parkedCarAlerts: parkedCarAlerts ?? this.parkedCarAlerts,
       packageAlerts: packageAlerts ?? this.packageAlerts,
       platformActivity: platformActivity ?? this.platformActivity,
+      fleetAlerts: fleetAlerts ?? this.fleetAlerts,
       whatsappMessages: whatsappMessages ?? this.whatsappMessages,
     );
   }

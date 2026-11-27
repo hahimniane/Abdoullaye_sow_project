@@ -42,6 +42,7 @@ describe("notification settings helpers", () => {
           parkedCarAlerts: true,
           packageAlerts: true,
           platformActivity: true,
+          fleetAlerts: "all",
         },
     );
   });
@@ -58,6 +59,22 @@ describe("notification settings helpers", () => {
         .whatsappMessages, false);
     assert.equal(normalizeNotificationPreferences({whatsappMessages: true})
         .whatsappMessages, true);
+  });
+
+  it("keeps Fleet alerts as all | needs | off, unknown = all", () => {
+    const fleet = (value) =>
+      normalizeNotificationPreferences({fleetAlerts: value}).fleetAlerts;
+    assert.equal(normalizeNotificationPreferences(undefined).fleetAlerts,
+        "all");
+    assert.equal(fleet("needs"), "needs");
+    assert.equal(fleet("off"), "off");
+    assert.equal(fleet("all"), "all");
+    for (const bad of [false, true, "OFF", "", 3, null, {}]) {
+      assert.equal(fleet(bad), "all", String(bad));
+    }
+    // Its own setting: the other switches leave it alone.
+    assert.equal(normalizeNotificationPreferences({platformActivity: false,
+      parkedCarAlerts: false}).fleetAlerts, "all");
   });
 
   it("keeps Store transfers on unless it is switched off", () => {

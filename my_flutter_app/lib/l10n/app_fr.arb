@@ -13829,6 +13829,17 @@
   "hflPaperworkSubtitle": "Papiers bientôt dus ou manquants",
   "hflMoreShipping": "Autres outils d'expédition",
   "hflMore": "Autres outils",
+  "falTitle": "Alertes Flotte",
+  "@falTitle": {
+    "description": "Profile, notification preferences: label of the three-choice setting for Fleet alerts (Fleet admins only)."
+  },
+  "falHelp": "Nouvelles plaques, nouveaux chauffeurs et paiements, regroupés ; ce qui demande votre action, tout de suite.",
+  "@falHelp": {
+    "description": "One line under the Fleet alerts setting."
+  },
+  "falAll": "Tout",
+  "falNeeds": "Seulement ce qui est à traiter",
+  "falOff": "Désactivées",
   "nhmMainWorkTitle": "Activité principale",
   "@nhmMainWorkTitle": {
     "description": "Business profile, Services panel: label of the list where the owner picks the work the app's home leads with."

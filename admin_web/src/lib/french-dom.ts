@@ -6105,6 +6105,11 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Pick a day": "Choisir un jour",
   "Remove the due date": "Retirer l’échéance",
   "Sales at my store": "Ventes de mon magasin",
+  // Fleet alerts to admins (notification preferences; docs/FLEET.md section 18).
+  "Fleet alerts": "Alertes Flotte",
+  "New plates, drivers and payments, grouped; anything that needs you at once.": "Nouvelles plaques, nouveaux chauffeurs et paiements, regroupés ; ce qui demande votre action, tout de suite.",
+  "Only what needs me": "Seulement ce qui est à faire",
+  "Off": "Désactivées",
   // Staff activity alerts (notification preferences): a car parked / a package
   // saved by someone else of the business.
   "Cars parked by my team": "Voitures garées par mon équipe",

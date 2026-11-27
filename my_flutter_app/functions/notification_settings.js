@@ -31,6 +31,9 @@ function defaultNotificationPreferences() {
     // Platform admins: cars, packages and sales across every business
     // (platform_activity_alerts.js).
     platformActivity: true,
+    // Fleet admins (fleet_admin_alerts.js): "all" (default) | "needs" (only
+    // what is in Needs you) | "off". A string, not a switch.
+    fleetAlerts: "all",
     // whatsappMessages is deliberately absent: a missing value means "not
     // chosen" - on for owners, off for staff (notifyWhatsAppConversation).
   };
@@ -75,6 +78,9 @@ function normalizeNotificationPreferences(raw) {
       prefs.packageAlerts !== false && defaults.packageAlerts,
     platformActivity:
       prefs.platformActivity !== false && defaults.platformActivity,
+    // Unknown or missing = "all" (a boolean from an older client too).
+    fleetAlerts: ["all", "needs", "off"].includes(prefs.fleetAlerts) ?
+      prefs.fleetAlerts : defaults.fleetAlerts,
     // Kept only when the person chose it, so saving a profile never turns
     // WhatsApp pushes on for staff by default.
     ...(typeof prefs.whatsappMessages === "boolean" ?

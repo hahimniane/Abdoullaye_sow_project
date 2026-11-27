@@ -85,6 +85,11 @@ import { ToggleRow } from "@/components/toggle-row";
 import {
   inventoryNotificationPreferenceFields,
   packageNotificationPreferenceFields,
+  fleetAlertsChoices,
+  fleetAlertsHint,
+  fleetAlertsLabel,
+  fleetAlertsLevel,
+  type FleetAlertsLevel,
   parkedCarNotificationPreferenceFields,
   mergeNotificationPreferences,
   notificationPreferenceFields,
@@ -182,11 +187,13 @@ function NotificationPreferencesPanel({
   showInventory = false,
   showParkedCars = false,
   showPackages = false,
+  showFleet = false,
 }: {
   profile: UserProfile;
   showInventory?: boolean;
   showParkedCars?: boolean;
   showPackages?: boolean;
+  showFleet?: boolean;
 }) {
   const [prefs, setPrefs] = useState(() =>
     mergeNotificationPreferences(profile.notificationPreferences),
@@ -196,6 +203,10 @@ function NotificationPreferencesPanel({
   // saved explicitly: the server reads the raw value.
   const [whatsappOn, setWhatsappOn] = useState(() =>
     whatsappMessagesOn(profile.role, profile.notificationPreferences),
+  );
+  // "Fleet alerts": three choices, saved with the switches.
+  const [fleetLevel, setFleetLevel] = useState<FleetAlertsLevel>(() =>
+    fleetAlertsLevel(profile.notificationPreferences),
   );
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
@@ -208,7 +219,7 @@ function NotificationPreferencesPanel({
     setNotice("");
     try {
       await httpsCallable(functions, "updateNotificationPreferences")({
-        notificationPreferences: { ...prefs, whatsappMessages: whatsappOn },
+        notificationPreferences: { ...prefs, whatsappMessages: whatsappOn, fleetAlerts: fleetLevel },
       });
       setNotice("Notification preferences saved.");
     } catch {
@@ -242,6 +253,24 @@ function NotificationPreferencesPanel({
             }
           />
         ))}
+        {showFleet && (
+          <div className="toggle-row">
+            <span className="toggle-text">
+              <b>{fleetAlertsLabel}</b>
+              <small>{fleetAlertsHint}</small>
+            </span>
+            <select
+              aria-label={fleetAlertsLabel}
+              data-testid="fleet-alerts-select"
+              onChange={(event) => setFleetLevel(event.target.value as FleetAlertsLevel)}
+              value={fleetLevel}
+            >
+              {fleetAlertsChoices.map((choice) => (
+                <option key={choice.value} value={choice.value}>{choice.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <ToggleRow
           label="WhatsApp messages"
           hint={whatsappMessagesHint(profile.role)}
@@ -278,6 +307,8 @@ export function BusinessConsole({
   const [shippingStep, setShippingStep] = useState<ShippingStep | "">("");
   // Which tab of the Fleet page is open (docs/FLEET.md section 15).
   const [fleetView, setFleetView] = useState<FleetView>("needs");
+  // A Fleet alert's driver or plate, opened on that tab once Fleet shows.
+  const [fleetFocus, setFleetFocus] = useState<{ kind: "driver" | "car"; id: string; stamp: number } | null>(null);
   // Every way into a section goes through here: the old shipping tab ids
   // (Containers, Barrels, Freight, Deliveries, Volume - still named by
   // notifications, Today's rows and links) open that step of Shipping.
@@ -802,6 +833,11 @@ export function BusinessConsole({
               setNotificationFocusId(target.focusId ?? "");
               setNotificationFocusView(target.panelView ?? "");
               setNotificationCaseId(target.caseId ?? "");
+              setFleetFocus(
+                target.focusId && (target.tab === "fleetDrivers" || target.tab === "fleetCars")
+                  ? { kind: target.tab === "fleetDrivers" ? "driver" : "car", id: target.focusId, stamp: Date.now() }
+                  : null,
+              );
               setNotificationSale(
                 target.panelView === "sales"
                   ? saleFocusFrom(target.focusId, target.storeId, Date.now())
@@ -947,6 +983,8 @@ export function BusinessConsole({
                 // the parking tab, or the containers / deliveries tabs.
                 showParkedCars={visibleTabs.some((tab) => tab.id === "parking")}
                 showPackages={visibleTabs.some((tab) => tab.id === "containers" || tab.id === "deliveries")}
+                // Fleet alerts reach the owner and Fleet admins of a business with Fleet.
+                showFleet={fleetOn && isFleetAdmin}
               />
             </>
           )}
@@ -1087,6 +1125,7 @@ export function BusinessConsole({
               businessId={businessId}
               isAdmin={isFleetAdmin}
               previewMode={previewMode}
+              focus={fleetFocus}
               setView={setFleetView}
               state={fleetState}
               view={fleetView}

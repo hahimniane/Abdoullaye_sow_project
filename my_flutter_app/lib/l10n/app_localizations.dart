@@ -40158,6 +40158,36 @@ abstract class AppLocalizations {
   /// **'More'**
   String get hflMore;
 
+  /// Profile, notification preferences: label of the three-choice setting for Fleet alerts (Fleet admins only).
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet alerts'**
+  String get falTitle;
+
+  /// One line under the Fleet alerts setting.
+  ///
+  /// In en, this message translates to:
+  /// **'New plates, drivers and payments, grouped; anything that needs you at once.'**
+  String get falHelp;
+
+  /// No description provided for @falAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything'**
+  String get falAll;
+
+  /// No description provided for @falNeeds.
+  ///
+  /// In en, this message translates to:
+  /// **'Only what needs me'**
+  String get falNeeds;
+
+  /// No description provided for @falOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get falOff;
+
   /// Business profile, Services panel: label of the list where the owner picks the work the app's home leads with.
   ///
   /// In en, this message translates to:

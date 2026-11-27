@@ -106,7 +106,9 @@ const MONTH = /^\d{4}-\d{2}$/;
  * @param {object} deps {admin, HttpsError, FieldValue, logger, requireAuth,
  *   getUserProfile, requireBusinessManager, hasBusinessPermission,
  *   requireAdminCapability, normalizeBusinessServices, writeAudit,
- *   dayKeyNow (() => "YYYY-MM-DD" in New York), now (() => Date)}.
+ *   dayKeyNow (() => "YYYY-MM-DD" in New York), now (() => Date),
+ *   notifyFleetAdmins (async (event) => void; optional: the alerts to
+ *   admins, docs/FLEET.md section 18)}.
  * @return {{fleetAction: Function, fleetDaily: Function,
  *   runFleetDay: Function}} Handlers.
  */
@@ -118,6 +120,31 @@ function createFleetHandlers(deps) {
     Date.now());
   const refuse = (code, status = "failed-precondition") =>
     new HttpsError(status, FLEET_REFUSALS[code] || code, {reason: code});
+
+  // Fleet alerts to admins (docs/FLEET.md section 18, fleet_admin_alerts.js):
+  // one hook injected through deps.notifyFleetAdmins. An alert must never
+  // fail or slow a Fleet action: every failure is caught and logged.
+  async function alertAdmins(event) {
+    if (typeof deps.notifyFleetAdmins !== "function") return;
+    try {
+      await deps.notifyFleetAdmins(event);
+    } catch (error) {
+      deps.logger.warn("Fleet admin alert not sent", {kind: event?.kind,
+        businessId: event?.businessId,
+        error: String(error?.message || error)});
+    }
+  }
+
+  // A driver's name for an alert ("" when unknown or on any failure).
+  async function driverNameOf(driverId) {
+    try {
+      if (!driverId) return "";
+      const doc = await db().collection("fleetDrivers").doc(driverId).get();
+      return doc.exists ? text(doc.get("name"), 120) : "";
+    } catch (error) {
+      return "";
+    }
+  }
 
   async function businessOf(businessId) {
     const doc = await db().collection("businesses").doc(businessId).get();
@@ -299,6 +326,8 @@ function createFleetHandlers(deps) {
       createdAt: FieldValue.serverTimestamp()});
     await audit(businessId, uid, "fleet_driver", ref.id, "fleet_driver_added",
         `Driver ${name} added`);
+    await alertAdmins({kind: "driver_added", businessId, actorUid: uid,
+      recordId: ref.id, driverId: ref.id, driverName: name});
     return {success: true, driverId: ref.id};
   }
 
@@ -362,6 +391,8 @@ function createFleetHandlers(deps) {
       createdAt: FieldValue.serverTimestamp()});
     await audit(businessId, uid, "fleet_car", ref.id, "fleet_car_added",
         `Plate ${plate} added`);
+    await alertAdmins({kind: "plate_added", businessId, actorUid: uid,
+      recordId: ref.id, carId: ref.id, plate});
     return {success: true, carId: ref.id};
   }
 
@@ -1022,6 +1053,9 @@ function createFleetHandlers(deps) {
         "fleet_payment_recorded",
         `Payment $${(amount / 100).toFixed(2)} (${method})`);
     await sendReceipt(businessId, ref.id);
+    await alertAdmins({kind: "payment_recorded", businessId, actorUid: uid,
+      recordId: ref.id, paymentId: ref.id, driverId,
+      driverName: await driverNameOf(driverId), amountCents: amount});
     return {success: true, paymentId: ref.id,
       creditAddedCents: result.creditAddedCents};
   }
@@ -1246,6 +1280,15 @@ function createFleetHandlers(deps) {
       await settleClaimsFor(p.driverId, amount, ref.id, p.creditId);
     }
     await sendReceipt(p.businessId, ref.id);
+    // The office picked the deposit (not the bank's own match): the other
+    // admins hear a payment was recorded. The bank's matches are told once
+    // per run by matchBankDeposits.
+    if (p.byUid && p.byUid !== "bank") {
+      await alertAdmins({kind: "payment_recorded", businessId: p.businessId,
+        actorUid: p.byUid, recordId: ref.id, paymentId: ref.id,
+        driverId: p.driverId, driverName: await driverNameOf(p.driverId),
+        amountCents: amount});
+    }
     return {paymentId: ref.id, amountCents: amount};
   }
 
@@ -1346,10 +1389,14 @@ function createFleetHandlers(deps) {
           {claims: env.claims, others});
     if (match.driverId) {
       try {
-        await payFromDeposit({businessId, creditId: doc.id,
+        const paid = await payFromDeposit({businessId, creditId: doc.id,
           driverId: match.driverId, how: match.how, byUid: "bank",
           claimId: match.claimId || ""});
         const taken = Number(credit.amountCents) || 0;
+        if (env.told) {
+          env.told.paid.push({driverId: match.driverId,
+            amountCents: Number(paid?.amountCents) || taken});
+        }
         env.claims = env.claims.filter((c) => c.id !== match.claimId &&
           !(c.driverId === match.driverId && c.amountCents === taken));
         return "paid";
@@ -1367,8 +1414,19 @@ function createFleetHandlers(deps) {
     const reason = match.reason || "unknown";
     if (credit.fleetWaiting !== true ||
         credit.fleetWaitingReason !== reason || !credit.fleetLookedAtMs) {
-      await doc.ref.set({fleetWaiting: true, fleetWaitingReason: reason,
-        fleetLookedAtMs: nowMs()}, {merge: true});
+      // Told to the admins only the first time the deposit starts waiting
+      // (read fresh in the same transaction, so two runs never both tell).
+      const starts = await db().runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        const first = !fresh.exists || fresh.get("fleetWaiting") !== true;
+        tx.set(doc.ref, {fleetWaiting: true, fleetWaitingReason: reason,
+          fleetLookedAtMs: nowMs()}, {merge: true});
+        return first;
+      });
+      if (starts && env.told) {
+        env.told.waiting.push({amountCents: Number(credit.amountCents) || 0,
+          senderName: text(credit.senderName, 80), reason});
+      }
     }
     // Two reports could have been this deposit: the office sees why.
     for (const claimId of match.claimIds || []) {
@@ -1378,6 +1436,33 @@ function createFleetHandlers(deps) {
           .catch(() => undefined);
     }
     return "waiting";
+  }
+
+  /**
+   * One run's news for the admins: one alert for the deposits the bank
+   * paid, one for the deposits that started waiting. Never throws.
+   *
+   * @param {string} businessId The business.
+   * @param {object} env The run's env ({drivers, told}).
+   * @return {Promise<void>}
+   */
+  async function tellBankRun(businessId, env) {
+    const {paid, waiting} = env.told;
+    if (paid.length > 0) {
+      const first = (id) => text(
+          env.drivers.find((d) => d.id === id)?.name, 120).split(/\s+/)[0];
+      await alertAdmins({kind: "bank_matched", businessId, actorUid: "",
+        recordId: "", count: paid.length,
+        totalCents: paid.reduce((sum, p) => sum + p.amountCents, 0),
+        names: paid.map((p) => first(p.driverId)).filter(Boolean)});
+    }
+    if (waiting.length > 0) {
+      await alertAdmins({kind: "deposit_waiting", businessId, actorUid: "",
+        recordId: "", count: waiting.length,
+        totalCents: waiting.reduce((sum, w) => sum + w.amountCents, 0),
+        amountCents: waiting[0].amountCents,
+        senderName: waiting[0].senderName, reason: waiting[0].reason});
+    }
   }
 
   /**
@@ -1410,7 +1495,8 @@ function createFleetHandlers(deps) {
           .where("businessId", "==", businessId).get())
           .docs.map((d) => ({id: d.id, ...d.data()}));
       const env = {businessId, since: fleetBank.matchStartMs(business, link),
-        drivers, claims: await claimsForMatching(businessId)};
+        drivers, claims: await claimsForMatching(businessId),
+        told: {paid: [], waiting: []}};
       for (const doc of docs) {
         try {
           const result = await matchOneDeposit(env, doc);
@@ -1422,6 +1508,7 @@ function createFleetHandlers(deps) {
                 error: String(error?.message || error)});
         }
       }
+      await tellBankRun(businessId, env);
     } catch (error) {
       deps.logger.error("Fleet deposit matching failed", {businessId,
         error: String(error?.message || error)});
@@ -1597,6 +1684,7 @@ function createFleetHandlers(deps) {
    */
   async function noteRemovedDeposits(businessId, creditIds) {
     let marked = 0;
+    const took = [];
     try {
       const ids = [...new Set((creditIds || []).filter(Boolean))];
       for (let i = 0; i < ids.length; i += 100) {
@@ -1614,10 +1702,12 @@ function createFleetHandlers(deps) {
                 pay.get("status") !== "recorded" ||
                 pay.get("bankRemoved") === true) return false;
             tx.update(ref, {bankRemoved: true, bankRemovedAtMs: Date.now()});
-            return true;
+            return {driverId: text(pay.get("driverId"), 180),
+              amountCents: Number(pay.get("amountCents")) || 0};
           });
           if (done) {
             marked += 1;
+            took.push({paymentId: ref.id, ...done});
             deps.logger.warn("Fleet: the bank removed a deposit that paid " +
               "a driver", {businessId, paymentId: ref.id});
           }
@@ -1626,6 +1716,19 @@ function createFleetHandlers(deps) {
     } catch (error) {
       deps.logger.error("Fleet removed-deposit check failed", {businessId,
         error: String(error?.message || error)});
+    }
+    if (took.length > 0) {
+      const one = took.length === 1 ? took[0] : null;
+      const names = [];
+      for (const t of took.slice(0, 5)) {
+        const name = text(await driverNameOf(t.driverId), 120).split(/\s+/)[0];
+        if (name) names.push(name);
+      }
+      await alertAdmins({kind: "bank_took_back", businessId, actorUid: "",
+        recordId: one ? one.paymentId : "", count: took.length,
+        paymentId: one ? one.paymentId : "", driverId: one ? one.driverId : "",
+        amountCents: one ? one.amountCents : 0,
+        totalCents: took.reduce((sum, t) => sum + t.amountCents, 0), names});
     }
     return marked;
   }
@@ -2391,6 +2494,17 @@ function createFleetHandlers(deps) {
     }
   }
 
+  // A report the office must decide (docs/FLEET.md section 18). No admin is
+  // behind it (a driver, a stranger or the clock), so every admin hears.
+  async function alertClaimOffice(claim, claimId) {
+    await alertAdmins({kind: "claim_needs_office",
+      businessId: claim.businessId, actorUid: "", recordId: claimId,
+      driverId: claim.driverId || "",
+      driverName: await driverNameOf(claim.driverId),
+      amountCents: Number(claim.amountCents) || 0,
+      reason: claim.reason || ""});
+  }
+
   async function createClaim(f) {
     const ref = claimsCol().doc();
     const t = nowMs();
@@ -2414,6 +2528,9 @@ function createFleetHandlers(deps) {
       updatedAt: FieldValue.serverTimestamp(),
     };
     await ref.set(claim);
+    if (f.state === fleetClaims.STATE.OFFICE) {
+      await alertClaimOffice(claim, ref.id);
+    }
     return {id: ref.id, ...claim};
   }
 
@@ -2700,6 +2817,7 @@ function createFleetHandlers(deps) {
       await ref.update({state: fleetClaims.STATE.OFFICE, reason,
         attempts: 0, ...stamp});
       await say("to_office");
+      await alertClaimOffice({...claim, reason}, claim.id);
       return {handled: true, outcome: "claim_office", notify: true};
     }
     await kept(false);
@@ -2730,6 +2848,8 @@ function createFleetHandlers(deps) {
       await ref.update({state: fleetClaims.STATE.OFFICE,
         reason: fleetClaims.REASON.NOT_A_DRIVER, attempts: 0, ...stamp});
       await say("to_office");
+      await alertClaimOffice({...claim,
+        reason: fleetClaims.REASON.NOT_A_DRIVER}, claim.id);
       return {handled: true, outcome: "claim_office", notify: true};
     }
     const hasAmount = Number(claim.amountCents) > 0;
@@ -2865,6 +2985,8 @@ function createFleetHandlers(deps) {
         reason: claim.reason || fleetClaims.REASON.NO_DEPOSIT,
         updatedAt: FieldValue.serverTimestamp()});
       out.told += 1;
+      await alertClaimOffice({...claim,
+        reason: claim.reason || fleetClaims.REASON.NO_DEPOSIT}, claim.id);
       // The same news as a push, to the driver's own phone (the picture may
       // have come from another one).
       if (claim.driverId) {

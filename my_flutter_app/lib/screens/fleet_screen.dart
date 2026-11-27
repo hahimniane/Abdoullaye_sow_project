@@ -30,6 +30,8 @@ class FleetScreen extends StatefulWidget {
     this.service,
     this.controller,
     this.initialTab = FleetTab.needs,
+    this.openDriverId,
+    this.openCarId,
   });
 
   final String businessId;
@@ -44,6 +46,11 @@ class FleetScreen extends StatefulWidget {
 
   /// The tab the page opens on (the business home opens Fleet on a tab).
   final FleetTab initialTab;
+
+  /// A Fleet alert names one driver or plate: once Fleet has loaded, its page
+  /// opens on top of the tab (once, and only if it exists).
+  final String? openDriverId;
+  final String? openCarId;
 
   @override
   State<FleetScreen> createState() => _FleetScreenState();
@@ -76,10 +83,41 @@ class _FleetScreenState extends State<FleetScreen>
           access: widget.access,
         );
     _controller!.start();
+    if ((widget.openDriverId ?? '').isNotEmpty ||
+        (widget.openCarId ?? '').isNotEmpty) {
+      _controller!.addListener(_openFocused);
+      _openFocused();
+    }
+  }
+
+  bool _focusDone = false;
+
+  /// Opens the driver or plate an alert named, as soon as Fleet has loaded.
+  void _openFocused() {
+    final c = _controller;
+    if (_focusDone || c == null || c.state.loading) return;
+    _focusDone = true;
+    c.removeListener(_openFocused);
+    final data = c.state.data;
+    final driverId = widget.openDriverId ?? '';
+    final carId = widget.openCarId ?? '';
+    final driver =
+        driverId.isNotEmpty && data.drivers.any((d) => d.id == driverId);
+    final car = carId.isNotEmpty && data.cars.any((x) => x.id == carId);
+    if (!driver && !car) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (driver) {
+        _openDriver(driverId);
+      } else {
+        _openCar(carId);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _controller?.removeListener(_openFocused);
     // A controller handed in belongs to its owner.
     if (widget.controller == null) _controller?.dispose();
     _tabs?.dispose();

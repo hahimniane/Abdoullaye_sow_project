@@ -296,6 +296,9 @@ export function businessTargetForNotification(
       return {tab: "freight", focusId, panelView: "requests"};
     case "parking_reservation_status":
       return {tab: "parking", focusId};
+    // Fleet alerts to admins (docs/FLEET.md section 18).
+    case "fleet_alert":
+      return fleetAlertTarget(data);
     // "Car parked" by someone else of the business: that car. A summary
     // ("Mamadou parked 4 more cars") names none: the parking list.
     case "parked_car":
@@ -341,6 +344,46 @@ export function businessTargetForNotification(
       return {tab: "transport", focusId, panelView: "jobs"};
     default:
       return {tab: "today"};
+  }
+}
+
+/**
+ * A Fleet alert opens Fleet on the right tab, then the driver or plate it
+ * names (the Fleet page takes the id in `focusId`): what needs the person ->
+ * Needs you; a new plate -> that plate; a new driver, or a payment that names
+ * one -> that driver (Payments when no driver); a bank check -> Payments.
+ * The tab ids are the old Fleet menu ids, which setActiveTab maps onto the
+ * tabs of the Fleet page.
+ */
+function fleetAlertTarget(data: NotificationData): BusinessNotificationTarget {
+  const driverId = firstText(data.driverId);
+  const carId = firstText(data.carId);
+  switch (firstText(data.fleetKind)) {
+    case "deposit_waiting":
+    case "claim_needs_office":
+    case "bank_took_back":
+      return {tab: "fleet"};
+    case "plate_added":
+      return carId ? {tab: "fleetCars", focusId: carId} : {tab: "fleetCars"};
+    case "driver_added":
+      return driverId ? {tab: "fleetDrivers", focusId: driverId} : {tab: "fleetDrivers"};
+    case "payment_recorded":
+      return driverId ? {tab: "fleetDrivers", focusId: driverId} : {tab: "fleetPayments"};
+    case "bank_matched":
+      return {tab: "fleetPayments"};
+    default:
+      switch (firstText(data.fleetTab)) {
+        case "drivers":
+          return {tab: "fleetDrivers"};
+        case "plates":
+          return {tab: "fleetCars"};
+        case "payments":
+          return {tab: "fleetPayments"};
+        case "paperwork":
+          return {tab: "fleetPaperwork"};
+        default:
+          return {tab: "fleet"};
+      }
   }
 }
 

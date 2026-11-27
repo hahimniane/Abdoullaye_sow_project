@@ -23816,6 +23816,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hflMore => 'More';
 
   @override
+  String get falTitle => 'Fleet alerts';
+
+  @override
+  String get falHelp =>
+      'New plates, drivers and payments, grouped; anything that needs you at once.';
+
+  @override
+  String get falAll => 'Everything';
+
+  @override
+  String get falNeeds => 'Only what needs me';
+
+  @override
+  String get falOff => 'Off';
+
+  @override
   String get nhmMainWorkTitle => 'Main work';
 
   @override

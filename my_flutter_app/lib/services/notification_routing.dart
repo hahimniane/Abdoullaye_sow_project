@@ -2,6 +2,7 @@ import '../screens/business_requests_screen.dart'
     show BusinessRequestsArguments;
 import '../screens/review_composer_screen.dart';
 import '../screens/tracking_screen.dart';
+import 'fleet_tabs.dart' show FleetTab;
 
 /// Who is holding the phone. The same notification type can mean two
 /// different screens: a parking status update sends a customer to their
@@ -90,6 +91,61 @@ class BusinessPackageArguments {
 
   final String lineId;
   final String trackingCode;
+}
+
+/// Fleet, opened from a "Fleet alert" (docs/FLEET.md section 18): on a tab,
+/// and then on one driver or plate when the alert names one.
+class FleetRouteArguments {
+  const FleetRouteArguments({
+    this.tab = FleetTab.needs,
+    this.driverId,
+    this.carId,
+  });
+
+  final FleetTab tab;
+  final String? driverId;
+  final String? carId;
+}
+
+FleetTab? _fleetTabNamed(String name) {
+  for (final tab in FleetTab.values) {
+    if (tab.name == name) return tab;
+  }
+  return null;
+}
+
+NotificationRoute _fleetAlertRoute(Map<String, dynamic> data) {
+  final kind = data['fleetKind']?.toString().trim() ?? '';
+  final driverId = _firstNonEmpty(data, ['driverId']);
+  final carId = _firstNonEmpty(data, ['carId']);
+  final named = _fleetTabNamed(_firstNonEmpty(data, ['fleetTab']));
+  FleetTab tab;
+  String? driver;
+  String? car;
+  switch (kind) {
+    case 'deposit_waiting':
+    case 'claim_needs_office':
+    case 'bank_took_back':
+      tab = FleetTab.needs;
+    case 'plate_added':
+      tab = FleetTab.plates;
+      car = carId.isEmpty ? null : carId;
+    case 'driver_added':
+      tab = FleetTab.drivers;
+      driver = driverId.isEmpty ? null : driverId;
+    case 'payment_recorded':
+      // The driver's page when the payment names one, else Payments.
+      tab = driverId.isEmpty ? FleetTab.payments : FleetTab.drivers;
+      driver = driverId.isEmpty ? null : driverId;
+    case 'bank_matched':
+      tab = FleetTab.payments;
+    default:
+      tab = named ?? FleetTab.needs;
+  }
+  return NotificationRoute(
+    '/fleet',
+    arguments: FleetRouteArguments(tab: tab, driverId: driver, carId: car),
+  );
 }
 
 /// Where to navigate for a given push notification's `data` payload.
@@ -395,6 +451,9 @@ NotificationRoute? _businessRouteForNotificationData(
     // business, so its own screens (cars, packages, sales) would show the
     // admin's empty business; the businesses list is where the app looks
     // after businesses (the dashboard's "Businesses" button).
+    // Fleet alerts to admins: Fleet on the right tab, then the driver or plate.
+    case 'fleet_alert':
+      return _fleetAlertRoute(data);
     case 'platform_activity':
     case 'business_member_joined':
       return const NotificationRoute('/businesses');

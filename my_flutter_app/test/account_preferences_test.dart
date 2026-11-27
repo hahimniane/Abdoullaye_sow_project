@@ -123,6 +123,7 @@ void main() {
       'parkedCarAlerts': true,
       'packageAlerts': true,
       'platformActivity': true,
+      'fleetAlerts': 'all',
     });
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).shipmentActivity,

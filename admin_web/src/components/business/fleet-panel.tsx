@@ -42,6 +42,7 @@ export function FleetPanel({
   state,
   isAdmin,
   previewMode,
+  focus = null,
 }: {
   view: FleetView;
   setView: (view: FleetView) => void;
@@ -50,6 +51,8 @@ export function FleetPanel({
   state: FleetState;
   isAdmin: boolean;
   previewMode: boolean;
+  /** A Fleet alert names a driver or a plate: open its page (a new `stamp` asks again). */
+  focus?: { kind: "driver" | "car"; id: string; stamp: number } | null;
 }) {
   const [driverId, setDriverId] = useState("");
   const [carId, setCarId] = useState("");
@@ -94,6 +97,14 @@ export function FleetPanel({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [anchor, view]);
+
+  // An alert's driver or plate (docs/FLEET.md section 18). The tab itself was
+  // set by the console; this opens the record on it.
+  useEffect(() => {
+    if (!focus?.id) return;
+    if (focus.kind === "driver") setDriverId(focus.id);
+    else setCarId(focus.id);
+  }, [focus]);
 
   const clearIntent = useCallback(() => setDriverIntent(null), []);
   const clearAddPlate = useCallback(() => setAddPlate(false), []);

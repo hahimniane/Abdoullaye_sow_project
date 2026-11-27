@@ -154,6 +154,7 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
           _preferences.parkedCarAlerts ||
           _preferences.packageAlerts ||
           _preferences.platformActivity ||
+          _preferences.fleetAlerts != FleetAlertsLevel.off ||
           _preferences.whatsappMessages == true) {
         try {
           await PushNotificationService().requestPermissionAndRegister();
@@ -588,6 +589,21 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                         _preferences.copyWith(packageAlerts: value),
                       ),
                     ),
+                  // Fleet admins hear about plates, drivers and payments they
+                  // did not handle (docs/FLEET.md section 18).
+                  if (showFleetAlertsSwitch(
+                    isStaff: auth.isStaff,
+                    services: auth.effectiveBusinessServices,
+                    permissions: auth.businessPermissions,
+                    businessId: auth.businessId ?? '',
+                  ))
+                    FleetAlertsChoice(
+                      key: const Key('fleet-alerts-notifications'),
+                      value: _preferences.fleetAlerts,
+                      onChanged: (value) => _updatePreferences(
+                        _preferences.copyWith(fleetAlerts: value),
+                      ),
+                    ),
                   // A customer wrote on WhatsApp (docs/WHATSAPP_CONVERSATIONS.md
                   // decision 7): owners hear unless they switch it off, staff
                   // only once they switch it on.
@@ -749,6 +765,59 @@ class _PreferenceSwitch extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       title: Text(title),
       subtitle: subtitle == null ? null : Text(subtitle!),
+    );
+  }
+}
+
+/// "Fleet alerts": Everything / Only what needs me / Off. Chips that wrap, so
+/// it fits a 320 px phone in French.
+class FleetAlertsChoice extends StatelessWidget {
+  const FleetAlertsChoice({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final labels = {
+      FleetAlertsLevel.all: l10n.falAll,
+      FleetAlertsLevel.needs: l10n.falNeeds,
+      FleetAlertsLevel.off: l10n.falOff,
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.falTitle, style: Theme.of(context).textTheme.bodyLarge),
+          const SizedBox(height: 2),
+          Text(
+            l10n.falHelp,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final level in FleetAlertsLevel.values)
+                ChoiceChip(
+                  key: Key('fleet-alerts-$level'),
+                  label: Text(labels[level]!),
+                  selected: FleetAlertsLevel.parse(value) == level,
+                  onSelected: (_) => onChanged(level),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

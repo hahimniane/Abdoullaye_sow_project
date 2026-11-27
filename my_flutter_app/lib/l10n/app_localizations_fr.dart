@@ -24183,6 +24183,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get hflMore => 'Autres outils';
 
   @override
+  String get falTitle => 'Alertes Flotte';
+
+  @override
+  String get falHelp =>
+      'Nouvelles plaques, nouveaux chauffeurs et paiements, regroupés ; ce qui demande votre action, tout de suite.';
+
+  @override
+  String get falAll => 'Tout';
+
+  @override
+  String get falNeeds => 'Seulement ce qui est à traiter';
+
+  @override
+  String get falOff => 'Désactivées';
+
+  @override
   String get nhmMainWorkTitle => 'Activité principale';
 
   @override

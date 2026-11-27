@@ -67,6 +67,9 @@ import 'models/transport_request.dart';
 import 'screens/transport_request_details_screen.dart';
 import 'screens/freight_quote_details_screen.dart';
 import 'screens/business_requests_screen.dart';
+import 'screens/fleet_screen.dart';
+import 'services/fleet_requests.dart' show fleetAccess;
+import 'services/fleet_tabs.dart' show FleetTab;
 import 'screens/my_package_requests_screen.dart';
 import 'screens/my_packages_screen.dart';
 import 'screens/package_result_screen.dart';
@@ -465,6 +468,22 @@ class MyApp extends StatelessWidget {
                   businessId: context.read<AuthProvider>().businessId ?? '',
                   focusRequestId:
                       args is BusinessRequestsArguments ? args.requestId : '',
+                );
+              },
+              // A Fleet alert: Fleet on a tab, then the driver or plate.
+              '/fleet': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments;
+                final fleet = args is FleetRouteArguments ? args : null;
+                final auth = context.read<AuthProvider>();
+                return FleetScreen(
+                  businessId: auth.businessId ?? '',
+                  access: fleetAccess(
+                    isStaff: auth.isStaff,
+                    permissions: auth.businessPermissions,
+                  ),
+                  initialTab: fleet?.tab ?? FleetTab.needs,
+                  openDriverId: fleet?.driverId,
+                  openCarId: fleet?.carId,
                 );
               },
               '/package-request': (context) {

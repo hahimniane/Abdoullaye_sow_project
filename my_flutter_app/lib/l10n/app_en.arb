@@ -13839,6 +13839,17 @@
   "hflPaperworkSubtitle": "Papers due soon or missing",
   "hflMoreShipping": "More shipping",
   "hflMore": "More",
+  "falTitle": "Fleet alerts",
+  "@falTitle": {
+    "description": "Profile, notification preferences: label of the three-choice setting for Fleet alerts (Fleet admins only)."
+  },
+  "falHelp": "New plates, drivers and payments, grouped; anything that needs you at once.",
+  "@falHelp": {
+    "description": "One line under the Fleet alerts setting."
+  },
+  "falAll": "Everything",
+  "falNeeds": "Only what needs me",
+  "falOff": "Off",
   "nhmMainWorkTitle": "Main work",
   "@nhmMainWorkTitle": {
     "description": "Business profile, Services panel: label of the list where the owner picks the work the app's home leads with."

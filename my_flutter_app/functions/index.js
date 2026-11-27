@@ -608,6 +608,7 @@ const businessMainWork = require("./business_main_work");
 // Staff activity alerts: a car parked / a package saved, told to the others
 // (namespaced: its pure rules share names like toMillis with this file).
 const staffActivity = require("./staff_activity_alerts");
+const fleetAdminAlerts = require("./fleet_admin_alerts");
 const platformActivity = require("./platform_activity_alerts");
 const inventoryTransfers = require("./inventory_transfers");
 const {renderInventoryTags} = require("./inventory_tags");
@@ -48927,6 +48928,8 @@ const fleet = createFleetHandlers({
   readPicture: readFleetPaymentPicture,
   sendFleetText: (args) => whatsappConversations().sayInThread(args),
   pushFleetDriver: (p) => fleetDriverPusher(p),
+  // Alerts to the business's admins (docs/FLEET.md section 18).
+  notifyFleetAdmins,
   // A payment screenshot sent from the app (docs/FLEET.md section 14): kept
   // like a WhatsApp picture, and deleted by the same 12-month sweep.
   storeClaimImage: async ({businessId, driverId, buffer, mimeType}) => {
@@ -52812,13 +52815,44 @@ async function sendStaffActivityPlan(kind, plan) {
   await Promise.all(plan.recipients.map((recipient) =>
     safeSendPreferenceNotification({
       uid: recipient.uid,
-      preferenceKey: staffActivity.ACTIVITY_PREFERENCE[kind],
+      preferenceKey: staffActivity.ACTIVITY_PREFERENCE[kind] ||
+        fleetAdminAlerts.FLEET_ALERT_PREFERENCE,
       title: recipient.title,
       body: recipient.body,
       data: plan.data,
       pushOnly: true,
     })));
   return plan.recipients.length;
+}
+
+/**
+ * One event's step in its person's grouping window: claimed once per record
+ * (a retried event never counts or sends twice), the window stepped in the
+ * same transaction. Shared by the staff alerts and the Fleet admin alerts.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {kind, recordId, businessId, actorUid, nowMs}.
+ * @return {Promise<?object>} planWindowEvent's answer, or null when the
+ *   record was already claimed.
+ */
+async function stepActivityWindow(db, {kind, recordId, businessId, actorUid,
+  nowMs}) {
+  const claimRef = db.collection(staffActivity.STAFF_ACTIVITY_ALERT_CLAIMS)
+      .doc(staffActivity.activityClaimId(kind, recordId));
+  const windowRef = db.collection(staffActivity.STAFF_ACTIVITY_ALERTS)
+      .doc(staffActivity.activityWindowId(businessId, kind, actorUid));
+  return db.runTransaction(async (tx) => {
+    const [claim, window] = await tx.getAll(claimRef, windowRef);
+    if (claim.exists) return null;
+    const planned = staffActivity.planWindowEvent(
+        window.exists ? window.data() || {} : null, nowMs);
+    const now = FirestoreFieldValue.serverTimestamp();
+    tx.create(claimRef, {businessId, kind, recordId, actorUid,
+      action: planned.action, createdAt: now});
+    tx.set(windowRef, {businessId, kind, actorUid, ...planned.next,
+      lastRecordId: recordId, updatedAt: now}, {merge: true});
+    return planned;
+  });
 }
 
 /**
@@ -52848,22 +52882,8 @@ async function handleStaffActivityRecord(db, kind, recordId, record) {
   if (staffActivity.planActivityRecipients(base).length === 0) {
     return {skipped: "no_recipients"};
   }
-  const claimRef = db.collection(staffActivity.STAFF_ACTIVITY_ALERT_CLAIMS)
-      .doc(staffActivity.activityClaimId(kind, recordId));
-  const windowRef = db.collection(staffActivity.STAFF_ACTIVITY_ALERTS)
-      .doc(staffActivity.activityWindowId(businessId, kind, actorUid));
-  const step = await db.runTransaction(async (tx) => {
-    const [claim, window] = await tx.getAll(claimRef, windowRef);
-    if (claim.exists) return null;
-    const planned = staffActivity.planWindowEvent(
-        window.exists ? window.data() || {} : null, nowMs);
-    const now = FirestoreFieldValue.serverTimestamp();
-    tx.create(claimRef, {businessId, kind, recordId, actorUid,
-      action: planned.action, createdAt: now});
-    tx.set(windowRef, {businessId, kind, actorUid, ...planned.next,
-      lastRecordId: recordId, updatedAt: now}, {merge: true});
-    return planned;
-  });
+  const step = await stepActivityWindow(db, {kind, recordId, businessId,
+    actorUid, nowMs});
   if (!step) return {skipped: "already_claimed"};
   if (step.action === "hold") return {held: true};
   let plan;
@@ -52901,6 +52921,65 @@ async function onStaffActivityCreated(kind, event, recordId) {
           recordId, error: String(error?.message || error)})),
     onPlatformActivityRecord(db, kind, recordId, record),
   ]);
+}
+
+// ---------------------------------------------------------------------------
+// Fleet alerts to admins (fleet_admin_alerts.js, docs/FLEET.md section 18).
+// The urgent kinds go at once; plate / driver / payment events go through the
+// same per-person window as the staff alerts above (the same
+// staffActivityAlerts collection and the same scheduled flush).
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {object} db Firestore.
+ * @param {object} event {kind, businessId, actorUid, recordId, ...facts}
+ *   from fleet_handlers (alertAdmins).
+ * @return {Promise<object>} What happened (for the log).
+ */
+async function handleFleetAdminAlert(db, event) {
+  const kind = String(event?.kind || "");
+  const businessId = String(event?.businessId || "").trim();
+  if (!fleetAdminAlerts.isFleetAlertKind(kind) || !businessId) {
+    return {skipped: "bad_event"};
+  }
+  const actorUid = String(event.actorUid || "").trim();
+  const people = await staffActivityPeople(db, businessId);
+  if (!people) return {skipped: "no_business"};
+  const actor = actorUid ?
+    await staffActivityActorProfile(db, people, actorUid) : null;
+  const base = {users: people.users, ownerUids: people.ownerUids,
+    isBlocked: accountAccessBlocked, actor};
+  // Nobody to tell: no window to keep either.
+  if (fleetAdminAlerts.planFleetRecipients({kind, businessId, actorUid,
+    ...base}).length === 0) {
+    return {skipped: "no_recipients"};
+  }
+  let plan;
+  if (fleetAdminAlerts.isGroupedKind(kind)) {
+    const recordId = String(event.recordId || "").trim();
+    if (!actorUid || !recordId) return {skipped: "no_actor"};
+    const step = await stepActivityWindow(db, {kind, recordId, businessId,
+      actorUid, nowMs: Date.now()});
+    if (!step) return {skipped: "already_claimed"};
+    if (step.action === "hold") return {held: true};
+    plan = step.action === "summary" ?
+      fleetAdminAlerts.planFleetSummary({kind, businessId, actorUid,
+        count: step.count, ...base}) :
+      fleetAdminAlerts.planFleetAlert({event: {...event, kind, businessId,
+        actorUid}, ...base});
+    const sent = await sendStaffActivityPlan(kind, plan);
+    return {[step.action]: sent};
+  }
+  plan = fleetAdminAlerts.planFleetAlert({event: {...event, kind,
+    businessId, actorUid}, ...base});
+  const sent = await sendStaffActivityPlan(kind, plan);
+  return {sent};
+}
+
+async function notifyFleetAdmins(event) {
+  const outcome = await handleFleetAdminAlert(admin.firestore(), event);
+  logger.info("Fleet admin alert", {kind: event?.kind,
+    businessId: event?.businessId, ...outcome});
 }
 
 // ---------------------------------------------------------------------------
@@ -53134,8 +53213,9 @@ async function flushStaffActivityWindow(db, doc, {nowMs, contexts}) {
   const businessId = String(claimed.state.businessId || "");
   const kind = String(claimed.state.kind || "");
   const actorUid = String(claimed.state.actorUid || "");
+  const fleetKind = fleetAdminAlerts.isGroupedKind(kind);
   if (!businessId || !actorUid ||
-      !staffActivity.ACTIVITY_KINDS.includes(kind)) {
+      (!fleetKind && !staffActivity.ACTIVITY_KINDS.includes(kind))) {
     return 0;
   }
   if (!contexts.has(businessId)) {
@@ -53144,7 +53224,9 @@ async function flushStaffActivityWindow(db, doc, {nowMs, contexts}) {
   const people = await contexts.get(businessId);
   if (!people) return 0;
   const actor = await staffActivityActorProfile(db, people, actorUid);
-  const plan = staffActivity.planActivitySummary({kind, businessId,
+  const summary = fleetKind ? fleetAdminAlerts.planFleetSummary :
+    staffActivity.planActivitySummary;
+  const plan = summary({kind, businessId,
     users: people.users, actorUid, actor, ownerUids: people.ownerUids,
     count: claimed.count, isBlocked: accountAccessBlocked});
   return sendStaffActivityPlan(kind, plan);
