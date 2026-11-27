@@ -516,3 +516,24 @@ pure helpers (tested) in `admin_web/src/lib/fleet-pickers.ts`.
   T712000C · Oct 3". "Charge this ticket" from the search arrives split.
 - Kept typed on purpose: names, plate, VIN, TLC licence, policy number,
   amounts, ZIP, notes and Zelle details (free values by nature).
+
+## 17. Fleet leads, Requests next (2026-11-26)
+
+Owner, 2026-11-26: Landa's main work is plate leasing; for shipping they only
+answer requests that come from Laawol customers, not register packages. So:
+
+- **Website.** When the viewer may open Fleet (business has the `fleet` service
+  and the person holds `fleet` or `fleet_admin`), the menu starts Fleet,
+  Shipping, Today, and the console opens on Fleet (Needs you) instead of
+  Today. Shipping already opens on its first step, Requests. A link or a
+  notification that opened another section is left alone. Staff without Fleet
+  keep the usual order and Today. Pure rules: `fleetLeads`, `fleetFirstTabs`,
+  `landingBusinessTab` in `admin_web/src/lib/business-sidebar.ts` (tested).
+- **App.** Fleet is a main work (`businesses/{id}.mainWork = "fleet"`); a
+  business with Fleet on that never chose a main work leads with it. The home
+  opens with the Fleet block (Needs you, Drivers, Plates, Payments), then a
+  Requests row with the count waiting for a price, then everything else under
+  a folded "More shipping". Nothing is removed (owner rule: a redesign keeps
+  everything reachable).
+- Requests reach a business only while it takes requests (Shipping >
+  Requests > Request settings) and has a price list for the country.

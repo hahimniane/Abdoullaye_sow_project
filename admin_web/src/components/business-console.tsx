@@ -110,6 +110,8 @@ import {fleetEnabled} from "@/lib/fleet";
 import type { BusinessTodayResponse, TodayAttentionItem, TodayContainersView } from "@/lib/business-today";
 import { previewBusinessToday } from "@/lib/business-today-preview";
 import {
+  fleetFirstTabs,
+  landingBusinessTab,
   buildBusinessSidebarGroups,
   businessPermissionHeld,
   businessSidebarTabs,
@@ -499,15 +501,29 @@ export function BusinessConsole({
   );
   const airOnly = airOnlyBusiness(flies, hasSeaContainer);
   const shippingStepsShown = useMemo(() => shippingStepsFor(shippingSteps, airOnly), [airOnly, shippingSteps]);
+  // Fleet leads for a plate-leasing business (docs/FLEET.md section 17):
+  // Fleet, then Shipping (it opens on Requests), then everything as before.
   const sidebarTabs = useMemo(
     () =>
-      airOnly
-        ? visibleTabs.map((tab) =>
-            tab.id === "shipping" ? {...tab, description: shippingCopy(true).sidebarDescription} : tab,
-          )
-        : visibleTabs,
+      fleetFirstTabs(
+        airOnly
+          ? visibleTabs.map((tab) =>
+              tab.id === "shipping" ? {...tab, description: shippingCopy(true).sidebarDescription} : tab,
+            )
+          : visibleTabs,
+      ),
     [airOnly, visibleTabs],
   );
+  // Where the console opens, decided once when the business record arrives:
+  // Fleet when it leads. A link or notification that already opened a
+  // section (anything but Today) is left where it is.
+  const landedRef = useRef(false);
+  useEffect(() => {
+    if (landedRef.current || !business) return;
+    landedRef.current = true;
+    const landing = landingBusinessTab(visibleTabs);
+    if (landing !== "today" && activeTab === "today") setActiveTab(landing);
+  }, [activeTab, business, setActiveTab, visibleTabs]);
 
   // "The menu has a new layout", once per person and browser, listing only
   // the moves that touch the sections this person can open.

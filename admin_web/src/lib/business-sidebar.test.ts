@@ -6,6 +6,9 @@ import {
   businessPermissionHeld,
   businessSidebarTabs,
   businessTabServiceAllowed,
+  fleetFirstTabs,
+  fleetLeads,
+  landingBusinessTab,
   normalizePinnedTabs,
   shippingServiceIds,
   shippingStepForTab,
@@ -287,5 +290,32 @@ describe("the Fleet page in the sidebar", () => {
     }
     const pinned = buildBusinessSidebarGroups(businessSidebarTabs, ["fleetDrivers", "fleetCars"], "");
     assert.deepEqual(pinned[0], { id: "pinned", label: "Pinned", tabs: businessSidebarTabs.filter((tab) => tab.id === "fleet") });
+  });
+});
+
+describe("Fleet leads the console (docs/FLEET.md section 17)", () => {
+  const tabsFor = (offered: string[], permissions: string[] | "owner") =>
+    visibleBusinessTabs((id) => offered.includes(id), holder(permissions));
+  const overviewIds = (offered: string[], permissions: string[] | "owner") =>
+    buildBusinessSidebarGroups(fleetFirstTabs(tabsFor(offered, permissions)), [], "")
+      .find((group) => group.id === "overview")?.tabs.map((tab) => tab.id);
+
+  it("puts Fleet first and Shipping next for whoever may open Fleet; nothing is hidden", () => {
+    const tabs = tabsFor(["fleet", "barrelShipping"], "owner");
+    assert.equal(fleetLeads(tabs), true);
+    assert.deepEqual(overviewIds(["fleet", "barrelShipping"], "owner"), ["fleet", "shipping", "today"]);
+    assert.deepEqual(fleetFirstTabs(tabs).map((tab) => tab.id).sort(), tabs.map((tab) => tab.id).sort());
+    assert.equal(landingBusinessTab(tabs), "fleet");
+  });
+
+  it("keeps the usual order and Today for a business without Fleet or staff without it", () => {
+    assert.deepEqual(overviewIds(["barrelShipping"], "owner"), ["today", "shipping"]);
+    assert.equal(landingBusinessTab(tabsFor(["barrelShipping"], "owner")), "today");
+    assert.deepEqual(overviewIds(["fleet", "barrelShipping"], ["containers"]), ["today", "shipping"]);
+    assert.equal(landingBusinessTab(tabsFor(["fleet", "barrelShipping"], ["containers"])), "today");
+  });
+
+  it("puts Fleet first even without shipping", () => {
+    assert.deepEqual(overviewIds(["fleet"], ["fleet"]), ["fleet", "today"]);
   });
 });

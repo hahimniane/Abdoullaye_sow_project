@@ -236,6 +236,32 @@ export function visibleBusinessTabs(
   });
 }
 
+/**
+ * Fleet leads (docs/FLEET.md section 17): a business whose main work is plate
+ * leasing (Landa) works Fleet all day and takes shipping only as requests
+ * from Laawol customers. When this viewer may open Fleet, it heads the menu,
+ * Shipping (which opens on Requests) comes next, and Today follows; every
+ * other section keeps its place. Nothing is hidden.
+ */
+export function fleetLeads(tabs: readonly Pick<BusinessSidebarTab, "id">[]): boolean {
+  return tabs.some((tab) => tab.id === "fleet");
+}
+
+/** The sections in menu order: Fleet, Shipping, then the rest as before, when Fleet leads. */
+export function fleetFirstTabs<T extends Pick<BusinessSidebarTab, "id">>(tabs: readonly T[]): T[] {
+  if (!fleetLeads(tabs)) return [...tabs];
+  const lead: BusinessTab[] = ["fleet", "shipping"];
+  return [
+    ...lead.flatMap((id) => tabs.filter((tab) => tab.id === id)),
+    ...tabs.filter((tab) => !lead.includes(tab.id)),
+  ];
+}
+
+/** Where the console opens: Fleet when it leads, otherwise Today. */
+export function landingBusinessTab(tabs: readonly Pick<BusinessSidebarTab, "id">[]): BusinessTab {
+  return fleetLeads(tabs) ? "fleet" : "today";
+}
+
 /** The steps that are lists of the loading-list workspace (one ContainersPanel). */
 export const containerListSteps: readonly ShippingStep[] = ["requests", "waiting", "containers"];
 
