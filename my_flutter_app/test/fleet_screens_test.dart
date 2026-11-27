@@ -738,7 +738,7 @@ void main() {
 
     // Every tab.
     for (final tab in [
-      'À traiter',
+      'À faire',
       'Chauffeurs',
       'Plaques',
       'Banque',

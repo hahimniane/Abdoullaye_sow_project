@@ -15584,7 +15584,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get fltTitle => 'Flotte';
 
   @override
-  String get fltHomeTabNeeds => 'À traiter';
+  String get fltHomeTabNeeds => 'À faire';
 
   @override
   String get fltHomeTabPaperwork => 'Papiers';
@@ -24193,7 +24193,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get falAll => 'Tout';
 
   @override
-  String get falNeeds => 'Seulement ce qui est à traiter';
+  String get falNeeds => 'Seulement ce qui est à faire';
 
   @override
   String get falOff => 'Désactivées';

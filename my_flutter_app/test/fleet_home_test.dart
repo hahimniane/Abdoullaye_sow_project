@@ -480,7 +480,7 @@ void main() {
 
     testWidgets('French on a 320 px phone: Needs you fits', (tester) async {
       await pump(tester, language: 'fr', width: 320);
-      expect(find.text('À traiter'), findsWidgets);
+      expect(find.text('À faire'), findsWidgets);
       expect(find.byKey(const Key('fleet-needs-row-late-d1')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

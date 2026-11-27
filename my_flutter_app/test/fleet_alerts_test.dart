@@ -123,7 +123,7 @@ void main() {
       await pump(t, 'fr', 'needs', (_) {});
       expect(find.text('Alertes Flotte'), findsOneWidget);
       expect(find.text('Tout'), findsOneWidget);
-      expect(find.text('Seulement ce qui est à traiter'), findsOneWidget);
+      expect(find.text('Seulement ce qui est à faire'), findsOneWidget);
       expect(find.text('Désactivées'), findsOneWidget);
       expect(
         t

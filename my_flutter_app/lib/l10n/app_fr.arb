@@ -7404,7 +7404,7 @@
   "fltPickTypeCity": "Nom de la ville",
   "fltPickKeepDay": "Garder le jour actuel",
   "fltTitle": "Flotte",
-  "fltHomeTabNeeds": "À traiter",
+  "fltHomeTabNeeds": "À faire",
   "fltHomeTabPaperwork": "Papiers",
   "fltHomeSettings": "Réglages de la flotte",
   "fltHomeNeedsSorted": "Le plus d'argent d'abord",
@@ -13838,7 +13838,7 @@
     "description": "One line under the Fleet alerts setting."
   },
   "falAll": "Tout",
-  "falNeeds": "Seulement ce qui est à traiter",
+  "falNeeds": "Seulement ce qui est à faire",
   "falOff": "Désactivées",
   "nhmMainWorkTitle": "Activité principale",
   "@nhmMainWorkTitle": {
